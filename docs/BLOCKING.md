@@ -45,9 +45,9 @@ En `relaxed`, une redirection vers une régie **présente dans les listes** rest
 
 Quand une navigation est refusée, un message « Redirection bloquée : … » s'affiche. Ouvre alors le **menu rapide** (appui long sur Retour) :
 
-- **Autoriser <domaine> pour ce site** : le domaine est ajouté aux domaines autorisés de ce site et la page s'ouvre. Pour un site de la configuration distante, le choix est gardé **localement** (fichier `site-overrides.json`) : la config distante n'est pas modifiée, et le choix survit à son actualisation comme aux mises à jour.
+- **Autoriser <domaine>** : le domaine est ajouté aux domaines autorisés de ce site et la page s'ouvre. Pour un site de la configuration distante, le choix est gardé **localement** (fichier `site-overrides.json`) : la config distante n'est pas modifiée, et le choix survit à son actualisation comme aux mises à jour.
 - **Ouvrir <domaine> une seule fois** : laisse passer cette navigation sans rien retenir.
-- **Enregistrer cette page comme site perso** : ajoute la page affichée à ton menu.
+- **Enregistrer ce site** : ajoute la page affichée à ton menu.
 
 ## 3. Scripts et sélecteurs
 

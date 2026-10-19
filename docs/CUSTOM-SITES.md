@@ -1,63 +1,61 @@
-# Sites personnels (ajoutés depuis l'app)
+# Sites personnels
 
-Tu peux ajouter tes propres sites directement sur la TV, sans modifier la configuration distante.
+Ajoute tes propres sites directement sur la TV, sans toucher à la configuration distante.
 
-## Ajouter
+## Ajouter un site
 
-1. Dans le menu, va sur la dernière carte **« + Ajouter un site »** et appuie sur OK.
-2. Saisis un **nom** et une **adresse** avec le clavier de la TV. `exemple.org` suffit : `https://` est ajouté tout seul.
-3. **Enregistrer**. La carte apparaît avec le badge **PERSO**.
+1. Dans le menu, choisis la carte **+ Ajouter**.
+2. Saisis l'**adresse**. Le champ commence par `https://` ; des boutons t'évitent de taper à la télécommande : `https://`, `www.`, `.com`, `.fr`, `.org`, `.net`, `.tv`, `/` et `⌫` pour effacer.
+3. Le **nom se remplit tout seul** à partir de l'adresse (`youtube.com` donne « Youtube »). Tu peux le modifier : il cesse alors de suivre l'adresse.
+4. Règle les **protections** (boutons, voir ci-dessous), puis **Enregistrer**.
 
-## Modifier ou supprimer
+## Les protections
 
-Sur une carte PERSO : **appui long sur OK** (ou la touche **Menu** de la télécommande). Pour supprimer, un premier appui sur *Supprimer* demande une confirmation.
+Chaque bouton s'allume (✓) quand il est actif :
 
-## Régler les redirections et les pubs d'un site perso
+| Bouton | Effet | Par défaut |
+|---|---|---|
+| **Bloquer les pubs** | Applique les listes de blocage et les règles globales de la configuration. | Activé |
+| **Bloquer les pop-ups** | Empêche les pages d'ouvrir des fenêtres. | Activé |
+| **Masquer les cookies** | Cache les bandeaux de consentement courants. | Désactivé |
+| **Connexions (Google, Microsoft…)** | Autorise les pages de connexion Google, YouTube, Microsoft, Apple et Facebook. | Désactivé |
+| **Redirections strictes / souples** | Strictes : le site ne peut aller que sur son propre domaine. Souples : partout, sauf vers les pubs connues des listes. Voir [BLOCKING](BLOCKING.md). | Strictes |
 
-Le formulaire propose, en plus du nom et de l'adresse :
+## Domaines autorisés et bloqués : on choisit, on ne saisit pas
 
-| Champ | Effet |
-|---|---|
-| **Domaines autorisés** | Domaines où la fenêtre peut aller (connexion, lecteur…). Séparés par une virgule : `accounts.exemple.com, cdn.exemple.com`. |
-| **Domaines à bloquer** | Régies à couper pour ce site. Séparés par une virgule. |
-| **Redirections : strictes / souples** | Voir [BLOCKING](BLOCKING.md). Appuie sur le bouton pour basculer. |
+Taper un nom de domaine à la télécommande est pénible : WiDo retient donc ce que le site a **réellement essayé de faire** et te le propose en boutons. Ces suggestions apparaissent dans la fenêtre de modification d'un site, **après l'avoir utilisé** (rien ne s'affiche pour un site neuf).
 
-Tu peux aussi apprendre depuis la lecture : menu rapide → *Autoriser <domaine>* ([BLOCKING](BLOCKING.md)).
+- **Domaines autorisés** : les redirections refusées. Un bouton `+ domaine` l'autorise, un bouton `✓ domaine` le retire.
+- **Domaines bloqués** : les domaines tiers que le site contacte (souvent des régies ou des traqueurs). Un bouton `+ domaine` le bloque, `✓ domaine` le débloque.
+
+Les domaines déjà autorisés, déjà bloqués ou propres au site ne sont jamais proposés. Ces informations restent **sur l'appareil**.
+
+## Options d'un site : appui long
+
+Sur une carte de **site perso** : **appui long sur OK** (ou touche **Menu**) ouvre trois boutons :
+
+- **Ouvrir**
+- **Modifier**
+- **Supprimer** (un premier appui demande de **Confirmer**)
+
+Quand la carte a le focus, elle affiche « Appui long : options ».
 
 ## Enregistrer un site depuis la lecture
 
-Pendant la lecture, menu rapide (appui long sur Retour) → **Enregistrer cette page comme site perso**. L'adresse racine de la page affichée est ajoutée au menu.
-
-## Supprimer un site perso
-
-Sur la carte : **appui long sur OK** (ou touche **Menu**) → **Supprimer**, puis **Confirmer la suppression**.
-
-## Ce qui est appliqué à un site perso
-
-| Élément | Valeur |
-|---|---|
-| Listes de blocage et règles globales de la configuration distante | **Oui** |
-| Politique de navigation | Oui : seul le domaine du site est autorisé |
-| Script `block-popups` | Oui, par défaut |
-| `allowedDomains`, `rules`, mode de navigation | Oui, réglables dans le formulaire |
-| `hideSelectors`, `userAgent`, `scripts` autres que `block-popups` | Non (réglages disponibles seulement pour les sites de la configuration) |
-| Icône et couleur de la carte | Détectées automatiquement, comme pour les autres cartes |
-| `http://` | Accepté (serveur du réseau local) : le site est alors marqué `allowInsecure` |
-
-Si un site perso a besoin de réglages plus fins (masquage CSS, agent utilisateur, autres scripts), ajoute-le plutôt à la configuration distante ([CONFIGURATION](CONFIGURATION.md)).
+Pendant la lecture, appui long sur Retour → **Enregistrer ce site** : l'adresse racine de la page affichée est ajoutée au menu.
 
 ## Ce qui est conservé, et quand
 
-Les sites perso sont enregistrés dans un fichier **local** de l'app (`local-sites.json`), séparé de la configuration distante.
+Les sites perso sont dans un fichier **local** (`local-sites.json`), séparé de la configuration distante.
 
 | Événement | Sites perso |
 |---|---|
-| *Actualiser* / nouvelle configuration distante | **Conservés** |
-| Mise à jour depuis l'app (bannière) | **Conservés** |
-| `adb install -r` (mise à jour par ordinateur) | **Conservés** |
-| Désinstaller puis réinstaller | **Perdus** |
-| « Effacer les données » dans les réglages Android | **Perdus** |
+| Actualiser / nouvelle configuration distante | **Conservés** |
+| Mise à jour depuis l'app, ou `adb install -r` | **Conservés** |
+| Désinstaller puis réinstaller, ou « Effacer les données » | **Perdus** |
 
-Si la configuration distante contient plus tard un site avec le **même identifiant** qu'un site perso, c'est celui de la configuration qui s'affiche. Les identifiants perso commencent toujours par `perso-` : il n'y a normalement pas de collision.
+Si la configuration distante contient un site avec le même identifiant qu'un site perso, c'est celui de la configuration qui s'affiche. Les identifiants perso commencent par `perso-`. Limites : 50 sites perso, 40 caractères par nom. Pas encore d'export : voir [ROADMAP](ROADMAP.md).
 
-Limites : 50 sites perso, 40 caractères pour un nom. Il n'y a pas encore de sauvegarde ni d'export : voir [ROADMAP](ROADMAP.md).
+## Réglages plus fins
+
+Masquage CSS, agent utilisateur et scripts autres que les deux boutons ci-dessus ne sont disponibles que pour les sites de la [configuration distante](CONFIGURATION.md).

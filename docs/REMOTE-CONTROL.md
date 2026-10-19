@@ -2,7 +2,7 @@
 
 ## Menu des sites
 
-Flèches pour se déplacer, **OK** pour ouvrir. Le fond du menu prend la couleur de la carte sélectionnée. La dernière carte, **« + Ajouter un site »**, ouvre le formulaire ([CUSTOM-SITES](CUSTOM-SITES.md)). Sur une carte PERSO, un appui long sur OK (ou la touche Menu) ouvre la modification. **Réglages** : voir [SETTINGS](SETTINGS.md).
+Flèches pour se déplacer, **OK** pour ouvrir. Le fond du menu prend la couleur de la carte sélectionnée. La dernière carte, **« + Ajouter un site »**, ouvre le formulaire ([CUSTOM-SITES](CUSTOM-SITES.md)). Sur une carte de site perso, un appui long sur OK (ou la touche Menu) ouvre les options : ouvrir, modifier, supprimer. **Réglages** : voir [SETTINGS](SETTINGS.md).
 
 ## Pendant la lecture
 
@@ -41,9 +41,9 @@ L'aide des commandes s'affiche à la **première ouverture** d'un site, puis à 
 
 - Reprendre, recharger la page, activer/désactiver le curseur
 - **Texte plus grand / plus petit** (mémorisé par site)
-- **Autoriser <domaine> pour ce site** et **Ouvrir <domaine> une seule fois** (après une redirection refusée, voir [BLOCKING](BLOCKING.md))
-- **Enregistrer cette page comme site perso**
-- Aide, retour au menu des sites
+- **Autoriser <domaine>** et **Ouvrir <domaine> une fois** (après une redirection refusée, voir [BLOCKING](BLOCKING.md))
+- **Enregistrer ce site**
+- Aide, retour aux sites
 - Compteurs : requêtes bloquées et navigations refusées pendant cette session
 
 ## Saisie de texte et voix

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0
+
+### Refonte de l'interface
+- Menu repensé et épuré : barre du haut courte, grille de cartes aérée, ligne d'état discrète en bas. Chaque zone a sa place : plus rien ne se superpose.
+- Cartes simplifiées (icône, nom, adresse), sans décor superflu. Textes raccourcis partout.
+- Fenêtres au cadre commun : titre en haut, contenu qui défile, **boutons toujours visibles** en bas.
+
+### Sites perso plus simples à gérer
+- **Suppression** visible : appui long sur une carte perso → Ouvrir / Modifier / Supprimer.
+- Formulaire guidé : on commence par l'**adresse**, aidée de boutons (`https://`, `www.`, `.com`, `.fr`…), le **nom s'en déduit** et reste modifiable.
+- Protections en **boutons** : bloquer les pubs, bloquer les pop-ups, masquer les cookies, autoriser les connexions, redirections strictes ou souples.
+- **Domaines autorisés et bloqués proposés en boutons** d'après ce que le site a réellement tenté de faire, au lieu de les saisir.
+- Champ `blockAds` (par site) dans la configuration.
+
 ## 0.3.1
 
 ### Corrigé
