@@ -9,6 +9,7 @@ import dev.wido.core.HostRules
 import dev.wido.core.LocalSites
 import dev.wido.core.Hosts
 import dev.wido.core.NavigationPolicy
+import dev.wido.core.SeenDomains
 import dev.wido.core.SiteOverrides
 import dev.wido.core.Site
 import dev.wido.core.WiDoConfig
@@ -58,6 +59,12 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     /** Domaines autorisés par l'utilisateur sur des sites de la config distante (jamais écrasés par elle). */
     @Volatile private var overrides: Map<String, List<String>> =
         runCatching { SiteOverrides.decode(overridesFile.readText()) }.getOrDefault(emptyMap())
+
+    private val seenFile get() = File(context.filesDir, "seen-domains.json")
+
+    /** Ce que chaque site a tenté de faire : sert à proposer des choix en un bouton. */
+    @Volatile private var seen: Map<String, SeenDomains.Entry> =
+        runCatching { SeenDomains.decode(seenFile.readText()) }.getOrDefault(emptyMap())
 
     private val _local = MutableStateFlow(readLocalSites())
     val localSites: StateFlow<List<Site>> = _local.asStateFlow()
@@ -147,7 +154,31 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     }
 
     @Synchronized
-    fun removeLocalSite(id: String) = saveLocal(_local.value.filterNot { it.id == id })
+    fun removeLocalSite(id: String) {
+        saveLocal(_local.value.filterNot { it.id == id })
+        if (id in seen) writeSeen(seen - id)
+    }
+
+    /** Mémorise les redirections refusées et les domaines tiers vus pendant une session. */
+    @Synchronized
+    fun recordSeen(siteId: String, navigationHosts: List<String>, requestCounts: Map<String, Int>) {
+        if (navigationHosts.isEmpty() && requestCounts.isEmpty()) return
+        writeSeen(seen + (siteId to SeenDomains.merge(seen[siteId] ?: SeenDomains.Entry(), navigationHosts, requestCounts)))
+    }
+
+    /**
+     * (à autoriser, à bloquer) : ce que le site a tenté de faire, sans ce qui est déjà autorisé,
+     * déjà bloqué ou propre au site. Vide tant que le site n'a pas été utilisé.
+     */
+    fun suggestionsFor(site: Site): Pair<List<String>, List<String>> {
+        val known = NavigationPolicy.allowedDomains(site) + LocalSites.blockedDomainsOf(site.rules)
+        return SeenDomains.suggestions(seen[site.id] ?: SeenDomains.Entry(), known.toSet())
+    }
+
+    private fun writeSeen(next: Map<String, SeenDomains.Entry>) {
+        writeAtomically(seenFile, SeenDomains.encode(next))
+        seen = next
+    }
 
     private fun takenIds(): Set<String> =
         (_state.value.config?.sites.orEmpty().map { it.id } + _local.value.map { it.id }).toSet()
@@ -164,10 +195,13 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     suspend fun blockerFor(site: Site): HostBlocker {
         val config = ensureLoaded()
         return withContext(Dispatchers.Default) {
-            val lists = coroutineScope {
-                config.blocklists.map { url -> async { loadList(url) } }.awaitAll()
+            // « Bloquer les pubs » désactivé : ni listes ni règles globales, seulement les règles du site.
+            val lists = if (site.blockAds) {
+                coroutineScope { config.blocklists.map { url -> async { loadList(url) } }.awaitAll() }
+            } else {
+                emptyList()
             }
-            val inline = FilterParser.parse((config.globalRules + site.rules).asSequence())
+            val inline = FilterParser.parse(((if (site.blockAds) config.globalRules else emptyList()) + site.rules).asSequence())
             // Le domaine du site et ceux qu'il peut ouvrir ne sont jamais bloqués : c'est ton choix explicite.
             val allowed = (config.whitelist.map(Hosts::normalize) + NavigationPolicy.allowedDomains(site)).toSet()
             // Couches conservées telles quelles : pas de recopie des listes à chaque ouverture.

@@ -37,6 +37,7 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
     fun updateSite(id: String, name: String, url: String, options: LocalSites.SiteOptions): String? =
         app.repository.updateLocalSite(id, name, url, options)
     fun removeSite(id: String) = app.repository.removeLocalSite(id)
+    fun suggestionsFor(site: dev.wido.core.Site) = app.repository.suggestionsFor(site)
 
     private val _update = MutableStateFlow<UpdateUi>(UpdateUi.None)
     val update: StateFlow<UpdateUi> = _update.asStateFlow()

@@ -10,6 +10,9 @@ import dev.wido.core.HostBlocker
 import dev.wido.core.NavigationPolicy
 import dev.wido.core.Site
 import java.io.ByteArrayInputStream
+import dev.wido.core.Hosts
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
 /** Applique le blocage de requêtes, la politique de navigation et l'injection de scripts. */
@@ -29,6 +32,16 @@ class WiDoWebViewClient(
     @Volatile var lastBlockedUrl: String? = null
         private set
 
+    private val requestCounts = ConcurrentHashMap<String, AtomicInteger>()
+    private val blockedNavigationHosts = CopyOnWriteArrayList<String>()
+
+    /** Ce que le site a tenté depuis le dernier appel : (redirections refusées, domaines tiers contactés). */
+    fun drainSeen(): Pair<List<String>, Map<String, Int>> {
+        val navigations = blockedNavigationHosts.toList().also { blockedNavigationHosts.clear() }
+        val requests = requestCounts.mapValues { it.value.get() }.also { requestCounts.clear() }
+        return navigations to requests
+    }
+
     /** Nouvelles règles (après avoir autorisé un domaine) sans recréer la page. */
     fun update(site: Site, blocker: HostBlocker) {
         this.site = site
@@ -45,7 +58,13 @@ class WiDoWebViewClient(
 
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
         val host = request.url.host ?: return null
-        if (!blocker.isBlocked(host)) return null
+        if (!blocker.isBlocked(host)) {
+            // Domaine tiers non bloqué : retenu pour proposer de le bloquer.
+            if (NavigationPolicy.allowedDomains(site).none { Hosts.matches(host, it) }) {
+                requestCounts.getOrPut(host.lowercase()) { AtomicInteger() }.incrementAndGet()
+            }
+            return null
+        }
         blockedRequests.incrementAndGet()
         return WebResourceResponse(
             "text/plain", "utf-8", 403, "Blocked by WiDo", emptyMap(), ByteArrayInputStream(ByteArray(0)),
@@ -60,6 +79,7 @@ class WiDoWebViewClient(
         }
         if (NavigationPolicy.isAllowed(url, site, blocker)) return false
         blockedNavigations.incrementAndGet()
+        Hosts.of(url)?.let { blockedNavigationHosts += it }
         lastBlockedUrl = url
         onNavigationBlocked(url)
         return true

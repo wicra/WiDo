@@ -672,7 +672,15 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onPause() {
         webView?.onPause()
+        saveSeen()
         super.onPause()
+    }
+
+    /** Garde ce que le site a tenté (redirections refusées, domaines tiers) pour proposer des choix dans les réglages du site. */
+    private fun saveSeen() {
+        val id = site?.id ?: return
+        val (navigations, requests) = client?.drainSeen() ?: return
+        (application as WiDoApp).repository.recordSeen(id, navigations, requests)
     }
 
     override fun onDestroy() {

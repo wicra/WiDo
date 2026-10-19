@@ -48,12 +48,32 @@ object LocalSites {
         return withScheme.takeIf { Hosts.of(it) != null }
     }
 
-    /** Réglages avancés d'un site perso. */
+    /** Réglages d'un site perso : des boutons, plus des listes de domaines. */
     data class SiteOptions(
+        /** Domaines autorisés saisis ou appris (sans le préréglage de connexion). */
         val allowedDomains: List<String> = emptyList(),
         val blockedDomains: List<String> = emptyList(),
         val relaxed: Boolean = false,
+        val blockAds: Boolean = true,
+        val blockPopups: Boolean = true,
+        val hideCookieBanners: Boolean = false,
+        /** Autorise les pages de connexion Google, Microsoft, Apple et Facebook. */
+        val allowLogins: Boolean = false,
     )
+
+    /** Nom proposé à partir de l'adresse : `https://www.exemple.org/x` donne `Exemple`. */
+    fun suggestName(rawUrl: String): String {
+        val host = normalizeUrl(rawUrl)?.let { Hosts.of(it) }?.removePrefix("www.") ?: return ""
+        if (host.all { it.isDigit() || it == '.' }) return host // adresse IP : on la garde
+        val labels = host.split('.').filter { it.isNotEmpty() }
+        if (labels.size < 2) return ""
+        val core = labels.dropLast(1).let { rest ->
+            // exemple.co.uk : on retire aussi « co »
+            if (rest.size >= 2 && rest.last() in setOf("co", "com", "org", "net", "gov", "ac")) rest.dropLast(1) else rest
+        }
+        val word = core.lastOrNull().orEmpty()
+        return word.replaceFirstChar { it.uppercase() }
+    }
 
     private const val MAX_DOMAINS = 30
 
@@ -75,6 +95,17 @@ object LocalSites {
     }
 
     fun domainsToText(domains: List<String>): String = domains.joinToString(", ")
+
+    /** Les réglages d'un site perso existant, pour remplir le formulaire de modification. */
+    fun optionsOf(site: Site): SiteOptions = SiteOptions(
+        allowedDomains = DomainPresets.custom(site.allowedDomains),
+        blockedDomains = blockedDomainsOf(site.rules),
+        relaxed = site.navigation == Navigation.RELAXED,
+        blockAds = site.blockAds,
+        blockPopups = "block-popups" in site.scripts,
+        hideCookieBanners = "hide-cookie-banners" in site.scripts,
+        allowLogins = DomainPresets.hasLogins(site.allowedDomains),
+    )
 
     /** Domaines d'une liste de règles `||domaine^` (les autres règles sont ignorées). */
     fun blockedDomainsOf(rules: List<String>): List<String> =
@@ -107,11 +138,15 @@ object LocalSites {
             id = id,
             name = cleanName,
             url = url,
-            allowedDomains = options.allowedDomains,
+            allowedDomains = DomainPresets.withLogins(options.allowedDomains, options.allowLogins),
             rules = options.blockedDomains.map { "||$it^" },
-            scripts = listOf("block-popups"),
+            scripts = listOfNotNull(
+                "block-popups".takeIf { options.blockPopups },
+                "hide-cookie-banners".takeIf { options.hideCookieBanners },
+            ),
             allowInsecure = scheme == "http",
             navigation = if (options.relaxed) Navigation.RELAXED else Navigation.STRICT,
+            blockAds = options.blockAds,
         )
         val problem = ConfigParser.validateSite(site, if (keepId != null) taken - keepId else taken)
         return if (problem != null) Built.Error(problem) else Built.Ok(site)

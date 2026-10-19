@@ -49,6 +49,8 @@ data class Site(
      * `relaxed` : navigation libre, sauf vers les domaines bloqués par les listes (YouTube, connexions).
      */
     val navigation: String = Navigation.STRICT,
+    /** Faux : les listes de blocage et règles globales ne s'appliquent pas à ce site (seules ses propres règles). */
+    val blockAds: Boolean = true,
 )
 
 object Navigation {
