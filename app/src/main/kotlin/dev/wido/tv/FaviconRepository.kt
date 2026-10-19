@@ -3,6 +3,8 @@ package dev.wido.tv
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color as AndroidColor
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import dev.wido.core.Site
@@ -13,15 +15,18 @@ import java.net.URI
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
+/** Icône d'un site et la couleur qui en est tirée (null si l'icône est grise, blanche ou noire). */
+data class SiteIcon(val image: ImageBitmap, val color: Color?)
+
 /**
  * Icônes des cartes. Téléchargées directement depuis le site (aucun service tiers), en https
  * seulement, bornées en taille, puis mises en cache sur disque.
  */
 class FaviconRepository(private val context: Context) {
     private val dir by lazy { File(context.filesDir, "favicons").apply { mkdirs() } }
-    private val memory = ConcurrentHashMap<String, ImageBitmap>()
+    private val memory = ConcurrentHashMap<String, SiteIcon>()
 
-    suspend fun load(site: Site): ImageBitmap? = withContext(Dispatchers.IO) {
+    suspend fun load(site: Site): SiteIcon? = withContext(Dispatchers.IO) {
         val key = sha1(site.icon ?: site.url)
         memory[key]?.let { return@withContext it }
 
@@ -43,7 +48,41 @@ class FaviconRepository(private val context: Context) {
             }
         }
         if (!png.exists()) return@withContext null
-        BitmapFactory.decodeFile(png.path)?.asImageBitmap()?.also { memory[key] = it }
+        val bitmap = BitmapFactory.decodeFile(png.path) ?: return@withContext null
+        SiteIcon(bitmap.asImageBitmap(), dominantColor(bitmap)).also { memory[key] = it }
+    }
+
+    /**
+     * Couleur dominante de l'icône : moyenne des pixels colorés, pondérée par leur saturation.
+     * Les gris, blancs et noirs sont ignorés (fonds, contours). Le résultat est ramené à une
+     * teinte vive mais lisible pour servir de fond de carte.
+     */
+    private fun dominantColor(source: Bitmap): Color? {
+        val size = 24
+        val small = Bitmap.createScaledBitmap(source, size, size, true)
+        val hsv = FloatArray(3)
+        var r = 0.0
+        var g = 0.0
+        var b = 0.0
+        var total = 0.0
+        for (y in 0 until size) for (x in 0 until size) {
+            val p = small.getPixel(x, y)
+            val alpha = AndroidColor.alpha(p) / 255f
+            if (alpha < 0.5f) continue
+            AndroidColor.colorToHSV(p, hsv)
+            if (hsv[1] < 0.25f || hsv[2] < 0.2f) continue
+            val w = (hsv[1] * hsv[2] * alpha).toDouble()
+            r += AndroidColor.red(p) * w
+            g += AndroidColor.green(p) * w
+            b += AndroidColor.blue(p) * w
+            total += w
+        }
+        if (total <= 0.0) return null
+        val average = AndroidColor.rgb((r / total).toInt(), (g / total).toInt(), (b / total).toInt())
+        AndroidColor.colorToHSV(average, hsv)
+        hsv[1] = hsv[1].coerceIn(0.5f, 0.9f)
+        hsv[2] = hsv[2].coerceIn(0.6f, 0.95f)
+        return Color(AndroidColor.HSVToColor(hsv))
     }
 
     private fun fetch(site: Site): Bitmap? {

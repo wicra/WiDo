@@ -44,7 +44,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.layout.ContentScale
@@ -64,6 +63,7 @@ import dev.wido.tv.ConfigState
 import dev.wido.tv.MenuSite
 import dev.wido.tv.MenuViewModel
 import dev.wido.tv.R
+import dev.wido.tv.SiteIcon
 import dev.wido.tv.UpdateUi
 import dev.wido.tv.WiDoApp
 import kotlinx.coroutines.delay
@@ -133,7 +133,7 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
                         index = index,
                         onClick = { onOpen(entry.site) },
                         onEdit = { editor = Editor.Edit(entry.site) },
-                        onFocus = { ambientTarget = parseColor(entry.site.color) ?: Palette.Accent },
+                        onFocus = { ambientTarget = it },
                         modifier = if (index == 0) Modifier.focusRequester(firstCard) else Modifier,
                     )
                 }
@@ -141,7 +141,7 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
                     AddCard(
                         index = sites.size,
                         onClick = { editor = Editor.Add },
-                        onFocus = { ambientTarget = Palette.Gold },
+                        onFocus = { ambientTarget = it },
                     )
                 }
             }
@@ -287,15 +287,16 @@ private fun SiteCard(
     index: Int,
     onClick: () -> Unit,
     onEdit: () -> Unit,
-    onFocus: () -> Unit,
+    onFocus: (Color) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val site = entry.site
-    val accent = parseColor(site.color) ?: Palette.Accent
     val context = LocalContext.current
-    val icon by produceState<ImageBitmap?>(null, site.id, site.url, site.icon) {
+    val icon by produceState<SiteIcon?>(null, site.id, site.url, site.icon) {
         value = (context.applicationContext as WiDoApp).favicons.load(site)
     }
+    // Couleur : celle de la config si elle en impose une, sinon celle de l'icône du site.
+    val accent = parseColor(site.color) ?: icon?.color ?: Palette.Accent
     // Les cartes perso se modifient par un clic long sur OK, ou la touche Menu.
     val editKeys = if (entry.local) {
         Modifier.onKeyEvent { e ->
@@ -313,7 +314,7 @@ private fun SiteCard(
             .then(editKeys)
             .fillMaxWidth()
             .aspectRatio(16f / 10f)
-            .tvFocusable(CardShape, glow = accent, onFocusChange = { if (it) onFocus() }, onLongClick = if (entry.local) onEdit else null, onClick = onClick)
+            .tvFocusable(CardShape, glow = accent, onFocusChange = { if (it) onFocus(accent) }, onLongClick = if (entry.local) onEdit else null, onClick = onClick)
             .background(Brush.linearGradient(listOf(accent.copy(alpha = 0.85f), accent.copy(alpha = 0.25f), Color(0xFF0C0E16))))
             .filmStrip(),
     ) {
@@ -326,10 +327,10 @@ private fun SiteCard(
                 .background(Color.White.copy(alpha = 0.16f)),
             contentAlignment = Alignment.Center,
         ) {
-            val bitmap = icon
-            if (bitmap != null) {
+            val siteIcon = icon
+            if (siteIcon != null) {
                 Image(
-                    bitmap,
+                    siteIcon.image,
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.size(52.dp),
@@ -399,13 +400,13 @@ private fun Modifier.filmStrip(): Modifier = drawBehind {
 }
 
 @Composable
-private fun AddCard(index: Int, onClick: () -> Unit, onFocus: () -> Unit) {
+private fun AddCard(index: Int, onClick: () -> Unit, onFocus: (Color) -> Unit) {
     Box(
         Modifier
             .then(rememberEntrance(index))
             .fillMaxWidth()
             .aspectRatio(16f / 10f)
-            .tvFocusable(CardShape, glow = Palette.Gold, onFocusChange = { if (it) onFocus() }, onClick = onClick)
+            .tvFocusable(CardShape, glow = Palette.Gold, onFocusChange = { if (it) onFocus(Palette.Gold) }, onClick = onClick)
             .background(Color.White.copy(alpha = 0.05f)),
         contentAlignment = Alignment.Center,
     ) {

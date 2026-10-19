@@ -9,8 +9,9 @@
       "id": "archive",
       "name": "Internet Archive (films libres)",
       "url": "https://archive.org/details/movies",
-      "scripts": ["block-popups"],
-      "color": "#2F9E44"
+      "scripts": [
+        "block-popups"
+      ]
     }
   ]
 }

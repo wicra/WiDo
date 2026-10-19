@@ -32,7 +32,7 @@ Fichiers fournis :
 | `hideSelectors` | liste | `[]` | Sélecteurs CSS à masquer (200 caractères max chacun, sans `{ } < >`). |
 | `enabled` | booléen | `true` | `false` : le site disparaît du menu sans perdre sa configuration. |
 | `userAgent` | texte | `default` | `default` (WebView), `desktop` (Chrome Linux) ou une chaîne complète. |
-| `color` | texte | accent | Couleur de la carte, `#RRGGBB`. Elle teinte aussi l'ambiance du menu quand la carte a le focus. |
+| `color` | texte | **automatique** | Optionnel. Sans lui, la couleur de la carte et de l'ambiance du menu est tirée de l'icône du site. Renseigne `#RRGGBB` seulement pour l'imposer. |
 | `icon` | texte | détecté | URL `https` d'une icône. Sans elle, WiDo cherche le favicon du site (voir plus bas). |
 | `allowInsecure` | booléen | `false` | Autorise `http` pour **ce site seulement** (serveur local type `http://192.168.1.20:8096`). |
 
@@ -66,3 +66,7 @@ Chaque carte affiche l'icône du site. WiDo la cherche ainsi, dans cet ordre :
 3. `/favicon.ico` à la racine du site.
 
 L'icône est téléchargée **directement depuis le site** (aucun service tiers n'est contacté), en `https` seulement, limitée à 512 Ko, puis mise en cache 14 jours. Si rien n'est trouvé, la carte affiche la première lettre du nom.
+
+## Couleur des cartes
+
+Par défaut, chaque carte prend **la couleur de l'icône de son site** : WiDo moyenne les pixels colorés de l'icône (gris, blancs et noirs ignorés), puis ramène le résultat à une teinte vive et lisible. Le fond du menu prend cette couleur quand la carte est sélectionnée. Une icône sans couleur (logo noir et blanc) donne la couleur d'accent violette. Le champ `color` ne sert qu'à imposer une teinte.

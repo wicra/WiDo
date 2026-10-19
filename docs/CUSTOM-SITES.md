@@ -20,7 +20,7 @@ Sur une carte PERSO : **appui long sur OK** (ou la touche **Menu** de la téléc
 | Politique de navigation | Oui : seul le domaine du site est autorisé |
 | Script `block-popups` | Oui, par défaut |
 | `allowedDomains`, `rules`, `hideSelectors`, `userAgent` | Non (réglages disponibles seulement pour les sites de la configuration) |
-| Icône | Détectée automatiquement, comme pour les autres cartes |
+| Icône et couleur de la carte | Détectées automatiquement, comme pour les autres cartes |
 | `http://` | Accepté (serveur du réseau local) : le site est alors marqué `allowInsecure` |
 
 Si un site perso a besoin de réglages fins (domaines supplémentaires, règles propres), ajoute-le plutôt à la configuration distante ([CONFIGURATION](CONFIGURATION.md)).
