@@ -16,6 +16,8 @@ Le premier travail de la v0.1.x est de faire tourner la CI, corriger ce qu'elle 
 
 ## À valider sur un appareil réel
 
+La check-list détaillée, avec les sites de test, est dans [TESTING](TESTING.md).
+
 - [ ] L'APK se compile (CI) et s'installe.
 - [ ] Le menu s'affiche, le focus est visible, la première carte est sélectionnée.
 - [ ] Widevine L1 effectif (app « DRM Info ») et lecture DRM dans la WebView.

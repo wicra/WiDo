@@ -23,6 +23,25 @@ Dans *Settings → Secrets and variables → Actions* du dépôt, crée :
 
 **Sauvegarde `wido.jks` hors du dépôt** (gestionnaire de mots de passe). Si tu la perds, tes utilisateurs devront désinstaller puis réinstaller l'app.
 
+## Pourquoi ces secrets ?
+
+Android **refuse d'installer une APK non signée**, et refuse de mettre à jour une app si la nouvelle version n'est pas signée avec **la même clé** que l'ancienne. Cette signature, c'est ce qui prouve que la mise à jour vient bien de toi et pas de quelqu'un d'autre qui aurait imité ton app.
+
+| Élément | À quoi il sert |
+|---|---|
+| **Keystore** (`wido.jks`) | Le fichier qui contient ta clé privée de signature. C'est ton identité d'éditeur. |
+| **Mot de passe du keystore** | Ouvre ce fichier. |
+| **Alias** | Le nom de la clé dans le fichier (ici `wido`). |
+| **Mot de passe de la clé** | Protège la clé elle-même. |
+
+Pourquoi des *secrets GitHub* plutôt que des fichiers dans le dépôt : le dépôt est public. Si la clé y était, n'importe qui pourrait signer une fausse version de WiDo qui s'installerait comme une mise à jour légitime. Les secrets ne sont lisibles que par la CI, jamais affichés dans les journaux, jamais visibles dans le code.
+
+À retenir :
+
+- **Tu les crées toi-même** sur ton ordinateur ; je ne les vois jamais et je ne les ai pas demandés pour travailler : ils ne servent qu'à la CI de release.
+- **Ils ne sont pas nécessaires pour tester.** La CI `build.yml` produit une APK *debug* sans aucun secret (signée avec la clé de debug automatique d'Android). Les secrets ne servent qu'au moment de publier une vraie release.
+- **Perdre la clé** veut dire que plus personne ne pourra mettre à jour l'app existante : il faudrait désinstaller puis réinstaller. Sauvegarde le keystore hors du dépôt.
+
 ## À chaque version
 
 1. Mets à jour [`CHANGELOG.md`](../CHANGELOG.md).

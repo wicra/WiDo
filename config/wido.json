@@ -1,16 +1,31 @@
 {
   "schema": 1,
-  "revision": 1,
-  "blocklists": [],
+  "revision": 2,
+  "blocklists": [
+    "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+  ],
   "globalRules": [],
   "whitelist": [],
   "sites": [
     {
-      "id": "exemple",
-      "name": "Exemple",
-      "url": "https://example.org/",
+      "id": "test-pubs",
+      "name": "Test du blocage de pubs",
+      "url": "https://d3ward.github.io/toolz/adblock.html",
       "scripts": ["block-popups"],
-      "color": "#7C5CFF"
+      "color": "#E5484D"
+    },
+    {
+      "id": "test-drm",
+      "name": "Test lecteur (Shaka)",
+      "url": "https://shaka-player-demo.appspot.com/",
+      "color": "#3E63DD"
+    },
+    {
+      "id": "archive",
+      "name": "Internet Archive (films libres)",
+      "url": "https://archive.org/details/movies",
+      "scripts": ["block-popups", "hide-cookie-banners"],
+      "color": "#2F9E44"
     }
   ]
 }
