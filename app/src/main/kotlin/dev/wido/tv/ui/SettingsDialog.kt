@@ -76,7 +76,10 @@ fun SettingsDialog(settings: Settings, onDismiss: () -> Unit) {
             KeyAction.SCROLL_TOP -> R.string.a_top
         },
     )
-    fun changed(block: () -> Unit): (Int) -> Unit = { block(); version++ }
+    fun changed(block: (Int) -> Unit): (Int) -> Unit = { step ->
+        block(step)
+        version++
+    }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
