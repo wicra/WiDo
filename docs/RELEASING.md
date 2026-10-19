@@ -42,6 +42,13 @@ Pourquoi des *secrets GitHub* plutôt que des fichiers dans le dépôt : le dép
 - **Ils ne sont pas nécessaires pour tester.** La CI `build.yml` produit une APK *debug* sans aucun secret (signée avec la clé de debug automatique d'Android). Les secrets ne servent qu'au moment de publier une vraie release.
 - **Perdre la clé** veut dire que plus personne ne pourra mettre à jour l'app existante : il faudrait désinstaller puis réinstaller. Sauvegarde le keystore hors du dépôt.
 
+## Pré-release de test (sans secrets)
+
+Si les secrets sont absents, le workflow ne s'arrête pas : il publie une **pré-release** dont l'APK est signée avec la clé de debug d'Android. C'est pratique pour tester sur la TV (par exemple avec Downloader), mais :
+
+- elle est marquée *pre-release* sur GitHub, donc **l'app ne la propose pas comme mise à jour** (`releases/latest` l'ignore) ;
+- une release signée avec ta vraie clé ne pourra pas l'écraser : il faudra d'abord `adb uninstall dev.wido.tv` ou la désinstaller depuis les réglages de la TV.
+
 ## À chaque version
 
 1. Mets à jour [`CHANGELOG.md`](../CHANGELOG.md).
