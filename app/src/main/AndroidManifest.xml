@@ -33,7 +33,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Lancée par Home Assistant : adb shell am start -n dev.wido.tv/.PlayerActivity --es site <id> -->
+        <!-- Lancée par Home Assistant avec l'extra "site" (identifiant du site), voir docs/HOME-ASSISTANT.md -->
         <activity
             android:name=".PlayerActivity"
             android:exported="true"
