@@ -1,6 +1,6 @@
 # Changelog
 
-## Non publié
+## 0.1.0
 
 ### Ajouté
 - Module `core` : configuration, blocage par hôte (AdBlock/hosts), politique de navigation, versions, releases GitHub, avec tests.
