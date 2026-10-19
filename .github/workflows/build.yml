@@ -20,6 +20,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Tests du module core
         run: ./gradlew :core:test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Tests de la logique du curseur aimanté
+        run: node scripts/js/snap-core.test.mjs
       - name: APK debug
         run: |
           # Les erreurs Gradle sont répétées en annotation : lisibles sans télécharger les journaux.

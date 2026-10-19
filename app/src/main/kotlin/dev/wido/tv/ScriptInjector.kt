@@ -15,8 +15,19 @@ import java.io.IOException
 class ScriptInjector(private val context: Context, private val site: Site) {
     private val source: String by lazy { build() }
 
+    /** Faux quand les scripts internes sont déjà injectés dans toutes les frames par la passerelle native. */
+    @Volatile var includeInternal = true
+
+    private val internal: String by lazy { internalScript() }
+
     fun inject(view: WebView) {
-        if (source.isNotEmpty()) view.evaluateJavascript(source, null)
+        val js = (if (includeInternal) internal + "\n" else "") + source
+        if (js.isNotBlank()) view.evaluateJavascript(js, null)
+    }
+
+    /** Scripts internes de WiDo (curseur aimanté, lecteur vidéo) : jamais choisis par la configuration. */
+    fun internalScript(): String = INTERNAL.joinToString("\n") { name ->
+        runCatching { context.assets.open("internal/$name").bufferedReader().use { it.readText() } }.getOrDefault("")
     }
 
     private fun build(): String {
@@ -45,6 +56,7 @@ class ScriptInjector(private val context: Context, private val site: Site) {
 
     private companion object {
         const val TAG = "WiDoScripts"
+        val INTERNAL = listOf("snap-core.js", "frame.js")
         val NAME = Regex("^[a-z0-9][a-z0-9-]{0,40}$")
     }
 }

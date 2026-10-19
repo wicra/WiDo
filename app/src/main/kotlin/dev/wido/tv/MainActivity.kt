@@ -11,7 +11,12 @@ import dev.wido.tv.ui.WiDoTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handleIntent(intent)
+        val launched = handleIntent(intent)
+        // Option « Rouvrir le dernier site » : seulement au lancement depuis l'accueil de la TV.
+        val settings = (application as WiDoApp).settings
+        if (!launched && savedInstanceState == null && intent.action == Intent.ACTION_MAIN && settings.startupLastSite) {
+            settings.lastSiteId?.let { startActivity(PlayerActivity.intent(this, it)) }
+        }
         setContent {
             WiDoTheme {
                 val vm: MenuViewModel = viewModel()
@@ -31,13 +36,13 @@ class MainActivity : ComponentActivity() {
      * - `config_url` : change l'URL de configuration (https uniquement, mémorisée) ;
      * - `site` : ouvre directement ce site.
      */
-    private fun handleIntent(intent: Intent) {
+    private fun handleIntent(intent: Intent): Boolean {
         val app = application as WiDoApp
         intent.getStringExtra(EXTRA_CONFIG_URL)?.let { app.settings.configUrl = it }
-        intent.getStringExtra(PlayerActivity.EXTRA_SITE)?.let {
-            intent.removeExtra(PlayerActivity.EXTRA_SITE)
-            startActivity(PlayerActivity.intent(this, it))
-        }
+        val site = intent.getStringExtra(PlayerActivity.EXTRA_SITE) ?: return false
+        intent.removeExtra(PlayerActivity.EXTRA_SITE)
+        startActivity(PlayerActivity.intent(this, site))
+        return true
     }
 
     private companion object {

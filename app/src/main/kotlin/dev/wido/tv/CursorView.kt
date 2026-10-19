@@ -13,7 +13,17 @@ import android.view.View
  */
 class CursorView(context: Context) : View(context) {
     private val density = resources.displayMetrics.density
-    private val scale = 1.8f * density
+    /** Taille de la flèche, en multiple de sa taille de base. */
+    var sizeFactor = 1.8f
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    /** Millisecondes avant masquage ; 0 = reste affiché. */
+    var hideDelayMs = 3_000L
+
+    private val scale get() = sizeFactor * density
 
     // Flèche classique, pointe en (0, 0), tracée sur une grille d'environ 13 x 20.
     private val arrow = Path().apply {
@@ -79,10 +89,18 @@ class CursorView(context: Context) : View(context) {
         return overflow
     }
 
+    /** Place directement le curseur (curseur aimanté). */
+    fun moveTo(x: Float, y: Float) {
+        px = x.coerceIn(0f, (width - 1).toFloat())
+        py = y.coerceIn(0f, (height - 1).toFloat())
+        wake()
+        invalidate()
+    }
+
     fun wake() {
         alpha = 1f
         removeCallbacks(hide)
-        postDelayed(hide, 3_000)
+        if (hideDelayMs > 0) postDelayed(hide, hideDelayMs)
     }
 
     override fun onDraw(canvas: Canvas) {

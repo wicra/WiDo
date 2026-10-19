@@ -1,0 +1,120 @@
+// Script interne de WiDo, injecté dans la page principale et dans ses iframes.
+// Il n'est jamais choisi par la configuration distante : voir docs/SECURITY.md.
+(function () {
+  'use strict';
+  if (window.__widoFrame) return;
+  window.__widoFrame = true;
+  var isTop = window === window.top;
+
+  // ---------- Curseur aimanté (page principale) ----------
+  var SELECTOR = 'a[href],button,input,select,textarea,summary,video,[role=button],[role=link],[role=tab],' +
+    '[role=menuitem],[role=checkbox],[onclick],[tabindex]:not([tabindex="-1"])';
+  var marked = null;
+  var markedOutline = '';
+  var markedOffset = '';
+
+  function usable(el, r) {
+    if (r.width < 8 || r.height < 8) return false;
+    if (r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth) return false;
+    var cs = window.getComputedStyle(el);
+    return cs.visibility !== 'hidden' && cs.display !== 'none' && cs.pointerEvents !== 'none' &&
+      parseFloat(cs.opacity) > 0.05;
+  }
+
+  function unmark() {
+    if (!marked) return;
+    marked.style.outline = markedOutline;
+    marked.style.outlineOffset = markedOffset;
+    marked = null;
+  }
+
+  function mark(el) {
+    unmark();
+    marked = el;
+    markedOutline = el.style.outline;
+    markedOffset = el.style.outlineOffset;
+    el.style.outline = '3px solid #1E90FF';
+    el.style.outlineOffset = '2px';
+  }
+
+  // (fx, fy) : position du curseur en fraction de la fenêtre. Renvoie la cible en fractions, ou null.
+  window.__widoSnap = function (dir, fx, fy) {
+    if (!isTop || !window.__widoPick) return null;
+    var nodes = document.querySelectorAll(SELECTOR);
+    var items = [];
+    var els = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var r = nodes[i].getBoundingClientRect();
+      if (!usable(nodes[i], r)) continue;
+      items.push({ x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height });
+      els.push(nodes[i]);
+    }
+    var index = window.__widoPick(dir, fx * window.innerWidth, fy * window.innerHeight, items);
+    if (index < 0) return null;
+    mark(els[index]);
+    return JSON.stringify({ x: items[index].x / window.innerWidth, y: items[index].y / window.innerHeight });
+  };
+  window.__widoUnmark = unmark;
+
+  // ---------- Lecteur vidéo (n'importe quelle frame) ----------
+  function bestVideo() {
+    var videos = document.querySelectorAll('video');
+    var best = null;
+    var bestArea = -1;
+    for (var i = 0; i < videos.length; i++) {
+      var v = videos[i];
+      var area = (v.videoWidth || 0) * (v.videoHeight || 0) || v.clientWidth * v.clientHeight;
+      if (area > bestArea) {
+        best = v;
+        bestArea = area;
+      }
+    }
+    return best;
+  }
+
+  function state(v) {
+    return {
+      paused: v.paused,
+      t: v.currentTime || 0,
+      d: isFinite(v.duration) ? v.duration : 0,
+      vol: v.muted ? 0 : v.volume
+    };
+  }
+
+  // cmd : 'state' | 'toggle' | 'play' | 'pause' | 'seek' (by, en secondes) | 'vol' (by, entre -1 et 1)
+  function command(c) {
+    var v = bestVideo();
+    if (!v) return null;
+    switch (c.cmd) {
+      case 'toggle': if (v.paused) v.play(); else v.pause(); break;
+      case 'play': v.play(); break;
+      case 'pause': v.pause(); break;
+      case 'seek': v.currentTime = Math.max(0, Math.min(isFinite(v.duration) ? v.duration : 1e9, v.currentTime + c.by)); break;
+      case 'vol': v.muted = false; v.volume = Math.max(0, Math.min(1, v.volume + c.by)); break;
+      default: break;
+    }
+    return state(v);
+  }
+
+  // Repli sans passerelle native : la page principale répond à evaluateJavascript.
+  window.__widoCommand = function (json) {
+    try {
+      var s = command(JSON.parse(json));
+      return s ? JSON.stringify(s) : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Passerelle native (WebMessageListener) : n'existe que si l'app l'a installée.
+  var bridge = window.WiDoBridge;
+  if (bridge && typeof bridge.postMessage === 'function') {
+    bridge.onmessage = function (event) {
+      try {
+        var s = command(JSON.parse(event.data));
+        if (s) bridge.postMessage(JSON.stringify({ type: 'media', s: s, top: isTop }));
+      } catch (e) { /* message illisible : ignoré */ }
+    };
+    bridge.postMessage(JSON.stringify({ type: 'hello', top: isTop }));
+  }
+})();

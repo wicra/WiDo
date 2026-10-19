@@ -3,12 +3,14 @@ package dev.wido.tv
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
 import android.animation.ValueAnimator
-import android.app.AlertDialog
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.media.AudioManager
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.Gravity
@@ -32,20 +34,33 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import dev.wido.core.Hosts
 import dev.wido.core.Site
+import dev.wido.core.Zoom
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+import org.json.JSONTokener
 
 /**
  * Lit un site dans une WebView plein écran, filtrée par les règles de la configuration.
- * Commandes : flèches = curseur, OK = clic, Retour = page précédente puis menu,
- * appui long sur Retour (ou Menu) = menu rapide, lecture/pause/avance/recul = lecteur vidéo.
+ *
+ * Télécommande (voir docs/REMOTE-CONTROL.md) : flèches = curseur aimanté (saute au lien suivant ;
+ * maintenues, déplacement libre), OK = clic, Retour = page précédente puis menu, appui long sur Retour
+ * (ou Menu) = menu rapide, touches média = lecteur vidéo, touches de couleur = raccourcis configurables,
+ * volume = indicateur WiDo, CH+/CH- = défilement de la page.
  */
 class PlayerActivity : ComponentActivity() {
+    private lateinit var settings: Settings
+    private lateinit var audio: AudioManager
     private lateinit var root: FrameLayout
     private lateinit var cursor: CursorView
+    private lateinit var osd: OsdView
     private var webView: WebView? = null
     private var client: WiDoWebViewClient? = null
+    private var injector: ScriptInjector? = null
+    private var bridge: FrameBridge? = null
     private var customView: View? = null
     private var customCallback: WebChromeClient.CustomViewCallback? = null
     private var cursorMode = true
@@ -58,8 +73,19 @@ class PlayerActivity : ComponentActivity() {
     private var overlayAnimator: ObjectAnimator? = null
     private var overlayVisible = true
 
+    private var helpView: View? = null
+    private var passivePoll = false
+    private val poll = Runnable {
+        if (osd.isShowing) {
+            passivePoll = true
+            media("state")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        settings = (application as WiDoApp).settings
+        audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
@@ -84,20 +110,24 @@ class PlayerActivity : ComponentActivity() {
                 finish()
                 return@launch
             }
-            val blocker = app.repository.blockerFor(site)
+            settings.lastSiteId = site.id
             loadingLabel.text = getString(R.string.loading_site, site.name)
+            val blocker = app.repository.blockerFor(site)
+            val scripts = ScriptInjector(this@PlayerActivity, site)
+            injector = scripts
             start(
                 site,
                 WiDoWebViewClient(
                     site,
                     blocker,
-                    ScriptInjector(this@PlayerActivity, site),
+                    scripts,
                     onNavigationBlocked = { url ->
                         runOnUiThread {
                             Toast.makeText(this@PlayerActivity, getString(R.string.toast_navigation_blocked, url.take(60)), Toast.LENGTH_SHORT).show()
                         }
                     },
                     onPageVisible = { runOnUiThread { hideOverlay() } },
+                    onPageStart = { bridge?.reset() },
                 ),
             )
             // Rafraîchit la configuration pour la prochaine ouverture, sans bloquer la lecture.
@@ -121,12 +151,25 @@ class PlayerActivity : ComponentActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             useWideViewPort = true
             loadWithOverviewMode = true
+            textZoom = settings.zoomFor(site.id)
             when (site.userAgent) {
                 "default", "" -> Unit
                 "desktop" -> userAgentString = DESKTOP_UA
                 else -> userAgentString = site.userAgent
             }
         }
+
+        // Passerelle vers toutes les frames (lecteurs dans des iframes) si la WebView l'accepte.
+        val bridged = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) &&
+            WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+        if (bridged) {
+            val frameBridge = FrameBridge { state -> runOnUiThread { onMediaState(state) } }
+            bridge = frameBridge
+            WebViewCompat.addWebMessageListener(wv, BRIDGE_NAME, setOf("*"), frameBridge)
+            WebViewCompat.addDocumentStartJavaScript(wv, injector?.internalScript().orEmpty(), setOf("*"))
+        }
+        injector?.includeInternal = !bridged
+
         wv.webViewClient = wc
         wv.webChromeClient = object : WebChromeClient() {
             override fun onShowCustomView(view: View, callback: CustomViewCallback) {
@@ -139,6 +182,7 @@ class PlayerActivity : ComponentActivity() {
                 root.addView(view, FrameLayout.LayoutParams(MATCH, MATCH))
                 wv.visibility = View.GONE
                 cursor.bringToFront()
+                osd.bringToFront()
             }
 
             override fun onHideCustomView() = exitCustomView()
@@ -155,9 +199,15 @@ class PlayerActivity : ComponentActivity() {
         wv.isFocusable = true
         root.addView(wv, FrameLayout.LayoutParams(MATCH, MATCH))
 
-        cursor = CursorView(this)
+        cursor = CursorView(this).apply {
+            sizeFactor = settings.cursorSize
+            hideDelayMs = settings.cursorHideSeconds * 1000L
+        }
         root.addView(cursor, FrameLayout.LayoutParams(MATCH, MATCH))
         cursor.wake()
+
+        osd = OsdView(this).apply { hideSeconds = settings.osdSeconds }
+        root.addView(osd, osd.layoutParamsForRoot())
 
         topBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
@@ -186,21 +236,60 @@ class PlayerActivity : ComponentActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (webView == null) return super.dispatchKeyEvent(event)
-        when (event.keyCode) {
+
+        // L'aide à l'écran se ferme à n'importe quelle touche.
+        if (helpView != null) {
+            if (event.action == KeyEvent.ACTION_UP) dismissHelp()
+            return true
+        }
+
+        val code = event.keyCode
+        when (code) {
             KeyEvent.KEYCODE_BACK -> return handleBack(event)
             KeyEvent.KEYCODE_MENU -> {
                 if (event.action == KeyEvent.ACTION_UP) showPanel()
                 return true
             }
+            KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> {
+                if (!settings.customVolume || audio.isVolumeFixed) return super.dispatchKeyEvent(event)
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    adjustVolume(
+                        when (code) {
+                            KeyEvent.KEYCODE_VOLUME_UP -> AudioManager.ADJUST_RAISE
+                            KeyEvent.KEYCODE_VOLUME_DOWN -> AudioManager.ADJUST_LOWER
+                            else -> AudioManager.ADJUST_TOGGLE_MUTE
+                        },
+                    )
+                }
+                return true
+            }
+            KeyEvent.KEYCODE_PROG_RED -> return colorKey(event, settings.keyRed)
+            KeyEvent.KEYCODE_PROG_GREEN -> return colorKey(event, settings.keyGreen)
+            KeyEvent.KEYCODE_PROG_YELLOW -> return colorKey(event, settings.keyYellow)
+            KeyEvent.KEYCODE_PROG_BLUE -> return colorKey(event, settings.keyBlue)
+            KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> {
+                if (event.action == KeyEvent.ACTION_DOWN) webView?.pageUp(false)
+                return true
+            }
+            KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> {
+                if (event.action == KeyEvent.ACTION_DOWN) webView?.pageDown(false)
+                return true
+            }
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE,
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyEvent.KEYCODE_MEDIA_REWIND,
             -> {
-                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) mediaKey(event.keyCode)
+                if (event.action == KeyEvent.ACTION_DOWN) mediaKey(code, event.repeatCount)
                 return true
             }
         }
+
+        // Plein écran vidéo : les flèches pilotent le lecteur.
+        if (customView != null && settings.fullscreenPlayerKeys) {
+            if (fullscreenKey(event)) return true
+        }
+
         if (cursorMode) {
-            when (event.keyCode) {
+            when (code) {
                 KeyEvent.KEYCODE_DPAD_UP -> return moveCursor(event, 0, -1)
                 KeyEvent.KEYCODE_DPAD_DOWN -> return moveCursor(event, 0, 1)
                 KeyEvent.KEYCODE_DPAD_LEFT -> return moveCursor(event, -1, 0)
@@ -237,16 +326,79 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    private fun colorKey(event: KeyEvent, action: KeyAction): Boolean {
+        if (event.action == KeyEvent.ACTION_UP) runKeyAction(action)
+        return true
+    }
+
+    private fun runKeyAction(action: KeyAction) {
+        when (action) {
+            KeyAction.NONE -> Unit
+            KeyAction.MENU -> finish()
+            KeyAction.RELOAD -> webView?.reload()
+            KeyAction.TOGGLE_CURSOR -> toggleCursor()
+            KeyAction.ZOOM_IN -> changeZoom(1)
+            KeyAction.ZOOM_OUT -> changeZoom(-1)
+            KeyAction.QUICK_MENU -> showPanel()
+            KeyAction.SAVE_PAGE -> saveCurrentPage()
+            KeyAction.SCROLL_TOP -> webView?.scrollTo(0, 0)
+        }
+    }
+
+    // --- Curseur ----------------------------------------------------------------------------
+
     private fun moveCursor(event: KeyEvent, dirX: Int, dirY: Int): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) return true
-        val density = resources.displayMetrics.density
-        // Vitesse progressive : précis au premier appui, rapide en maintenant.
-        val step = (8f + minOf(event.repeatCount, 25) * 2.5f) * density
-        val (overX, overY) = cursor.moveBy(dirX * step, dirY * step)
-        if (customView == null && (overX != 0f || overY != 0f)) {
-            webView?.scrollBy((overX * 2).toInt(), (overY * 2).toInt()) // le curseur bute sur un bord : la page défile
+        // Un appui bref saute au prochain lien ; maintenu, le curseur se déplace librement.
+        if (settings.snapNavigation && event.repeatCount == 0 && customView == null) {
+            snap(dirX, dirY)
+        } else {
+            freeMove(event.repeatCount, dirX, dirY)
         }
         return true
+    }
+
+    private fun freeMove(repeat: Int, dirX: Int, dirY: Int) {
+        val density = resources.displayMetrics.density
+        // Vitesse progressive : précis au premier appui, rapide en maintenant.
+        val step = (8f + minOf(repeat, 25) * 2.5f) * density * settings.cursorSpeed
+        val (overX, overY) = cursor.moveBy(dirX * step, dirY * step)
+        if (customView == null) {
+            if (repeat == 0) webView?.evaluateJavascript("window.__widoUnmark&&window.__widoUnmark()", null)
+            if (overX != 0f || overY != 0f) {
+                webView?.scrollBy((overX * 2).toInt(), (overY * 2).toInt()) // le curseur bute sur un bord : la page défile
+            }
+        }
+    }
+
+    /** Demande à la page le lien ou bouton le plus naturel dans cette direction ; sinon déplacement libre. */
+    private fun snap(dirX: Int, dirY: Int) {
+        val wv = webView ?: return
+        if (wv.width == 0 || wv.height == 0) return
+        val dir = when {
+            dirX < 0 -> "left"
+            dirX > 0 -> "right"
+            dirY < 0 -> "up"
+            else -> "down"
+        }
+        val fx = cursor.px / wv.width
+        val fy = cursor.py / wv.height
+        wv.evaluateJavascript("window.__widoSnap?window.__widoSnap('$dir',$fx,$fy):null") { raw ->
+            val target = parseSnapTarget(raw)
+            if (target != null) {
+                cursor.moveTo(target.first * wv.width, target.second * wv.height)
+            } else {
+                freeMove(0, dirX, dirY)
+            }
+        }
+    }
+
+    private fun parseSnapTarget(raw: String?): Pair<Float, Float>? {
+        val text = unquote(raw) ?: return null
+        return runCatching {
+            val o = JSONObject(text)
+            o.getDouble("x").toFloat() to o.getDouble("y").toFloat()
+        }.getOrNull()
     }
 
     private var tapDownTime = 0L
@@ -274,21 +426,88 @@ class PlayerActivity : ComponentActivity() {
         ev.recycle()
     }
 
-    private fun mediaKey(keyCode: Int) {
-        val js = when (keyCode) {
-            KeyEvent.KEYCODE_MEDIA_PLAY -> "v.play()"
-            KeyEvent.KEYCODE_MEDIA_PAUSE -> "v.pause()"
-            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> "v.currentTime+=10"
-            KeyEvent.KEYCODE_MEDIA_REWIND -> "v.currentTime-=10"
-            else -> "(v.paused?v.play():v.pause())"
+    private fun toggleCursor() {
+        cursorMode = !cursorMode
+        cursor.visibility = if (cursorMode) View.VISIBLE else View.GONE
+        if (cursorMode) cursor.wake()
+    }
+
+    // --- Lecteur vidéo, volume, zoom --------------------------------------------------------
+
+    private fun mediaKey(keyCode: Int, repeat: Int) {
+        val seek = settings.seekSeconds.toDouble()
+        when (keyCode) {
+            KeyEvent.KEYCODE_MEDIA_PLAY -> media("play")
+            KeyEvent.KEYCODE_MEDIA_PAUSE -> media("pause")
+            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> media("seek", seek * (1 + minOf(repeat, 4)))
+            KeyEvent.KEYCODE_MEDIA_REWIND -> media("seek", -seek * (1 + minOf(repeat, 4)))
+            else -> if (repeat == 0) media("toggle")
         }
-        // La vidéo la plus grande de la page ; ne traverse pas les iframes d'un autre domaine.
-        webView?.evaluateJavascript(
-            "(function(){var v=Array.from(document.querySelectorAll('video'))" +
-                ".sort(function(a,b){return b.videoWidth*b.videoHeight-a.videoWidth*a.videoHeight})[0];" +
-                "if(v){$js;}})();",
-            null,
-        )
+    }
+
+    /** Flèches et OK en plein écran vidéo. Renvoie vrai si la touche est consommée. */
+    private fun fullscreenKey(event: KeyEvent): Boolean {
+        val seek = settings.seekSeconds.toDouble()
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> if (event.action == KeyEvent.ACTION_DOWN) media("seek", -seek)
+            KeyEvent.KEYCODE_DPAD_RIGHT -> if (event.action == KeyEvent.ACTION_DOWN) media("seek", seek)
+            KeyEvent.KEYCODE_DPAD_UP -> if (event.action == KeyEvent.ACTION_DOWN) videoVolume(1)
+            KeyEvent.KEYCODE_DPAD_DOWN -> if (event.action == KeyEvent.ACTION_DOWN) videoVolume(-1)
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) media("toggle")
+            else -> return false
+        }
+        return true
+    }
+
+    private fun videoVolume(direction: Int) {
+        if (settings.customVolume && !audio.isVolumeFixed) {
+            adjustVolume(if (direction > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER)
+        } else {
+            media("vol", 0.1 * direction)
+        }
+    }
+
+    /** Commande envoyée au lecteur vidéo de la page, dans n'importe quelle frame. */
+    private fun media(cmd: String, by: Double? = null) {
+        val json = JSONObject().put("cmd", cmd).apply { if (by != null) put("by", by) }.toString()
+        val b = bridge
+        if (b != null) {
+            b.send(json)
+        } else {
+            webView?.evaluateJavascript("window.__widoCommand&&window.__widoCommand(${JSONObject.quote(json)})") { raw ->
+                parseMediaState(unquote(raw))?.let { onMediaState(it) }
+            }
+        }
+    }
+
+    private fun onMediaState(state: MediaState) {
+        val passive = passivePoll
+        passivePoll = false
+        osd.showMedia(state, passive)
+        root.removeCallbacks(poll)
+        if (osd.isShowing) root.postDelayed(poll, POLL_MS) // la barre avance pendant qu'elle est visible
+    }
+
+    /** Règle le volume du système sans le panneau d'Android, et affiche l'indicateur de WiDo. */
+    private fun adjustVolume(direction: Int) {
+        audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0)
+        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val level = if (audio.isStreamMute(AudioManager.STREAM_MUSIC)) 0 else audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        osd.showVolume(level, max)
+    }
+
+    private fun changeZoom(direction: Int) {
+        val current = site ?: return
+        val next = Zoom.step(settings.zoomFor(current.id), direction)
+        settings.setZoomFor(current.id, next)
+        webView?.settings?.textZoom = next
+        osd.showText(getString(R.string.osd_zoom, next))
+    }
+
+    /** `evaluateJavascript` renvoie un littéral JSON : on en tire la chaîne, ou null. */
+    private fun unquote(raw: String?): String? {
+        if (raw.isNullOrBlank() || raw == "null") return null
+        return runCatching { JSONTokener(raw).nextValue() as? String }.getOrNull()
     }
 
     // --- Menu rapide ------------------------------------------------------------------------
@@ -300,6 +519,8 @@ class PlayerActivity : ComponentActivity() {
         entries += getString(R.string.panel_resume) to {}
         entries += getString(R.string.panel_reload) to { webView?.reload() }
         entries += getString(if (cursorMode) R.string.panel_cursor_on else R.string.panel_cursor_off) to { toggleCursor() }
+        entries += getString(R.string.panel_zoom_in) to { changeZoom(1) }
+        entries += getString(R.string.panel_zoom_out) to { changeZoom(-1) }
 
         // La dernière redirection refusée : l'autoriser pour ce site, ou l'ouvrir une seule fois.
         val blockedUrl = c?.lastBlockedUrl
@@ -313,6 +534,7 @@ class PlayerActivity : ComponentActivity() {
         }
 
         entries += getString(R.string.panel_save_page) to { saveCurrentPage() }
+        entries += getString(R.string.panel_help) to { showHelp() }
         entries += getString(R.string.panel_menu) to { finish() }
         entries += getString(R.string.panel_blocked, c?.blockedRequests?.get() ?: 0, c?.blockedNavigations?.get() ?: 0) to {}
 
@@ -320,12 +542,6 @@ class PlayerActivity : ComponentActivity() {
             .setTitle(R.string.panel_title)
             .setItems(entries.map { it.first }.toTypedArray()) { _, which -> entries[which].second() }
             .show()
-    }
-
-    private fun toggleCursor() {
-        cursorMode = !cursorMode
-        cursor.visibility = if (cursorMode) View.VISIBLE else View.GONE
-        if (cursorMode) cursor.wake()
     }
 
     /** Autorise `host` pour ce site (gardé localement), recharge les règles puis ouvre la page refusée. */
@@ -354,6 +570,36 @@ class PlayerActivity : ComponentActivity() {
         val name = host.removePrefix("www.")
         val error = (application as WiDoApp).repository.addLocalSite(name, "$scheme://$host")
         Toast.makeText(this, error ?: getString(R.string.toast_saved, name), Toast.LENGTH_LONG).show()
+    }
+
+    // --- Aide à l'écran ---------------------------------------------------------------------
+
+    private fun showHelp() {
+        if (helpView != null) return
+        val density = resources.displayMetrics.density
+        val card = TextView(this).apply {
+            text = getString(R.string.help_body)
+            setTextColor(0xFFF4F7FC.toInt())
+            textSize = 19f
+            setLineSpacing(0f, 1.25f)
+            val pad = (32 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+            background = GradientDrawable().apply {
+                setColor(0xF2101626.toInt())
+                cornerRadius = 20 * density
+                setStroke((2 * density).toInt(), 0x661E90FF)
+            }
+        }
+        helpView = card
+        root.addView(card, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        card.bringToFront()
+        card.postDelayed({ dismissHelp() }, HELP_TIMEOUT_MS)
+    }
+
+    private fun dismissHelp() {
+        val view = helpView ?: return
+        helpView = null
+        root.removeView(view)
     }
 
     // --- Écran de chargement ----------------------------------------------------------------
@@ -410,6 +656,11 @@ class PlayerActivity : ComponentActivity() {
         overlay.animate().alpha(0f).setDuration(250).withEndAction {
             if (overlay.parent != null) root.removeView(overlay)
         }.start()
+        // Première utilisation : rappel des commandes.
+        if (!settings.helpSeen) {
+            settings.helpSeen = true
+            root.postDelayed({ showHelp() }, 500)
+        }
     }
 
     // --- Cycle de vie -----------------------------------------------------------------------
@@ -426,6 +677,7 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onDestroy() {
         overlayAnimator?.cancel()
+        root.removeCallbacks(poll)
         customCallback?.onCustomViewHidden()
         webView?.let {
             root.removeView(it)
@@ -438,8 +690,11 @@ class PlayerActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_SITE = "site"
+        private const val BRIDGE_NAME = "WiDoBridge"
         private const val ACCENT = 0xFF1E90FF.toInt()
         private const val OVERLAY_TIMEOUT_MS = 20_000L
+        private const val HELP_TIMEOUT_MS = 15_000L
+        private const val POLL_MS = 700L
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val LONG_PRESS_MS = 600L
         private const val DESKTOP_UA =

@@ -48,12 +48,13 @@ fun SiteEditorDialog(
     onSave: (name: String, url: String, options: LocalSites.SiteOptions) -> String?,
     onDelete: (() -> Unit)?,
     onDismiss: () -> Unit,
+    defaultRelaxed: Boolean = false,
 ) {
     var name by remember { mutableStateOf(initial?.name.orEmpty()) }
     var url by remember { mutableStateOf(initial?.url.orEmpty()) }
     var allowed by remember { mutableStateOf(LocalSites.domainsToText(initial?.allowedDomains.orEmpty())) }
     var blocked by remember { mutableStateOf(LocalSites.domainsToText(LocalSites.blockedDomainsOf(initial?.rules.orEmpty()))) }
-    var relaxed by remember { mutableStateOf(initial?.navigation == Navigation.RELAXED) }
+    var relaxed by remember { mutableStateOf(if (initial != null) initial.navigation == Navigation.RELAXED else defaultRelaxed) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
     val nameFocus = remember { FocusRequester() }

@@ -19,6 +19,7 @@ class WiDoWebViewClient(
     private val injector: ScriptInjector,
     private val onNavigationBlocked: (String) -> Unit,
     private val onPageVisible: () -> Unit,
+    private val onPageStart: () -> Unit = {},
 ) : WebViewClient() {
     @Volatile private var site = site
     @Volatile private var blocker = blocker
@@ -64,7 +65,10 @@ class WiDoWebViewClient(
         return true
     }
 
-    override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) = injector.inject(view)
+    override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+        onPageStart()
+        injector.inject(view)
+    }
 
     override fun onPageCommitVisible(view: WebView, url: String?) = onPageVisible()
 

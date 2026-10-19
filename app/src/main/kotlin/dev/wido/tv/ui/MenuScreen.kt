@@ -81,6 +81,8 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
     val sites by vm.sites.collectAsState()
 
     var editor by remember { mutableStateOf<Editor?>(null) }
+    var showSettings by remember { mutableStateOf(false) }
+    val settings = (LocalContext.current.applicationContext as WiDoApp).settings
     // Ambiance : le fond prend la couleur de la carte qui a le focus, comme la lumière d'une salle.
     var ambientTarget by remember { mutableStateOf(Palette.Accent) }
     val ambient by animateColorAsState(ambientTarget, tween(700), label = "ambient")
@@ -113,7 +115,7 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
             .padding(horizontal = 56.dp, vertical = 28.dp),
     ) {
         Column(Modifier.fillMaxSize()) {
-            Header(state, onRefresh = vm::refresh)
+            Header(state, onRefresh = vm::refresh, onSettings = { showSettings = true })
             Spacer(Modifier.height(14.dp))
             UpdateBanner(update, onInstall = vm::install)
             Marquee()
@@ -166,12 +168,15 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
                 }
             },
             onDismiss = { editor = null },
+            defaultRelaxed = settings.newSitesRelaxed,
         )
     }
+
+    if (showSettings) SettingsDialog(settings) { showSettings = false }
 }
 
 @Composable
-private fun Header(state: ConfigState, onRefresh: () -> Unit) {
+private fun Header(state: ConfigState, onRefresh: () -> Unit, onSettings: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Image(
             painterResource(R.drawable.wido_logo),
@@ -198,6 +203,8 @@ private fun Header(state: ConfigState, onRefresh: () -> Unit) {
         Spacer(Modifier.weight(1f))
         StatusPill(state)
         Spacer(Modifier.width(16.dp))
+        ActionButton(stringResource(R.string.action_settings), onSettings, primary = false)
+        Spacer(Modifier.width(12.dp))
         ActionButton(stringResource(R.string.action_refresh), onRefresh)
     }
 }
