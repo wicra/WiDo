@@ -1,6 +1,6 @@
 # Réglages
 
-Menu principal → **Réglages**. Chaque ligne se règle avec **◀ ▶** (ou **OK** pour passer à la valeur suivante). Les changements s'appliquent à l'ouverture du site suivant. **Réinitialiser** remet les réglages de confort à leur valeur d'origine, sans toucher à l'URL de configuration ni aux sites.
+Menu principal → **Réglages**. Les réglages sont rangés par thème (Curseur, Lecture, Touches de couleur, Général). Chaque choix est un **bouton visible** : déplace le focus dessus et appuie sur **OK**. Les réglages à nombreuses valeurs (zoom, masquage du curseur, touches de couleur) ont deux boutons **◀ ▶** autour de la valeur. Les changements s'appliquent à l'ouverture du site suivant. **Réinitialiser** remet les réglages de confort à leur valeur d'origine, sans toucher à l'URL de configuration ni aux sites.
 
 | Réglage | Valeurs | Défaut | Effet |
 |---|---|---|---|

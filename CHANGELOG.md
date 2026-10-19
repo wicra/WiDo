@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+
+### Corrigé
+- Les options d'un site perso ne dépendent plus de l'appui long (que certaines télécommandes ne transmettent pas) : une bande **« ••• »** visible en bas de la carte les ouvre. Elle est séparée du corps de la carte, donc atteignable au focus et sans superposition.
+
+### Amélioré
+- **Écran de Réglages refait** : réglages rangés par thème (Curseur, Lecture, Touches de couleur, Général), choix toujours visibles sous forme de boutons, plus de valeur cachée derrière une flèche.
+
 ## 0.4.0
 
 ### Refonte de l'interface

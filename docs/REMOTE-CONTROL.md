@@ -2,7 +2,7 @@
 
 ## Menu des sites
 
-Flèches pour se déplacer, **OK** pour ouvrir. Le fond du menu prend la couleur de la carte sélectionnée. La dernière carte, **« + Ajouter un site »**, ouvre le formulaire ([CUSTOM-SITES](CUSTOM-SITES.md)). Sur une carte de site perso, un appui long sur OK (ou la touche Menu) ouvre les options : ouvrir, modifier, supprimer. **Réglages** : voir [SETTINGS](SETTINGS.md).
+Flèches pour se déplacer, **OK** pour ouvrir. Le fond du menu prend la couleur de la carte sélectionnée. La dernière carte, **« + Ajouter un site »**, ouvre le formulaire ([CUSTOM-SITES](CUSTOM-SITES.md)). Sur une carte de site perso, la bande **« ••• »** en bas de la carte ouvre les options : ouvrir, modifier, supprimer ([CUSTOM-SITES](CUSTOM-SITES.md)). **Réglages** : voir [SETTINGS](SETTINGS.md).
 
 ## Pendant la lecture
 
