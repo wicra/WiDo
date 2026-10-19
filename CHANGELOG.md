@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+### Ajouté
+- **Curseur aimanté** : un appui bref sur une flèche saute au lien ou bouton le plus naturel dans cette direction (contour bleu) ; maintenue, la flèche déplace librement. Désactivable.
+- **Barre de lecture** à l'écran (état, temps, durée, volume, progression), qui pilote la vidéo même dans une iframe d'un autre domaine quand la WebView le permet.
+- **Volume personnalisé** : les touches de volume règlent le volume du système avec un indicateur WiDo.
+- **Zoom du texte**, mémorisé par site (touches de couleur ou menu rapide).
+- **Touches de couleur** configurables, CH +/− pour faire défiler, flèches du plein écran vidéo (avance/recul, volume, lecture/pause).
+- **Aide à l'écran** des commandes (première ouverture, puis menu rapide).
+- **Écran de Réglages** : vitesse, taille et masquage du curseur, zoom par défaut, saut de lecture, durée des indicateurs, volume, touches, démarrage sur le dernier site, redirections des nouveaux sites.
+
 ## 0.2.0
 
 ### Ajouté

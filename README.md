@@ -11,7 +11,7 @@ Un navigateur de streaming pour **Google TV / Android TV**, pensé pour la tél�
 ## Ce que fait le MVP
 
 - **Menu de sites** à la télécommande (grille, focus visible, état de la configuration).
-- **Lecture plein écran** dans une WebView, avec **curseur** piloté aux flèches (OK = clic), clavier de la TV sur les champs de saisie, touches média (lecture/pause, ±10 s).
+- **Lecture plein écran** dans une WebView, avec **curseur aimanté** (une flèche saute au prochain lien), clic à OK, clavier de la TV sur les champs de saisie, **barre de lecture**, volume personnalisé, zoom du texte et touches de couleur configurables.
 - **Blocage de pubs et de redirections** : listes de domaines (format AdBlock ou hosts), règles globales ou par site, politique de navigation qui refuse tout domaine non prévu.
 - **Configuration distante** : un fichier JSON sur GitHub (sites, listes, règles). Un site change de domaine ? Tu modifies une ligne.
 - **Mise à jour depuis les releases GitHub**, sans serveur : l'app télécharge l'APK, vérifie sa somme SHA-256, puis Android demande confirmation.
@@ -36,7 +36,8 @@ Ce qu'il ne fait pas (encore) : API locale pour taper du texte à distance, prof
 | [Configuration](docs/CONFIGURATION.md) | Tous les champs du fichier JSON, avec exemples. |
 | [Blocage](docs/BLOCKING.md) | Ce qui est bloqué, comment, et ses limites. |
 | [Scripts](docs/SCRIPTS.md) | Les scripts intégrés et les sélecteurs masqués. |
-| [Télécommande](docs/REMOTE-CONTROL.md) | Curseur, touches, menu rapide. |
+| [Télécommande](docs/REMOTE-CONTROL.md) | Curseur aimanté, touches, barre de lecture, menu rapide. |
+| [Réglages](docs/SETTINGS.md) | Curseur, zoom, volume, touches de couleur, démarrage. |
 | [Mises à jour](docs/UPDATES.md) | Fonctionnement via les releases GitHub. |
 | [Home Assistant](docs/HOME-ASSISTANT.md) | Scène « soirée cinéma », lancement d'un site. |
 | [Architecture](docs/ARCHITECTURE.md) | Modules, flux, décisions de conception. |

@@ -14,7 +14,15 @@
 
 Le premier travail de la v0.1.x est de faire tourner la CI, corriger ce qu'elle révèle, puis valider sur le projecteur.
 
-## À valider sur un appareil réel
+## À valider sur un appareil réel (v0.3)
+
+- [ ] Curseur aimanté : saute bien d'un lien à l'autre sur YouTube et sur un site à grille de vignettes.
+- [ ] Barre de lecture : pilote une vidéo dans une **iframe** d'un autre domaine (passerelle native).
+- [ ] Volume personnalisé : l'indicateur WiDo remplace celui d'Android et le volume change réellement.
+- [ ] Touches de couleur : la télécommande du projecteur en a-t-elle ? Que renvoient CH +/- ?
+- [ ] Zoom du texte : lisible à 3 mètres, mémorisé par site.
+- [ ] Écran de Réglages : navigation et changement de valeurs à la télécommande.
+
 
 La check-list détaillée, avec les sites de test, est dans [TESTING](TESTING.md).
 

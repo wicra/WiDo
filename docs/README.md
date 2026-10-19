@@ -6,7 +6,7 @@ Ordre de lecture conseillé :
 2. [TESTING](TESTING.md) : sites de test et check-list.
 3. [CONFIGURATION](CONFIGURATION.md) : décrire tes sites et tes règles, et [CUSTOM-SITES](CUSTOM-SITES.md) pour en ajouter depuis la TV.
 4. [BLOCKING](BLOCKING.md) et [SCRIPTS](SCRIPTS.md) : régler le blocage.
-5. [REMOTE-CONTROL](REMOTE-CONTROL.md) : utiliser la télécommande.
+5. [REMOTE-CONTROL](REMOTE-CONTROL.md) et [SETTINGS](SETTINGS.md) : utiliser la télécommande et la régler.
 6. [HOME-ASSISTANT](HOME-ASSISTANT.md) : automatiser la soirée.
 7. [UPDATES](UPDATES.md) : comprendre les mises à jour.
 

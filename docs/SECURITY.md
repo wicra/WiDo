@@ -12,6 +12,15 @@
 | Lancement d'un site par une autre app | `PlayerActivity` est exportée pour Home Assistant, mais n'ouvre que des sites **déjà présents dans ta configuration**. |
 | Fichier ou liste énorme | Tailles bornées (config 1 Mo, liste 8 Mo, APK 100 Mo, 100 sites, 5000 règles). |
 
+## Scripts internes et passerelle native
+
+WiDo injecte dans les pages (et leurs iframes) un **script interne** embarqué dans l'APK (`assets/internal/`) pour le curseur aimanté et le lecteur vidéo. Règles :
+
+- il ne vient **jamais** de la configuration ni du réseau ;
+- il ne lit ni ne transmet le contenu de la page : il répond seulement à des commandes d'app (`toggle`, `seek`, `vol`, `state`) et renvoie l'état de la vidéo (pause, temps, durée, volume) ;
+- la passerelle native (`WiDoBridge`) n'expose **aucune** action sensible : un site malveillant qui l'appelle ne peut qu'envoyer un message à l'app, qui n'en traite que le type `media` ;
+- elle est installée avec des règles d'origine `*` pour atteindre les lecteurs dans des iframes d'autres domaines : c'est un choix assumé, limité à ce canal.
+
 ## Ce que WiDo ne protège pas
 
 - Le contenu des sites que tu configures : leur fiabilité reste ta responsabilité.
