@@ -51,14 +51,14 @@ Pourquoi des *secrets GitHub* plutôt que des fichiers dans le dépôt : le dép
 
 ## Pré-release de test (sans secrets)
 
-Si les secrets sont absents, le workflow ne s'arrête pas : il publie une **pré-release** dont l'APK est signée avec la clé de debug d'Android. C'est pratique pour tester sur la TV (par exemple avec Downloader), mais :
+Pour un tag contenant `-test` (par exemple `v0.1.0-test1`) et sans secrets, le workflow ne s'arrête pas : il publie une **pré-release**. Pour tout autre tag, l'absence de secrets fait échouer la publication, afin de ne jamais diffuser par erreur une APK signée avec la clé de debug. La pré-release dont l'APK est signée avec la clé de debug d'Android. C'est pratique pour tester sur la TV (par exemple avec Downloader), mais :
 
 - elle est marquée *pre-release* sur GitHub, donc **l'app ne la propose pas comme mise à jour** (`releases/latest` l'ignore) ;
 - une release signée avec ta vraie clé ne pourra pas l'écraser : il faudra d'abord `adb uninstall dev.wido.tv` ou la désinstaller depuis les réglages de la TV.
 
 ## Pré-release de test (sans secrets)
 
-Si les secrets sont absents, le workflow ne s'arrête pas : il publie une **pré-release** dont l'APK est signée avec la clé de debug d'Android. C'est pratique pour tester sur la TV (par exemple avec Downloader), mais :
+Pour un tag contenant `-test` (par exemple `v0.1.0-test1`) et sans secrets, le workflow ne s'arrête pas : il publie une **pré-release**. Pour tout autre tag, l'absence de secrets fait échouer la publication, afin de ne jamais diffuser par erreur une APK signée avec la clé de debug. La pré-release dont l'APK est signée avec la clé de debug d'Android. C'est pratique pour tester sur la TV (par exemple avec Downloader), mais :
 
 - elle est marquée *pre-release* sur GitHub, donc **l'app ne la propose pas comme mise à jour** (`releases/latest` l'ignore) ;
 - une release signée avec ta vraie clé ne pourra pas l'écraser : il faudra d'abord `adb uninstall dev.wido.tv` ou la désinstaller depuis les réglages de la TV.

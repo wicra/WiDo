@@ -28,9 +28,15 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.WIDO_KEYSTORE_BASE64 }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
-            # Sans secrets : APK signée avec la clé de debug, publiée en pré-release (test uniquement).
-            echo "::warning::Secret WIDO_KEYSTORE_BASE64 absent : APK de test signée avec la clé debug (voir docs/RELEASING.md)"
-            echo "PRERELEASE=--prerelease" >> "$GITHUB_ENV"
+            case "$GITHUB_REF_NAME" in
+              *-test*)
+                # Tag de test sans secrets : APK signée avec la clé debug, publiée en pré-release.
+                echo "::warning::Secret WIDO_KEYSTORE_BASE64 absent : APK de test signée avec la clé debug"
+                echo "PRERELEASE=--prerelease" >> "$GITHUB_ENV" ;;
+              *)
+                echo "::error::Secret WIDO_KEYSTORE_BASE64 absent : une version normale doit être signée avec ta clé (voir docs/RELEASING.md)"
+                exit 1 ;;
+            esac
           else
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/wido.jks"
             echo "WIDO_KEYSTORE_PATH=$RUNNER_TEMP/wido.jks" >> "$GITHUB_ENV"
