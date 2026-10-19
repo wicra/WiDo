@@ -8,25 +8,24 @@
   "whitelist": [],
   "sites": [
     {
-      "id": "test-pubs",
-      "name": "Test du blocage de pubs",
-      "url": "https://d3ward.github.io/toolz/adblock.html",
+      "id": "Adresse-Wiflix",
+      "name": "Adresse Wiflix",
+      "url": "https://wiflix-adresses.fun",
       "scripts": [
         "block-popups"
       ]
     },
     {
-      "id": "test-drm",
-      "name": "Test lecteur (Shaka)",
-      "url": "https://shaka-player-demo.appspot.com/"
+      "id": "Wiflix",
+      "name": "Wiflix",
+      "url": "https://flemmix.land"
     },
     {
-      "id": "archive",
-      "name": "Internet Archive (films libres)",
-      "url": "https://archive.org/details/movies",
+      "id": "Youtube",
+      "name": "Youtube",
+      "url": "https://youtube.com",
       "scripts": [
-        "block-popups",
-        "hide-cookie-banners"
+        "block-popups"
       ]
     }
   ]
