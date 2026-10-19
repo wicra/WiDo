@@ -4,7 +4,7 @@ Ordre de lecture conseillé :
 
 1. [INSTALL-ANDROID-TV](INSTALL-ANDROID-TV.md) : mettre l'app sur le projecteur (résumé : [INSTALL](INSTALL.md)).
 2. [TESTING](TESTING.md) : sites de test et check-list.
-3. [CONFIGURATION](CONFIGURATION.md) : décrire tes sites et tes règles.
+3. [CONFIGURATION](CONFIGURATION.md) : décrire tes sites et tes règles, et [CUSTOM-SITES](CUSTOM-SITES.md) pour en ajouter depuis la TV.
 4. [BLOCKING](BLOCKING.md) et [SCRIPTS](SCRIPTS.md) : régler le blocage.
 5. [REMOTE-CONTROL](REMOTE-CONTROL.md) : utiliser la télécommande.
 6. [HOME-ASSISTANT](HOME-ASSISTANT.md) : automatiser la soirée.

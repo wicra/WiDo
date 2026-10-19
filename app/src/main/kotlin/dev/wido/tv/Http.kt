@@ -36,6 +36,26 @@ object Http {
         }
     }
 
+    /** Lit au plus `maxBytes` octets du début de la réponse, sans erreur si elle est plus longue. */
+    fun getPrefix(url: String, maxBytes: Int, timeoutMs: Int = 6_000): ByteArray {
+        val conn = open(url, timeoutMs, emptyMap())
+        try {
+            check(conn)
+            conn.inputStream.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buf = ByteArray(8 * 1024)
+                while (out.size() < maxBytes) {
+                    val n = input.read(buf, 0, minOf(buf.size, maxBytes - out.size()))
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                }
+                return out.toByteArray()
+            }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     fun download(
         url: String,
         dest: File,

@@ -22,6 +22,10 @@ Aucun serveur à héberger : les **releases GitHub** du dépôt font office de c
 
 La somme est lue dans le champ `digest` de l'asset (fourni par GitHub) ou, à défaut, dans les notes de release sous la forme `sha256: <64 caractères hexadécimaux>`. La CI de ce dépôt l'écrit automatiquement ([RELEASING](RELEASING.md)).
 
+## Ce qui est conservé
+
+Une mise à jour (depuis l'app ou par `adb install -r`) remplace le code mais **garde les données de l'app** : sites ajoutés depuis la TV, URL de configuration, cache des listes et des icônes. Voir [CUSTOM-SITES](CUSTOM-SITES.md).
+
 ## Ce qui n'est pas possible
 
 - **Installation 100 % silencieuse** : réservée aux apps système ou à ADB. Pour un parc maîtrisé, depuis un ordinateur ou Home Assistant : `adb install -r wido-vX.Y.Z.apk`.

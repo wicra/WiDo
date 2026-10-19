@@ -40,6 +40,8 @@ data class Site(
     val userAgent: String = "default",
     /** Couleur d'accent de la carte, ex. `#E50914`. */
     val color: String? = null,
+    /** URL (https) d'une icône à la place du favicon détecté automatiquement. */
+    val icon: String? = null,
     /** Autorise http (réseau local, serveur maison). Désactivé par défaut. */
     val allowInsecure: Boolean = false,
 )
@@ -88,12 +90,14 @@ object ConfigParser {
         val seen = mutableSetOf<String>()
         val sites = mutableListOf<Site>()
         for (site in raw.sites.take(MAX_SITES)) {
-            val problem = validate(site, seen)
+            val problem = validateSite(site, seen)
             if (problem != null) {
                 warnings += "Site « ${site.id} » ignoré : $problem"
             } else {
                 seen += site.id
-                sites += site.copy(rules = site.rules.take(MAX_RULES))
+                val icon = site.icon?.takeIf { Hosts.schemeOf(it) == "https" && Hosts.of(it) != null }
+                if (site.icon != null && icon == null) warnings += "Site « ${site.id} » : icône ignorée (https requis)"
+                sites += site.copy(rules = site.rules.take(MAX_RULES), icon = icon)
             }
         }
         if (raw.sites.size > MAX_SITES) warnings += "Plus de $MAX_SITES sites : les suivants sont ignorés."
@@ -104,9 +108,10 @@ object ConfigParser {
         )
     }
 
-    private fun validate(site: Site, seen: Set<String>): String? {
+    /** Pourquoi ce site est inacceptable, ou null s'il est valide. `taken` : identifiants déjà utilisés. */
+    fun validateSite(site: Site, taken: Set<String>): String? {
         if (!ID_REGEX.matches(site.id)) return "identifiant invalide (a-z, 0-9, tirets, 32 max)"
-        if (site.id in seen) return "identifiant en double"
+        if (site.id in taken) return "identifiant en double"
         if (site.name.isBlank()) return "nom vide"
         val scheme = Hosts.schemeOf(site.url)
         if (Hosts.of(site.url) == null) return "URL invalide"

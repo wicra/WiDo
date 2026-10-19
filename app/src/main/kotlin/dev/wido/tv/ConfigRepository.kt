@@ -6,6 +6,7 @@ import dev.wido.core.ConfigParser
 import dev.wido.core.FilterParser
 import dev.wido.core.HostBlocker
 import dev.wido.core.HostRules
+import dev.wido.core.LocalSites
 import dev.wido.core.Hosts
 import dev.wido.core.NavigationPolicy
 import dev.wido.core.Site
@@ -15,7 +16,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
@@ -26,6 +29,9 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
 enum class ConfigSource { Remote, Cache, Bundled }
+
+/** Un site du menu : `local` = ajouté sur cet appareil (modifiable, jamais écrasé par la config distante). */
+data class MenuSite(val site: Site, val local: Boolean)
 
 data class ConfigState(
     val config: WiDoConfig? = null,
@@ -42,6 +48,19 @@ data class ConfigState(
 class ConfigRepository(private val context: Context, private val settings: Settings) {
     private val _state = MutableStateFlow(ConfigState())
     val state: StateFlow<ConfigState> = _state.asStateFlow()
+
+    private val localFile get() = File(context.filesDir, "local-sites.json")
+
+    /** Sites ajoutés depuis l'app : fichier à part, que ni l'actualisation ni les mises à jour ne touchent. */
+    private val _local = MutableStateFlow(readLocalSites())
+    val localSites: StateFlow<List<Site>> = _local.asStateFlow()
+
+    /** Sites distants activés, puis sites locaux. */
+    val sites: Flow<List<MenuSite>> = combine(_state, _local) { st, local ->
+        val remote = st.config?.sites.orEmpty()
+        val remoteIds = remote.map { it.id }.toSet()
+        LocalSites.merge(remote, local).filter { it.enabled }.map { MenuSite(it, local = it.id !in remoteIds) }
+    }
 
     private val mutex = Mutex()
     private val parsedLists = ConcurrentHashMap<String, HostRules>()
@@ -69,6 +88,46 @@ class ConfigRepository(private val context: Context, private val settings: Setti
             _state.update { it.copy(loading = false, error = e.message) }
         }
     }
+
+    suspend fun findSite(id: String): Site? {
+        val config = ensureLoaded()
+        return LocalSites.merge(config.sites, _local.value).firstOrNull { it.id == id && it.enabled }
+    }
+
+    /** Ajoute un site local. Renvoie un message d'erreur, ou null si c'est fait. */
+    @Synchronized
+    fun addLocalSite(name: String, url: String): String? {
+        val local = _local.value
+        if (local.size >= LocalSites.MAX_LOCAL) return "Limite de ${LocalSites.MAX_LOCAL} sites atteinte."
+        return when (val built = LocalSites.build(name, url, takenIds())) {
+            is LocalSites.Built.Error -> built.message
+            is LocalSites.Built.Ok -> { saveLocal(local + built.site); null }
+        }
+    }
+
+    @Synchronized
+    fun updateLocalSite(id: String, name: String, url: String): String? {
+        val local = _local.value
+        if (local.none { it.id == id }) return "Site introuvable."
+        return when (val built = LocalSites.build(name, url, takenIds(), keepId = id)) {
+            is LocalSites.Built.Error -> built.message
+            is LocalSites.Built.Ok -> { saveLocal(local.map { if (it.id == id) built.site else it }); null }
+        }
+    }
+
+    @Synchronized
+    fun removeLocalSite(id: String) = saveLocal(_local.value.filterNot { it.id == id })
+
+    private fun takenIds(): Set<String> =
+        (_state.value.config?.sites.orEmpty().map { it.id } + _local.value.map { it.id }).toSet()
+
+    private fun saveLocal(list: List<Site>) {
+        writeAtomically(localFile, LocalSites.encode(list))
+        _local.value = list
+    }
+
+    private fun readLocalSites(): List<Site> =
+        runCatching { LocalSites.decode(localFile.readText()) }.getOrDefault(emptyList())
 
     /** Construit le filtre d'un site : listes distantes + règles globales + règles du site. */
     suspend fun blockerFor(site: Site): HostBlocker {

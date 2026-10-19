@@ -30,6 +30,7 @@ Ce qu'il ne fait pas (encore) : API locale pour taper du texte à distance, prof
 | [Installer sur Android TV](docs/INSTALL-ANDROID-TV.md) | Guide pas à pas : mode développeur, ADB, Downloader, clé USB, dépannage. |
 | [Installation (résumé)](docs/INSTALL.md) | Commandes essentielles et URL de configuration. |
 | [Tester](docs/TESTING.md) | Sites de test fournis et check-list sur appareil. |
+| [Sites personnels](docs/CUSTOM-SITES.md) | Ajouter ses sites depuis la TV, conservés lors des mises à jour. |
 | [Configuration](docs/CONFIGURATION.md) | Tous les champs du fichier JSON, avec exemples. |
 | [Blocage](docs/BLOCKING.md) | Ce qui est bloqué, comment, et ses limites. |
 | [Scripts](docs/SCRIPTS.md) | Les scripts intégrés et les sélecteurs masqués. |

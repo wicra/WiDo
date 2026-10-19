@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">WiDo</string>
-    <string name="menu_title">What do you want to watch?</string>
-    <string name="menu_hint">Long-press Back for the quick menu while playing</string>
+    <string name="menu_title">Now showing</string>
+    <string name="menu_hint">Own site: long-press OK (or Menu key) to edit · While playing: long-press Back = quick menu</string>
     <string name="status_loading">Loading configuration…</string>
     <string name="status_ok">Configuration up to date · revision %1$d</string>
     <string name="status_offline">Offline: cached configuration · revision %1$d</string>
@@ -29,4 +29,15 @@
     <string name="panel_menu">Back to the site menu</string>
     <string name="panel_blocked">%1$d request(s) blocked · %2$d navigation(s) refused</string>
     <string name="toast_navigation_blocked">Redirect blocked: %1$s</string>
+    <string name="add_site">Add a site</string>
+    <string name="badge_local">OWN</string>
+    <string name="editor_title_add">Add a site</string>
+    <string name="editor_title_edit">Edit site</string>
+    <string name="field_name">Name</string>
+    <string name="field_url">Address (e.g. example.org)</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_delete_confirm">Confirm deletion</string>
+    <string name="editor_hint">Sites added here stay on this device: neither a configuration refresh nor an app update removes them.</string>
 </resources>

@@ -65,8 +65,7 @@ class PlayerActivity : ComponentActivity() {
         val siteId = intent.getStringExtra(EXTRA_SITE).orEmpty()
         val app = application as WiDoApp
         lifecycleScope.launch {
-            val config = app.repository.ensureLoaded()
-            val site = config.sites.firstOrNull { it.id == siteId && it.enabled }
+            val site = app.repository.findSite(siteId)
             if (site == null) {
                 Toast.makeText(this@PlayerActivity, getString(R.string.player_unknown_site, siteId), Toast.LENGTH_LONG).show()
                 finish()

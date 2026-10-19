@@ -32,7 +32,8 @@ Fichiers fournis :
 | `hideSelectors` | liste | `[]` | Sélecteurs CSS à masquer (200 caractères max chacun, sans `{ } < >`). |
 | `enabled` | booléen | `true` | `false` : le site disparaît du menu sans perdre sa configuration. |
 | `userAgent` | texte | `default` | `default` (WebView), `desktop` (Chrome Linux) ou une chaîne complète. |
-| `color` | texte | accent | Couleur de la carte, `#RRGGBB`. |
+| `color` | texte | accent | Couleur de la carte, `#RRGGBB`. Elle teinte aussi l'ambiance du menu quand la carte a le focus. |
+| `icon` | texte | détecté | URL `https` d'une icône. Sans elle, WiDo cherche le favicon du site (voir plus bas). |
 | `allowInsecure` | booléen | `false` | Autorise `http` pour **ce site seulement** (serveur local type `http://192.168.1.20:8096`). |
 
 ## Quand le site change de domaine
@@ -55,3 +56,13 @@ Si un site cesse de fonctionner après un changement, la redirection refusée s'
 - **Dans ce dépôt** (`config/wido.json`) : le plus simple, versionné.
 - **Dans un gist** ou un autre dépôt : change l'URL avec `--es config_url`.
 - Aucun secret ne doit y figurer : le fichier est public si le dépôt l'est.
+
+## Icônes des cartes
+
+Chaque carte affiche l'icône du site. WiDo la cherche ainsi, dans cet ordre :
+
+1. le champ `icon` s'il est renseigné ;
+2. la page d'accueil du site : balises `apple-touch-icon`, puis `icon` (la plus grande) ;
+3. `/favicon.ico` à la racine du site.
+
+L'icône est téléchargée **directement depuis le site** (aucun service tiers n'est contacté), en `https` seulement, limitée à 512 Ko, puis mise en cache 14 jours. Si rien n'est trouvé, la carte affiche la première lettre du nom.

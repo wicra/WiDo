@@ -6,8 +6,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.wido.core.ReleaseInfo
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 sealed interface UpdateUi {
@@ -21,6 +23,14 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as WiDoApp
 
     val config: StateFlow<ConfigState> = app.repository.state
+
+    val sites: StateFlow<List<MenuSite>> =
+        app.repository.sites.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Chaque fonction renvoie un message d'erreur à afficher, ou null si c'est fait. */
+    fun addSite(name: String, url: String): String? = app.repository.addLocalSite(name, url)
+    fun updateSite(id: String, name: String, url: String): String? = app.repository.updateLocalSite(id, name, url)
+    fun removeSite(id: String) = app.repository.removeLocalSite(id)
 
     private val _update = MutableStateFlow<UpdateUi>(UpdateUi.None)
     val update: StateFlow<UpdateUi> = _update.asStateFlow()

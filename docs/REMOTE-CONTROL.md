@@ -4,6 +4,10 @@
 
 Flèches pour se déplacer, **OK** pour ouvrir. La première carte a le focus à l'arrivée. *Actualiser* recharge la configuration distante.
 
+Dernière carte **« + Ajouter un site »** : voir [CUSTOM-SITES](CUSTOM-SITES.md). Sur une carte PERSO, un appui long sur OK (ou la touche Menu) ouvre la modification.
+
+Le fond du menu prend la couleur de la carte sélectionnée. Chaque carte affiche l'icône de son site.
+
 ## Pendant la lecture
 
 | Touche | Effet |

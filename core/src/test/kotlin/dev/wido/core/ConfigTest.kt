@@ -48,4 +48,16 @@ class ConfigTest {
     @Test fun garbageFails() {
         assertFailsWith<ConfigException> { ConfigParser.parse("pas du json") }
     }
+
+    @Test fun iconMustBeHttps() {
+        val p = ConfigParser.parse(
+            """{"sites":[
+              {"id":"a","name":"A","url":"https://a.example/","icon":"https://a.example/i.png"},
+              {"id":"b","name":"B","url":"https://b.example/","icon":"http://b.example/i.png"}
+            ]}""",
+        )
+        assertEquals("https://a.example/i.png", p.config.sites[0].icon)
+        assertEquals(null, p.config.sites[1].icon)
+        assertEquals(1, p.warnings.size)
+    }
 }
