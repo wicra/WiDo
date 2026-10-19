@@ -11,24 +11,30 @@ OUT="${2:-$HOME/wido-signing}"
 KS="$OUT/wido.jks"
 
 command -v keytool >/dev/null || { echo "keytool introuvable : installe un JDK 17 ou plus." >&2; exit 1; }
-[ -e "$KS" ] && { echo "$KS existe déjà : je refuse de l'écraser (perdre la clé empêche toute mise à jour)." >&2; exit 1; }
+mkdir -p "${OUT}"
+chmod 700 "${OUT}"
 
-mkdir -p "$OUT"
-chmod 700 "$OUT"
+if [ -e "${KS}" ]; then
+  echo "La clé ${KS} existe déjà : je la réutilise (je ne la recrée pas)."
+  read -r -s -p "Mot de passe de cette clé : " PASS
+  echo
+  keytool -list -keystore "${KS}" -alias wido -storepass "${PASS}" >/dev/null 2>&1 \
+    || { echo "Mot de passe incorrect pour ${KS}." >&2; exit 1; }
+else
+  read -r -s -p "Choisis un mot de passe pour la clé (12 caractères minimum) : " PASS
+  echo
+  [ "${#PASS}" -ge 12 ] || { echo "Mot de passe trop court." >&2; exit 1; }
 
-read -r -s -p "Choisis un mot de passe pour la clé (12 caractères minimum) : " PASS
-echo
-[ "${#PASS}" -ge 12 ] || { echo "Mot de passe trop court." >&2; exit 1; }
-
-keytool -genkeypair -keystore "$KS" -alias wido \
-  -keyalg RSA -keysize 4096 -validity 10000 \
-  -storepass "$PASS" -keypass "$PASS" -dname "CN=WiDo, O=WiDo"
-chmod 600 "$KS"
+  keytool -genkeypair -keystore "${KS}" -alias wido \
+    -keyalg RSA -keysize 4096 -validity 10000 \
+    -storepass "${PASS}" -keypass "${PASS}" -dname "CN=WiDo, O=WiDo"
+  chmod 600 "${KS}"
+fi
 
 B64="$(base64 < "$KS" | tr -d '\n')"
 
 if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
-  echo "Envoi des 4 secrets vers $REPO…"
+  echo "Envoi des 4 secrets vers ${REPO}"
   printf %s "$B64"  | gh secret set WIDO_KEYSTORE_BASE64   --repo "$REPO"
   printf %s "$PASS" | gh secret set WIDO_KEYSTORE_PASSWORD --repo "$REPO"
   printf %s "wido"  | gh secret set WIDO_KEY_ALIAS         --repo "$REPO"
