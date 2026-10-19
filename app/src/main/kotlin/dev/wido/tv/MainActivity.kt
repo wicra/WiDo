@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.wido.tv.ui.MenuScreen
 import dev.wido.tv.ui.WiDoTheme
@@ -23,6 +24,11 @@ class MainActivity : ComponentActivity() {
                 MenuScreen(vm) { site -> startActivity(PlayerActivity.intent(this, site.id)) }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ViewModelProvider(this)[MenuViewModel::class.java].onForeground()
     }
 
     override fun onNewIntent(intent: Intent) {

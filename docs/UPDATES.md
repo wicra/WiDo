@@ -2,6 +2,19 @@
 
 Aucun serveur à héberger : les **releases GitHub** du dépôt font office de canal de distribution.
 
+## Vérifier l'état dans l'app
+
+Le pied de page du menu indique l'état de la dernière vérification, à côté de la version installée :
+
+| Affichage | Sens |
+|---|---|
+| *Recherche de mise à jour…* | Vérification en cours. |
+| *À jour* | La version installée est la plus récente publiée. |
+| *Mise à jour : vérification impossible (…)* | La TV n'a pas pu lire la release ; le motif est entre parenthèses (réseau, `HTTP 403` : limite de l'API GitHub, nom d'hôte introuvable : DNS ou filtrage). |
+| Bannière **« Mise à jour vX.Y.Z disponible »** | Une version plus récente existe : appuie sur *Installer*. |
+
+La vérification se fait à l'ouverture du menu, au retour dans l'app après plus de 5 minutes, et à chaque appui sur **Actualiser**.
+
 ## Déroulé
 
 1. Au lancement du menu, l'app lit `https://api.github.com/repos/wicra/WiDo/releases/latest`.

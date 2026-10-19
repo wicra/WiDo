@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+### Corrigé
+- Mise à jour : l'état de la vérification est maintenant **visible** dans le pied de page (« À jour », « Recherche… », ou le motif de l'échec). Avant, tout échec était silencieux.
+- La vérification est relancée par **Actualiser** et au retour dans l'app après plus de 5 minutes, et non plus seulement au tout premier affichage du menu.
+
 ## 0.3.0
 
 ### Ajouté

@@ -15,6 +15,9 @@ import kotlinx.coroutines.launch
 
 sealed interface UpdateUi {
     data object None : UpdateUi
+    data object Checking : UpdateUi
+    data object UpToDate : UpdateUi
+    data class CheckFailed(val detail: String) : UpdateUi
     data class Available(val info: ReleaseInfo) : UpdateUi
     data class Downloading(val info: ReleaseInfo, val percent: Int) : UpdateUi
     data class Failed(val info: ReleaseInfo, @StringRes val messageRes: Int, val detail: String? = null) : UpdateUi
@@ -38,24 +41,43 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
     private val _update = MutableStateFlow<UpdateUi>(UpdateUi.None)
     val update: StateFlow<UpdateUi> = _update.asStateFlow()
 
+    private var lastCheck = 0L
+
     init {
         refresh()
-        checkUpdate()
     }
 
+    /** Recharge la configuration et cherche une mise à jour (bouton « Actualiser »). */
     fun refresh() {
         viewModelScope.launch {
             app.repository.ensureLoaded()
             app.repository.refresh()
         }
+        checkUpdate()
     }
 
-    private fun checkUpdate() {
+    /** Retour au premier plan : on revérifie si la dernière vérification date de plus de 5 minutes. */
+    fun onForeground() {
+        if (System.currentTimeMillis() - lastCheck > RECHECK_MS) checkUpdate()
+    }
+
+    fun checkUpdate() {
+        val state = _update.value
+        if (state is UpdateUi.Downloading) return
+        lastCheck = System.currentTimeMillis()
+        if (state !is UpdateUi.Available) _update.value = UpdateUi.Checking
         viewModelScope.launch {
-            // Pas de réseau ou pas de release : on ne dit rien, la mise à jour n'est jamais bloquante.
-            val info = runCatching { app.updates.check() }.getOrNull() ?: return@launch
-            _update.value = UpdateUi.Available(info)
+            // Une mise à jour n'est jamais bloquante, mais un échec doit se voir : sinon impossible à comprendre.
+            _update.value = try {
+                app.updates.check()?.let { UpdateUi.Available(it) } ?: UpdateUi.UpToDate
+            } catch (e: Exception) {
+                UpdateUi.CheckFailed(e.message ?: e.javaClass.simpleName)
+            }
         }
+    }
+
+    private companion object {
+        const val RECHECK_MS = 5 * 60 * 1000L
     }
 
     fun install(info: ReleaseInfo) {

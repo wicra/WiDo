@@ -106,4 +106,7 @@
     <string name="a_quick_menu">Menu rapide</string>
     <string name="a_save_page">Enregistrer la page</string>
     <string name="a_top">Haut de la page</string>
+    <string name="update_checking">Recherche de mise à jour…</string>
+    <string name="update_uptodate">À jour</string>
+    <string name="update_check_failed">Mise à jour : vérification impossible (%1$s)</string>
 </resources>

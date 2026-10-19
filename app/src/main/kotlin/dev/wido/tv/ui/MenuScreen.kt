@@ -148,7 +148,7 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
                     )
                 }
             }
-            Footer()
+            Footer(update)
         }
     }
 
@@ -260,12 +260,11 @@ internal fun ActionButton(
 
 @Composable
 private fun UpdateBanner(update: UpdateUi, onInstall: (ReleaseInfo) -> Unit) {
-    if (update is UpdateUi.None) return
     val (message, info) = when (update) {
         is UpdateUi.Available -> stringResource(R.string.update_available, update.info.tag) to update.info
         is UpdateUi.Downloading -> stringResource(R.string.update_downloading, update.percent) to null
         is UpdateUi.Failed -> stringResource(update.messageRes, update.detail.orEmpty()) to update.info
-        UpdateUi.None -> return
+        UpdateUi.None, UpdateUi.Checking, UpdateUi.UpToDate, is UpdateUi.CheckFailed -> return
     }
     Row(
         Modifier
@@ -446,9 +445,20 @@ private fun EmptyState() {
 }
 
 @Composable
-private fun Footer() {
+private fun Footer(update: UpdateUi) {
+    val (status, color) = when (update) {
+        UpdateUi.None -> "" to Palette.TextSecondary
+        UpdateUi.Checking -> stringResource(R.string.update_checking) to Palette.TextSecondary
+        UpdateUi.UpToDate -> stringResource(R.string.update_uptodate) to Palette.Ok
+        is UpdateUi.CheckFailed -> stringResource(R.string.update_check_failed, update.detail.take(60)) to Palette.Warning
+        is UpdateUi.Available, is UpdateUi.Downloading, is UpdateUi.Failed -> "" to Palette.TextSecondary
+    }
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.menu_hint), color = Palette.TextSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        if (status.isNotEmpty()) {
+            Text(status, color = color, fontSize = 13.sp)
+            Spacer(Modifier.width(16.dp))
+        }
         Text(stringResource(R.string.version_footer, BuildConfig.VERSION_NAME), color = Palette.TextSecondary, fontSize = 13.sp)
     }
 }

@@ -106,4 +106,7 @@
     <string name="a_quick_menu">Quick menu</string>
     <string name="a_save_page">Save the page</string>
     <string name="a_top">Top of the page</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_uptodate">Up to date</string>
+    <string name="update_check_failed">Update: check failed (%1$s)</string>
 </resources>
