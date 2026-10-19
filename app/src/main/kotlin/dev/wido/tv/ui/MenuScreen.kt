@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,9 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -74,6 +71,10 @@ private sealed interface Editor {
     data class Edit(val site: Site) : Editor
 }
 
+/**
+ * Écran d'accueil : une barre en haut, la grille des sites, une ligne d'état en bas. Chaque zone a sa
+ * propre place dans une colonne : rien ne se superpose.
+ */
 @Composable
 fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
     val state by vm.config.collectAsState()
@@ -81,9 +82,11 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
     val sites by vm.sites.collectAsState()
 
     var editor by remember { mutableStateOf<Editor?>(null) }
+    var actionsFor by remember { mutableStateOf<Site?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     val settings = (LocalContext.current.applicationContext as WiDoApp).settings
-    // Ambiance : le fond prend la couleur de la carte qui a le focus, comme la lumière d'une salle.
+
+    // Ambiance : la lueur du haut prend la couleur de la carte sélectionnée.
     var ambientTarget by remember { mutableStateOf(Palette.Accent) }
     val ambient by animateColorAsState(ambientTarget, tween(700), label = "ambient")
     val firstCard = remember { FocusRequester() }
@@ -99,35 +102,32 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
             .drawBehind {
                 drawRect(
                     Brush.radialGradient(
-                        listOf(ambient.copy(alpha = 0.38f), Color.Transparent),
-                        center = Offset(size.width * 0.5f, -size.height * 0.05f),
-                        radius = size.width * 0.85f,
-                    ),
-                )
-                drawRect(
-                    Brush.radialGradient(
-                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
-                        center = Offset(size.width / 2, size.height / 2),
-                        radius = size.maxDimension * 0.72f,
+                        listOf(ambient.copy(alpha = 0.28f), Color.Transparent),
+                        center = Offset(size.width * 0.5f, -size.height * 0.1f),
+                        radius = size.width * 0.8f,
                     ),
                 )
             }
-            .padding(horizontal = 56.dp, vertical = 28.dp),
+            .padding(horizontal = 48.dp, vertical = 24.dp),
     ) {
         Column(Modifier.fillMaxSize()) {
-            Header(state, onRefresh = vm::refresh, onSettings = { showSettings = true })
-            Spacer(Modifier.height(14.dp))
+            TopBar(state, onSettings = { showSettings = true }, onRefresh = vm::refresh)
+            Spacer(Modifier.height(12.dp))
             UpdateBanner(update, onInstall = vm::install)
-            Marquee()
-            Spacer(Modifier.height(18.dp))
-            if (sites.isEmpty() && !state.loading) {
-                EmptyState()
-            }
+            Text(
+                stringResource(R.string.menu_title).uppercase(),
+                color = Palette.TextSecondary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 3.sp,
+                modifier = Modifier.padding(start = 12.dp),
+            )
+            if (sites.isEmpty() && !state.loading) EmptyHint()
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(250.dp),
-                horizontalArrangement = Arrangement.spacedBy(26.dp),
-                verticalArrangement = Arrangement.spacedBy(26.dp),
-                contentPadding = PaddingValues(14.dp),
+                columns = GridCells.Adaptive(210.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                contentPadding = PaddingValues(12.dp),
                 modifier = Modifier.weight(1f),
             ) {
                 itemsIndexed(sites, key = { _, it -> it.site.id }) { index, entry ->
@@ -135,25 +135,32 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
                         entry = entry,
                         index = index,
                         onClick = { onOpen(entry.site) },
-                        onEdit = { editor = Editor.Edit(entry.site) },
+                        onOptions = { actionsFor = entry.site },
                         onFocus = { ambientTarget = it },
                         modifier = if (index == 0) Modifier.focusRequester(firstCard) else Modifier,
                     )
                 }
                 item(key = "add") {
-                    AddCard(
-                        index = sites.size,
-                        onClick = { editor = Editor.Add },
-                        onFocus = { ambientTarget = it },
-                    )
+                    AddCard(index = sites.size, onClick = { editor = Editor.Add }, onFocus = { ambientTarget = it })
                 }
             }
             Footer(update)
         }
     }
 
+    actionsFor?.let { site ->
+        SiteActionsDialog(
+            site = site,
+            onOpen = { actionsFor = null; onOpen(site) },
+            onEdit = { actionsFor = null; editor = Editor.Edit(site) },
+            onDelete = { vm.removeSite(site.id); actionsFor = null },
+            onDismiss = { actionsFor = null },
+        )
+    }
+
     editor?.let { current ->
         val initial = (current as? Editor.Edit)?.site
+        val (suggestAllow, suggestBlock) = remember(initial) { initial?.let { vm.suggestionsFor(it) } ?: (emptyList<String>() to emptyList()) }
         SiteEditorDialog(
             initial = initial,
             onSave = { name, url, options ->
@@ -161,13 +168,9 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
                 if (error == null) editor = null
                 error
             },
-            onDelete = initial?.let { site ->
-                {
-                    vm.removeSite(site.id)
-                    editor = null
-                }
-            },
             onDismiss = { editor = null },
+            suggestAllow = suggestAllow,
+            suggestBlock = suggestBlock,
             defaultRelaxed = settings.newSitesRelaxed,
         )
     }
@@ -176,85 +179,33 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
 }
 
 @Composable
-private fun Header(state: ConfigState, onRefresh: () -> Unit, onSettings: () -> Unit) {
+private fun TopBar(state: ConfigState, onSettings: () -> Unit, onRefresh: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Image(
-            painterResource(R.drawable.wido_logo),
-            contentDescription = null,
-            modifier = Modifier.size(58.dp),
-        )
-        Spacer(Modifier.width(18.dp))
-        Column {
-            Text(
-                "WiDo",
-                color = Palette.TextPrimary,
-                fontSize = 38.sp,
-                fontWeight = FontWeight.Light,
-                letterSpacing = 10.sp,
-            )
-            Spacer(Modifier.height(6.dp))
-            Box(
-                Modifier
-                    .width(72.dp)
-                    .height(2.dp)
-                    .background(Brush.horizontalGradient(listOf(Palette.Highlight, Color.Transparent))),
-            )
-        }
-        Spacer(Modifier.weight(1f))
-        StatusPill(state)
-        Spacer(Modifier.width(16.dp))
-        ActionButton(stringResource(R.string.action_settings), onSettings, primary = false)
+        Image(painterResource(R.drawable.wido_logo), contentDescription = null, modifier = Modifier.size(40.dp))
         Spacer(Modifier.width(12.dp))
-        ActionButton(stringResource(R.string.action_refresh), onRefresh)
+        Text("WiDo", color = Palette.TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Spacer(Modifier.weight(1f))
+        StatusDot(state)
+        Spacer(Modifier.width(14.dp))
+        ActionButton(stringResource(R.string.action_settings), onSettings, primary = false, compact = true)
+        Spacer(Modifier.width(10.dp))
+        ActionButton(stringResource(R.string.action_refresh), onRefresh, compact = true)
     }
 }
 
+/** État de la configuration en deux mots : un point de couleur et un libellé court. */
 @Composable
-private fun Marquee() {
-    Text(
-        stringResource(R.string.menu_title).uppercase(),
-        color = Palette.Highlight,
-        fontSize = 15.sp,
-        fontWeight = FontWeight.Medium,
-        letterSpacing = 6.sp,
-    )
-}
-
-@Composable
-private fun StatusPill(state: ConfigState) {
-    val revision = state.config?.revision ?: 0
+private fun StatusDot(state: ConfigState) {
     val (text, dot) = when {
         state.loading && state.config == null -> stringResource(R.string.status_loading) to Palette.TextSecondary
         state.warnings.isNotEmpty() -> stringResource(R.string.status_warnings, state.warnings.size) to Palette.Warning
-        state.source == ConfigSource.Remote -> stringResource(R.string.status_ok, revision) to Palette.Ok
-        state.source == ConfigSource.Cache -> stringResource(R.string.status_offline, revision) to Palette.Warning
-        else -> stringResource(R.string.status_bundled) to Palette.Warning
+        state.source == ConfigSource.Remote -> stringResource(R.string.status_ok) to Palette.Ok
+        else -> stringResource(R.string.status_offline) to Palette.Warning
     }
-    Row(
-        Modifier.clip(PillShape).background(Color.White.copy(alpha = 0.07f)).padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(9.dp).clip(CircleShape).background(dot))
-        Spacer(Modifier.width(10.dp))
-        Text(text, color = Palette.TextSecondary, fontSize = 14.sp)
-    }
-}
-
-@Composable
-internal fun ActionButton(
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    primary: Boolean = true,
-) {
-    Box(
-        modifier
-            .tvFocusable(PillShape, glow = Palette.Accent, onClick = onClick)
-            .background(if (primary) Palette.Accent else Color.White.copy(alpha = 0.10f))
-            .padding(horizontal = 24.dp, vertical = 11.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
+        Spacer(Modifier.width(8.dp))
+        Text(text, color = Palette.TextSecondary, fontSize = 13.sp, maxLines = 1)
     }
 }
 
@@ -269,14 +220,14 @@ private fun UpdateBanner(update: UpdateUi, onInstall: (ReleaseInfo) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(bottom = 16.dp)
+            .padding(bottom = 12.dp)
             .clip(CardShape)
-            .background(Brush.horizontalGradient(listOf(Palette.Highlight.copy(alpha = 0.22f), Color.White.copy(alpha = 0.06f))))
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .background(Palette.Accent.copy(alpha = 0.18f))
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(message, color = Palette.TextPrimary, fontSize = 18.sp, modifier = Modifier.weight(1f))
-        if (info != null) ActionButton(stringResource(R.string.update_install), { onInstall(info) })
+        Text(message, color = Palette.TextPrimary, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (info != null) ActionButton(stringResource(R.string.update_install), { onInstall(info) }, compact = true)
     }
 }
 
@@ -285,12 +236,12 @@ private fun UpdateBanner(update: UpdateUi, onInstall: (ReleaseInfo) -> Unit) {
 private fun rememberEntrance(index: Int): Modifier {
     val progress = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        delay((index.coerceAtMost(8) * 70L))
-        progress.animateTo(1f, tween(450))
+        delay(index.coerceAtMost(8) * 60L)
+        progress.animateTo(1f, tween(400))
     }
     return Modifier.graphicsLayer {
         alpha = progress.value
-        translationY = (1f - progress.value) * 40f
+        translationY = (1f - progress.value) * 30f
     }
 }
 
@@ -299,7 +250,7 @@ private fun SiteCard(
     entry: MenuSite,
     index: Int,
     onClick: () -> Unit,
-    onEdit: () -> Unit,
+    onOptions: () -> Unit,
     onFocus: (Color) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -310,156 +261,111 @@ private fun SiteCard(
     }
     // Couleur : celle de la config si elle en impose une, sinon celle de l'icône du site.
     val accent = parseColor(site.color) ?: icon?.color ?: Palette.Accent
-    // Les cartes perso se modifient par un clic long sur OK, ou la touche Menu.
-    val editKeys = if (entry.local) {
+    var focused by remember { mutableStateOf(false) }
+
+    // Options d'un site perso : appui long sur OK, ou touche Menu.
+    val optionsKey = if (entry.local) {
         Modifier.onKeyEvent { e ->
             val handled = e.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_MENU && e.nativeKeyEvent.action == KeyEvent.ACTION_UP
-            if (handled) onEdit()
+            if (handled) onOptions()
             handled
         }
     } else {
         Modifier
     }
 
-    Box(
+    Column(
         modifier
             .then(rememberEntrance(index))
-            .then(editKeys)
+            .then(optionsKey)
             .fillMaxWidth()
-            .aspectRatio(16f / 10f)
-            .tvFocusable(CardShape, glow = accent, onFocusChange = { if (it) onFocus(accent) }, onLongClick = if (entry.local) onEdit else null, onClick = onClick)
-            .background(Brush.linearGradient(listOf(accent.copy(alpha = 0.85f), accent.copy(alpha = 0.25f), Color(0xFF0C0E16))))
-            .filmStrip(),
+            .aspectRatio(1.3f)
+            .tvFocusable(
+                CardShape,
+                glow = accent,
+                onFocusChange = { focused = it; if (it) onFocus(accent) },
+                onLongClick = if (entry.local) onOptions else null,
+                onClick = onClick,
+            )
+            .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.55f), Palette.Surface)))
+            .padding(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Box(
-            Modifier
-                .align(Alignment.Center)
-                .padding(bottom = 26.dp)
-                .size(76.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(Color.White.copy(alpha = 0.16f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            val siteIcon = icon
-            if (siteIcon != null) {
-                Image(
-                    siteIcon.image,
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.size(52.dp),
-                )
-            } else {
-                Text(
-                    site.name.firstOrNull()?.uppercase().orEmpty(),
-                    color = Color.White,
-                    fontSize = 34.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
+        IconBubble(icon, site.name)
+        Spacer(Modifier.height(10.dp))
+        Text(
+            site.name,
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
+        val sub = when {
+            focused && entry.local -> stringResource(R.string.hint_options)
+            entry.local -> "${Hosts.of(site.url).orEmpty()} · ${stringResource(R.string.tag_local)}"
+            else -> Hosts.of(site.url).orEmpty()
         }
-        Column(
-            Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))))
-                .padding(start = 18.dp, end = 18.dp, top = 22.dp, bottom = 16.dp),
-        ) {
-            Text(
-                site.name,
-                color = Color.White,
-                fontSize = 21.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                Hosts.of(site.url).orEmpty(),
-                color = Color.White.copy(alpha = 0.65f),
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (entry.local) {
-            Text(
-                stringResource(R.string.badge_local),
-                color = Color.Black,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 14.dp, end = 12.dp)
-                    .clip(PillShape)
-                    .background(Palette.Highlight)
-                    .padding(horizontal = 9.dp, vertical = 3.dp),
-            )
-        }
+        Text(sub, color = Color.White.copy(alpha = 0.65f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
     }
 }
 
-/** Perforations de pellicule en haut et en bas de la carte. */
-private fun Modifier.filmStrip(): Modifier = drawBehind {
-    val hole = Size(10.dp.toPx(), 6.dp.toPx())
-    val gap = 18.dp.toPx()
-    val margin = 7.dp.toPx()
-    val color = Color.Black.copy(alpha = 0.35f)
-    var x = gap / 2
-    while (x + hole.width < size.width) {
-        drawRoundRect(color, Offset(x, margin), hole, CornerRadius(2.dp.toPx()))
-        drawRoundRect(color, Offset(x, size.height - margin - hole.height), hole, CornerRadius(2.dp.toPx()))
-        x += gap
+@Composable
+private fun IconBubble(icon: SiteIcon?, name: String) {
+    Box(
+        Modifier.size(60.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (icon != null) {
+            Image(icon.image, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(38.dp))
+        } else {
+            Text(name.firstOrNull()?.uppercase().orEmpty(), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
 @Composable
 private fun AddCard(index: Int, onClick: () -> Unit, onFocus: (Color) -> Unit) {
-    Box(
+    Column(
         Modifier
             .then(rememberEntrance(index))
             .fillMaxWidth()
-            .aspectRatio(16f / 10f)
+            .aspectRatio(1.3f)
             .tvFocusable(CardShape, glow = Palette.Highlight, onFocusChange = { if (it) onFocus(Palette.Highlight) }, onClick = onClick)
-            .background(Color.White.copy(alpha = 0.05f)),
-        contentAlignment = Alignment.Center,
+            .background(Color.White.copy(alpha = 0.06f)),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("+", color = Palette.Highlight, fontSize = 54.sp, fontWeight = FontWeight.Light)
-            Text(
-                stringResource(R.string.add_site),
-                color = Palette.TextSecondary,
-                fontSize = 17.sp,
-                textAlign = TextAlign.Center,
-            )
-        }
+        Text("+", color = Palette.Highlight, fontSize = 44.sp, fontWeight = FontWeight.Light)
+        Text(stringResource(R.string.add_site), color = Palette.TextSecondary, fontSize = 15.sp, maxLines = 1)
     }
 }
 
 @Composable
-private fun EmptyState() {
-    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-        Text(stringResource(R.string.empty_title), color = Palette.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(8.dp))
-        Text(stringResource(R.string.empty_body), color = Palette.TextSecondary, fontSize = 17.sp)
-    }
+private fun EmptyHint() {
+    Text(
+        stringResource(R.string.empty_body),
+        color = Palette.TextSecondary,
+        fontSize = 15.sp,
+        modifier = Modifier.padding(start = 12.dp, top = 8.dp),
+    )
 }
 
+/** Une seule ligne discrète : la version à gauche, l'état de la mise à jour à droite. */
 @Composable
 private fun Footer(update: UpdateUi) {
     val (status, color) = when (update) {
-        UpdateUi.None -> "" to Palette.TextSecondary
         UpdateUi.Checking -> stringResource(R.string.update_checking) to Palette.TextSecondary
-        UpdateUi.UpToDate -> stringResource(R.string.update_uptodate) to Palette.Ok
-        is UpdateUi.CheckFailed -> stringResource(R.string.update_check_failed, update.detail.take(60)) to Palette.Warning
-        is UpdateUi.Available, is UpdateUi.Downloading, is UpdateUi.Failed -> "" to Palette.TextSecondary
+        UpdateUi.UpToDate -> stringResource(R.string.update_uptodate) to Palette.TextSecondary
+        is UpdateUi.CheckFailed -> stringResource(R.string.update_check_failed, update.detail.take(40)) to Palette.Warning
+        else -> "" to Palette.TextSecondary
     }
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(stringResource(R.string.menu_hint), color = Palette.TextSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f))
-        if (status.isNotEmpty()) {
-            Text(status, color = color, fontSize = 13.sp)
-            Spacer(Modifier.width(16.dp))
-        }
-        Text(stringResource(R.string.version_footer, BuildConfig.VERSION_NAME), color = Palette.TextSecondary, fontSize = 13.sp)
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.version_footer, BuildConfig.VERSION_NAME), color = Palette.TextSecondary.copy(alpha = 0.7f), fontSize = 11.sp)
+        Spacer(Modifier.weight(1f))
+        if (status.isNotEmpty()) Text(status, color = color, fontSize = 11.sp, maxLines = 1)
     }
 }
 

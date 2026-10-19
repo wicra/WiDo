@@ -20,6 +20,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 object Palette {
@@ -62,13 +63,15 @@ fun WiDoTheme(content: @Composable () -> Unit) {
 fun Modifier.tvFocusable(
     shape: Shape = CardShape,
     glow: Color = Palette.Accent,
+    focusScale: Float = 1.07f,
+    glowElevation: Dp = 24.dp,
     onFocusChange: (Boolean) -> Unit = {},
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ): Modifier {
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.09f else 1f, label = "focusScale")
-    val elevation by animateDpAsState(if (focused) 28.dp else 0.dp, label = "focusGlow")
+    val scale by animateFloatAsState(if (focused) focusScale else 1f, label = "focusScale")
+    val elevation by animateDpAsState(if (focused) glowElevation else 0.dp, label = "focusGlow")
     return this
         .onFocusChanged {
             focused = it.isFocused

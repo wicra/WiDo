@@ -2,17 +2,10 @@ package dev.wido.tv.ui
 
 import android.view.KeyEvent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,14 +14,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import dev.wido.tv.KeyAction
 import dev.wido.tv.R
 import dev.wido.tv.Settings
@@ -81,25 +71,16 @@ fun SettingsDialog(settings: Settings, onDismiss: () -> Unit) {
         version++
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(
-            Modifier
-                .width(800.dp)
-                .clip(CardShape)
-                .background(Palette.SurfaceHigh)
-                .padding(28.dp),
-        ) {
-            Text(stringResource(R.string.settings_title), color = Palette.TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-            Text(
-                stringResource(R.string.settings_hint),
-                color = Palette.TextSecondary,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(top = 4.dp, bottom = 14.dp),
-            )
-            Column(
-                Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+    DialogFrame(
+        title = stringResource(R.string.settings_title),
+        onDismiss = onDismiss,
+        width = 760.dp,
+        buttons = {
+            ActionButton(stringResource(R.string.settings_close), onDismiss)
+            ActionButton(stringResource(R.string.settings_reset), { settings.resetComfort(); version++ }, primary = false)
+        },
+    ) {
+        Text(stringResource(R.string.settings_hint), color = Palette.TextSecondary, fontSize = 13.sp)
                 // `refresh` est lu ici pour que la liste soit recalculée à chaque changement.
                 if (refresh >= 0) {
                     ChoiceRow(
@@ -172,14 +153,6 @@ fun SettingsDialog(settings: Settings, onDismiss: () -> Unit) {
                         changed { settings.newSitesRelaxed = !settings.newSitesRelaxed },
                     )
                 }
-            }
-            Spacer(Modifier.height(18.dp))
-            Row {
-                ActionButton(stringResource(R.string.settings_close), onDismiss)
-                Spacer(Modifier.width(14.dp))
-                ActionButton(stringResource(R.string.settings_reset), { settings.resetComfort(); version++ }, primary = false)
-            }
-        }
     }
 }
 
@@ -200,10 +173,10 @@ private fun ChoiceRow(label: String, value: String, onStep: (Int) -> Unit) {
             }
             .tvFocusable(PillShape, glow = Palette.Accent) { onStep(1) }
             .background(Palette.Surface)
-            .padding(horizontal = 22.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = Palette.TextPrimary, fontSize = 17.sp, modifier = Modifier.weight(1f))
-        Text("◀  $value  ▶", color = Palette.Highlight, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = Palette.TextPrimary, fontSize = 16.sp, maxLines = 1, modifier = Modifier.weight(1f))
+        Text("◀  $value  ▶", color = Palette.Highlight, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
