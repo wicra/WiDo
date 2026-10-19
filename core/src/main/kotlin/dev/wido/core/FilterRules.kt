@@ -74,13 +74,30 @@ object FilterParser {
     }
 }
 
-/** Décide si une requête vers un hôte doit être bloquée. Une exception l'emporte toujours. */
-class HostBlocker(private val rules: HostRules) {
+/**
+ * Décide si une requête vers un hôte doit être bloquée. Une exception l'emporte toujours.
+ *
+ * Les règles restent en **couches** (listes distantes, règles globales, règles du site) : on ne
+ * recopie pas des dizaines de milliers de domaines à chaque ouverture de site. Les décisions sont
+ * mises en cache par hôte : une page émet des centaines de requêtes vers quelques dizaines d'hôtes.
+ */
+class HostBlocker(private val layers: List<HostRules>) {
+    constructor(rules: HostRules) : this(listOf(rules))
+
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
     fun isBlocked(host: String): Boolean {
         val h = Hosts.normalize(host)
         if (h.isEmpty()) return false
-        if (inSuffixes(h, rules.allowed)) return false
-        return inSuffixes(h, rules.blocked)
+        cache[h]?.let { return it }
+        val decision = decide(h)
+        if (cache.size < MAX_CACHE) cache[h] = decision
+        return decision
+    }
+
+    private fun decide(host: String): Boolean {
+        if (layers.any { inSuffixes(host, it.allowed) }) return false
+        return layers.any { inSuffixes(host, it.blocked) }
     }
 
     private fun inSuffixes(host: String, set: Set<String>): Boolean {
@@ -92,5 +109,9 @@ class HostBlocker(private val rules: HostRules) {
             if (dot < 0) return false
             cur = cur.substring(dot + 1)
         }
+    }
+
+    private companion object {
+        const val MAX_CACHE = 4096
     }
 }

@@ -44,7 +44,18 @@ data class Site(
     val icon: String? = null,
     /** Autorise http (réseau local, serveur maison). Désactivé par défaut. */
     val allowInsecure: Boolean = false,
+    /**
+     * `strict` : la fenêtre ne navigue que sur les domaines du site (le plus sûr contre les pubs).
+     * `relaxed` : navigation libre, sauf vers les domaines bloqués par les listes (YouTube, connexions).
+     */
+    val navigation: String = Navigation.STRICT,
 )
+
+object Navigation {
+    const val STRICT = "strict"
+    const val RELAXED = "relaxed"
+    val ALL = setOf(STRICT, RELAXED)
+}
 
 class ConfigException(message: String) : Exception(message)
 
@@ -97,7 +108,13 @@ object ConfigParser {
                 seen += site.id
                 val icon = site.icon?.takeIf { Hosts.schemeOf(it) == "https" && Hosts.of(it) != null }
                 if (site.icon != null && icon == null) warnings += "Site « ${site.id} » : icône ignorée (https requis)"
-                sites += site.copy(rules = site.rules.take(MAX_RULES), icon = icon)
+                val nav = site.navigation.lowercase()
+                if (nav !in Navigation.ALL) warnings += "Site « ${site.id} » : navigation « ${site.navigation} » inconnue, « strict » utilisé"
+                sites += site.copy(
+                    rules = site.rules.take(MAX_RULES),
+                    icon = icon,
+                    navigation = if (nav in Navigation.ALL) nav else Navigation.STRICT,
+                )
             }
         }
         if (raw.sites.size > MAX_SITES) warnings += "Plus de $MAX_SITES sites : les suivants sont ignorés."

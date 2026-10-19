@@ -19,13 +19,19 @@ Le fond du menu prend la couleur de la carte sélectionnée. Chaque carte affich
 | Lecture/pause, ▶, ❚❚ | Agit sur la plus grande vidéo de la page. |
 | Avance / recul rapide | ±10 secondes sur cette vidéo. |
 
-Le curseur se masque après 3 secondes d'inactivité et réapparaît au moindre mouvement.
+Le curseur est une flèche de souris (la pointe est le point de clic) ; il devient bleu pendant l'appui sur OK. Il se masque après 3 secondes d'inactivité et réapparaît au moindre mouvement.
+
+## Écran de chargement
+
+À l'ouverture d'un site, le logo WiDo s'anime pendant que la page se charge (plus d'écran noir). Les chargements suivants affichent une fine barre de progression en haut de l'écran.
 
 ## Menu rapide
 
 - **Reprendre**
 - **Recharger la page**
 - **Curseur activé/désactivé** : désactivé, les flèches font naviguer au focus (utile pour les sites conçus pour la TV).
+- **Autoriser <domaine> pour ce site** et **Ouvrir <domaine> une seule fois** (visibles après une redirection refusée, voir [BLOCKING](BLOCKING.md))
+- **Enregistrer cette page comme site perso**
 - **Retour au menu des sites**
 - Compteurs : requêtes bloquées et navigations refusées pendant cette session.
 

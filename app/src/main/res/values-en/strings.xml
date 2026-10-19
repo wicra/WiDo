@@ -40,4 +40,16 @@
     <string name="action_delete">Delete</string>
     <string name="action_delete_confirm">Confirm deletion</string>
     <string name="editor_hint">Sites added here stay on this device: neither a configuration refresh nor an app update removes them.</string>
+    <string name="loading_site">Loading %1$s…</string>
+    <string name="panel_allow">Allow %1$s for this site</string>
+    <string name="panel_open_once">Open %1$s once</string>
+    <string name="panel_save_page">Save this page as an own site</string>
+    <string name="toast_allowed">%1$s allowed for this site</string>
+    <string name="toast_saved">Site saved: %1$s</string>
+    <string name="field_allowed">Allowed domains (useful redirects), comma-separated</string>
+    <string name="field_blocked">Domains to block (ads), comma-separated</string>
+    <string name="nav_strict">Redirects: strict</string>
+    <string name="nav_relaxed">Redirects: relaxed</string>
+    <string name="nav_strict_hint">The site can only open its own domain and the ones allowed above. Recommended against ads.</string>
+    <string name="nav_relaxed_hint">Any redirect is allowed except to known ad domains from the blocklists. For YouTube, sign-ins…</string>
 </resources>

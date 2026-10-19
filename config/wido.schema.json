@@ -37,6 +37,7 @@
         "userAgent": { "type": "string", "default": "default", "description": "default, desktop ou une chaîne complète." },
         "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
         "icon": { "type": "string", "pattern": "^https://", "description": "Icône de la carte (sinon le favicon du site est détecté)." },
+        "navigation": { "enum": ["strict", "relaxed"], "default": "strict", "description": "strict : seulement le domaine du site ; relaxed : tout sauf les domaines bloqués." },
         "allowInsecure": { "type": "boolean", "default": false, "description": "Autorise http (serveur local)." }
       }
     }

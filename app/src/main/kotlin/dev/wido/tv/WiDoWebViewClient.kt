@@ -14,11 +14,30 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** Applique le blocage de requêtes, la politique de navigation et l'injection de scripts. */
 class WiDoWebViewClient(
-    private val site: Site,
-    private val blocker: HostBlocker,
+    site: Site,
+    blocker: HostBlocker,
     private val injector: ScriptInjector,
     private val onNavigationBlocked: (String) -> Unit,
+    private val onPageVisible: () -> Unit,
 ) : WebViewClient() {
+    @Volatile private var site = site
+    @Volatile private var blocker = blocker
+    @Volatile private var allowOnceUrl: String? = null
+
+    /** Dernière navigation refusée : proposée dans le menu rapide pour être autorisée. */
+    @Volatile var lastBlockedUrl: String? = null
+        private set
+
+    /** Nouvelles règles (après avoir autorisé un domaine) sans recréer la page. */
+    fun update(site: Site, blocker: HostBlocker) {
+        this.site = site
+        this.blocker = blocker
+    }
+
+    /** Laisse passer cette navigation, une seule fois. */
+    fun allowOnce(url: String) {
+        allowOnceUrl = url
+    }
 
     val blockedRequests = AtomicInteger()
     val blockedNavigations = AtomicInteger()
@@ -34,15 +53,25 @@ class WiDoWebViewClient(
 
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         val url = request.url.toString()
-        if (NavigationPolicy.isAllowed(url, site)) return false
+        if (url == allowOnceUrl) {
+            allowOnceUrl = null
+            return false
+        }
+        if (NavigationPolicy.isAllowed(url, site, blocker)) return false
         blockedNavigations.incrementAndGet()
+        lastBlockedUrl = url
         onNavigationBlocked(url)
         return true
     }
 
     override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) = injector.inject(view)
 
-    override fun onPageFinished(view: WebView, url: String?) = injector.inject(view)
+    override fun onPageCommitVisible(view: WebView, url: String?) = onPageVisible()
+
+    override fun onPageFinished(view: WebView, url: String?) {
+        injector.inject(view)
+        onPageVisible()
+    }
 
     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
         if (!request.isForMainFrame) return

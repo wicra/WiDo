@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.wido.core.LocalSites
 import dev.wido.core.ReleaseInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,8 +29,10 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
         app.repository.sites.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Chaque fonction renvoie un message d'erreur à afficher, ou null si c'est fait. */
-    fun addSite(name: String, url: String): String? = app.repository.addLocalSite(name, url)
-    fun updateSite(id: String, name: String, url: String): String? = app.repository.updateLocalSite(id, name, url)
+    fun addSite(name: String, url: String, options: LocalSites.SiteOptions): String? =
+        app.repository.addLocalSite(name, url, options)
+    fun updateSite(id: String, name: String, url: String, options: LocalSites.SiteOptions): String? =
+        app.repository.updateLocalSite(id, name, url, options)
     fun removeSite(id: String) = app.repository.removeLocalSite(id)
 
     private val _update = MutableStateFlow<UpdateUi>(UpdateUi.None)

@@ -34,3 +34,31 @@ class NavigationPolicyTest {
         assertTrue(NavigationPolicy.isAllowed("http://a.example/", site.copy(allowInsecure = true)))
     }
 }
+
+class RelaxedNavigationTest {
+    private val blocker = HostBlocker(FilterParser.parse("||ads.example.net^"))
+    private val strict = Site(id = "y", name = "Y", url = "https://www.y.example/")
+    private val relaxed = strict.copy(navigation = Navigation.RELAXED)
+
+    @Test fun relaxedAllowsUnblockedForeignDomains() {
+        assertTrue(NavigationPolicy.isAllowed("https://accounts.login.example/signin", relaxed, blocker))
+    }
+
+    @Test fun relaxedStillBlocksListedDomains() {
+        assertFalse(NavigationPolicy.isAllowed("https://ads.example.net/click", relaxed, blocker))
+        assertFalse(NavigationPolicy.isAllowed("https://x.ads.example.net/click", relaxed, blocker))
+    }
+
+    @Test fun relaxedStillRefusesNonWebSchemesAndHttp() {
+        assertFalse(NavigationPolicy.isAllowed("intent://x#Intent;end", relaxed, blocker))
+        assertFalse(NavigationPolicy.isAllowed("http://other.example/", relaxed, blocker))
+    }
+
+    @Test fun strictIgnoresTheBlockerForForeignDomains() {
+        assertFalse(NavigationPolicy.isAllowed("https://accounts.login.example/signin", strict, blocker))
+    }
+
+    @Test fun relaxedWithoutBlockerBehavesAsStrict() {
+        assertFalse(NavigationPolicy.isAllowed("https://accounts.login.example/signin", relaxed))
+    }
+}

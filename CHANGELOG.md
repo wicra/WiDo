@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0
+
+### Ajouté
+- **Redirections** : mode `strict` ou `relaxed` par site (champ `navigation`). `relaxed` laisse passer connexions et redirections utiles (YouTube) tout en refusant les domaines des listes de blocage.
+- Sites perso : domaines autorisés, domaines à bloquer et mode de navigation réglables dans le formulaire.
+- Menu rapide : **Autoriser le domaine refusé**, **Ouvrir une seule fois**, **Enregistrer cette page comme site perso**. Les domaines autorisés sur un site de la config distante sont gardés localement.
+- **Écran de chargement** animé (logo) à l'ouverture d'un site, et barre de progression pour les chargements suivants, à la place de l'écran noir.
+- **Curseur de souris** en forme de flèche, qui devient bleu pendant le clic.
+- **Nouvelle identité visuelle** tirée de l'icône : icône du lanceur, bannière Android TV, logo dans le menu, palette bleu nuit / bleu électrique.
+
+### Amélioré
+- Blocage plus rapide : les listes ne sont plus recopiées à chaque ouverture de site, et les décisions sont mises en cache par hôte.
+
 ## 0.1.1
 
 ### Ajouté

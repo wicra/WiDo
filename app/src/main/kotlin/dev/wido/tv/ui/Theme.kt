@@ -23,13 +23,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
 object Palette {
-    val Background = Color(0xFF07080D)
-    val Surface = Color(0xFF14171F)
-    val SurfaceHigh = Color(0xFF1C2030)
-    val Accent = Color(0xFF7C5CFF)
-    val Gold = Color(0xFFE8C26A)
-    val TextPrimary = Color(0xFFF4F1EA)
-    val TextSecondary = Color(0xFF9A9FB0)
+    // Palette tirée de l'icône : bleu nuit, bleu électrique, blanc.
+    val Background = Color(0xFF070B14)
+    val Surface = Color(0xFF101626)
+    val SurfaceHigh = Color(0xFF172036)
+    val Accent = Color(0xFF1E90FF)
+    val Highlight = Color(0xFF66C2FF)
+    val TextPrimary = Color(0xFFF4F7FC)
+    val TextSecondary = Color(0xFF9AAAC4)
     val Warning = Color(0xFFFFB74D)
     val Ok = Color(0xFF4CD08B)
 }
@@ -78,7 +79,7 @@ fun Modifier.tvFocusable(
             scaleY = scale
         }
         .shadow(elevation, shape, ambientColor = glow, spotColor = glow)
-        .border(3.dp, if (focused) Palette.Gold else Color.Transparent, shape)
+        .border(3.dp, if (focused) Palette.Highlight else Color.Transparent, shape)
         .clip(shape)
         .combinedClickable(onClick = onClick, onLongClick = onLongClick)
 }

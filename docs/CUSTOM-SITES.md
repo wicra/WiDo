@@ -12,6 +12,26 @@ Tu peux ajouter tes propres sites directement sur la TV, sans modifier la config
 
 Sur une carte PERSO : **appui long sur OK** (ou la touche **Menu** de la télécommande). Pour supprimer, un premier appui sur *Supprimer* demande une confirmation.
 
+## Régler les redirections et les pubs d'un site perso
+
+Le formulaire propose, en plus du nom et de l'adresse :
+
+| Champ | Effet |
+|---|---|
+| **Domaines autorisés** | Domaines où la fenêtre peut aller (connexion, lecteur…). Séparés par une virgule : `accounts.exemple.com, cdn.exemple.com`. |
+| **Domaines à bloquer** | Régies à couper pour ce site. Séparés par une virgule. |
+| **Redirections : strictes / souples** | Voir [BLOCKING](BLOCKING.md). Appuie sur le bouton pour basculer. |
+
+Tu peux aussi apprendre depuis la lecture : menu rapide → *Autoriser <domaine>* ([BLOCKING](BLOCKING.md)).
+
+## Enregistrer un site depuis la lecture
+
+Pendant la lecture, menu rapide (appui long sur Retour) → **Enregistrer cette page comme site perso**. L'adresse racine de la page affichée est ajoutée au menu.
+
+## Supprimer un site perso
+
+Sur la carte : **appui long sur OK** (ou touche **Menu**) → **Supprimer**, puis **Confirmer la suppression**.
+
 ## Ce qui est appliqué à un site perso
 
 | Élément | Valeur |
@@ -19,11 +39,12 @@ Sur une carte PERSO : **appui long sur OK** (ou la touche **Menu** de la téléc
 | Listes de blocage et règles globales de la configuration distante | **Oui** |
 | Politique de navigation | Oui : seul le domaine du site est autorisé |
 | Script `block-popups` | Oui, par défaut |
-| `allowedDomains`, `rules`, `hideSelectors`, `userAgent` | Non (réglages disponibles seulement pour les sites de la configuration) |
+| `allowedDomains`, `rules`, mode de navigation | Oui, réglables dans le formulaire |
+| `hideSelectors`, `userAgent`, `scripts` autres que `block-popups` | Non (réglages disponibles seulement pour les sites de la configuration) |
 | Icône et couleur de la carte | Détectées automatiquement, comme pour les autres cartes |
 | `http://` | Accepté (serveur du réseau local) : le site est alors marqué `allowInsecure` |
 
-Si un site perso a besoin de réglages fins (domaines supplémentaires, règles propres), ajoute-le plutôt à la configuration distante ([CONFIGURATION](CONFIGURATION.md)).
+Si un site perso a besoin de réglages plus fins (masquage CSS, agent utilisateur, autres scripts), ajoute-le plutôt à la configuration distante ([CONFIGURATION](CONFIGURATION.md)).
 
 ## Ce qui est conservé, et quand
 

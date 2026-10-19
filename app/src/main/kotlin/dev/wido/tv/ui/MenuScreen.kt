@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -153,8 +154,8 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
         val initial = (current as? Editor.Edit)?.site
         SiteEditorDialog(
             initial = initial,
-            onSave = { name, url ->
-                val error = if (initial == null) vm.addSite(name, url) else vm.updateSite(initial.id, name, url)
+            onSave = { name, url, options ->
+                val error = if (initial == null) vm.addSite(name, url, options) else vm.updateSite(initial.id, name, url, options)
                 if (error == null) editor = null
                 error
             },
@@ -172,6 +173,12 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
 @Composable
 private fun Header(state: ConfigState, onRefresh: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Image(
+            painterResource(R.drawable.wido_logo),
+            contentDescription = null,
+            modifier = Modifier.size(58.dp),
+        )
+        Spacer(Modifier.width(18.dp))
         Column {
             Text(
                 "WiDo",
@@ -185,7 +192,7 @@ private fun Header(state: ConfigState, onRefresh: () -> Unit) {
                 Modifier
                     .width(72.dp)
                     .height(2.dp)
-                    .background(Brush.horizontalGradient(listOf(Palette.Gold, Color.Transparent))),
+                    .background(Brush.horizontalGradient(listOf(Palette.Highlight, Color.Transparent))),
             )
         }
         Spacer(Modifier.weight(1f))
@@ -199,7 +206,7 @@ private fun Header(state: ConfigState, onRefresh: () -> Unit) {
 private fun Marquee() {
     Text(
         stringResource(R.string.menu_title).uppercase(),
-        color = Palette.Gold,
+        color = Palette.Highlight,
         fontSize = 15.sp,
         fontWeight = FontWeight.Medium,
         letterSpacing = 6.sp,
@@ -258,7 +265,7 @@ private fun UpdateBanner(update: UpdateUi, onInstall: (ReleaseInfo) -> Unit) {
             .fillMaxWidth()
             .padding(bottom = 16.dp)
             .clip(CardShape)
-            .background(Brush.horizontalGradient(listOf(Palette.Gold.copy(alpha = 0.22f), Color.White.copy(alpha = 0.06f))))
+            .background(Brush.horizontalGradient(listOf(Palette.Highlight.copy(alpha = 0.22f), Color.White.copy(alpha = 0.06f))))
             .padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -378,7 +385,7 @@ private fun SiteCard(
                     .align(Alignment.TopEnd)
                     .padding(top = 14.dp, end = 12.dp)
                     .clip(PillShape)
-                    .background(Palette.Gold)
+                    .background(Palette.Highlight)
                     .padding(horizontal = 9.dp, vertical = 3.dp),
             )
         }
@@ -406,12 +413,12 @@ private fun AddCard(index: Int, onClick: () -> Unit, onFocus: (Color) -> Unit) {
             .then(rememberEntrance(index))
             .fillMaxWidth()
             .aspectRatio(16f / 10f)
-            .tvFocusable(CardShape, glow = Palette.Gold, onFocusChange = { if (it) onFocus(Palette.Gold) }, onClick = onClick)
+            .tvFocusable(CardShape, glow = Palette.Highlight, onFocusChange = { if (it) onFocus(Palette.Highlight) }, onClick = onClick)
             .background(Color.White.copy(alpha = 0.05f)),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("+", color = Palette.Gold, fontSize = 54.sp, fontWeight = FontWeight.Light)
+            Text("+", color = Palette.Highlight, fontSize = 54.sp, fontWeight = FontWeight.Light)
             Text(
                 stringResource(R.string.add_site),
                 color = Palette.TextSecondary,

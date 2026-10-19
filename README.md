@@ -1,5 +1,7 @@
 # WiDo
 
+![WiDo](docs/assets/banner.png)
+
 Un navigateur de streaming pour **Google TV / Android TV**, pensé pour la télécommande, avec blocage de pubs configurable **à distance**. Open source (MIT).
 
 > Né d'un besoin simple : sur un projecteur Google TV, pas d'Opera ni d'extension. WiDo reprend ce que fait une extension de blocage, mais sur la TV, avec une liste de sites et des règles que tu modifies depuis GitHub, sans réinstaller l'app.

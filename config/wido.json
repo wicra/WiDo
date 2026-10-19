@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": 4,
+  "revision": 5,
   "blocklists": [
     "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
   ],
@@ -13,7 +13,8 @@
       "url": "https://youtube.com",
       "scripts": [
         "block-popups"
-      ]
+      ],
+      "navigation": "relaxed"
     }
   ]
 }

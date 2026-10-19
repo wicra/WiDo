@@ -74,3 +74,50 @@ class LocalSitesTest {
         assertEquals(listOf(ok), LocalSites.decode(LocalSites.encode(listOf(bad, notLocal, ok, ok))))
     }
 }
+
+class LocalSitesOptionsTest {
+    @Test fun parseDomainsAcceptsMixedSeparatorsAndUrls() {
+        val (list, err) = LocalSites.parseDomains("a.example, https://www.b.example/page;c.example d.example")
+        assertEquals(null, err)
+        assertEquals(listOf("a.example", "b.example", "c.example", "d.example"), list)
+    }
+
+    @Test fun parseDomainsRejectsGarbage() {
+        assertTrue(LocalSites.parseDomains("pasundomaine").second != null)
+        assertTrue(LocalSites.parseDomains("ok.example, ???").second != null)
+        assertEquals(emptyList<String>() to null, LocalSites.parseDomains("  ,  "))
+    }
+
+    @Test fun optionsEndUpInTheSite() {
+        val opts = LocalSites.SiteOptions(listOf("login.example"), listOf("pub.example"), relaxed = true)
+        val site = assertIs<LocalSites.Built.Ok>(LocalSites.build("S", "s.example", emptySet(), options = opts)).site
+        assertEquals(listOf("login.example"), site.allowedDomains)
+        assertEquals(listOf("||pub.example^"), site.rules)
+        assertEquals(Navigation.RELAXED, site.navigation)
+        assertEquals(listOf("pub.example"), LocalSites.blockedDomainsOf(site.rules))
+    }
+}
+
+class SiteOverridesTest {
+    @Test fun addsAndAppliesDomains() {
+        val map = SiteOverrides.withDomain(emptyMap(), "youtube", "www.Accounts.Example.")!!
+        assertEquals(mapOf("youtube" to listOf("accounts.example")), map)
+        val site = Site(id = "youtube", name = "Y", url = "https://y.example/", allowedDomains = listOf("x.example"))
+        assertEquals(listOf("x.example", "accounts.example"), SiteOverrides.apply(site, map).allowedDomains)
+        assertEquals(site, SiteOverrides.apply(site.copy(id = "autre"), map).copy(id = "youtube"))
+    }
+
+    @Test fun rejectsInvalidAndIsIdempotent() {
+        assertNull(SiteOverrides.withDomain(emptyMap(), "youtube", "pasundomaine"))
+        assertNull(SiteOverrides.withDomain(emptyMap(), "Bad Id", "ok.example"))
+        val once = SiteOverrides.withDomain(emptyMap(), "y", "a.example")!!
+        assertEquals(once, SiteOverrides.withDomain(once, "y", "a.example"))
+    }
+
+    @Test fun fileRoundTripAndGarbage() {
+        val map = mapOf("y" to listOf("a.example", "b.example"))
+        assertEquals(map, SiteOverrides.decode(SiteOverrides.encode(map)))
+        assertEquals(emptyMap(), SiteOverrides.decode("pas du json"))
+        assertEquals(emptyMap(), SiteOverrides.decode(SiteOverrides.encode(mapOf("Bad Id" to listOf("a.example"), "y" to listOf("???")))))
+    }
+}

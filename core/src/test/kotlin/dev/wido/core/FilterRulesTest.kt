@@ -52,3 +52,23 @@ class FilterRulesTest {
         assertEquals(setOf("b.com"), m.allowed)
     }
 }
+
+class HostBlockerLayersTest {
+    @Test fun layersAreCombinedWithoutMerging() {
+        val b = HostBlocker(listOf(FilterParser.parse("||a.com^"), FilterParser.parse("||b.com^"), HostRules(allowed = setOf("ok.a.com"))))
+        assertTrue(b.isBlocked("x.a.com"))
+        assertTrue(b.isBlocked("b.com"))
+        assertFalse(b.isBlocked("ok.a.com"))
+        assertFalse(b.isBlocked("c.com"))
+    }
+
+    @Test fun exceptionInAnyLayerWins() {
+        val b = HostBlocker(listOf(FilterParser.parse("||a.com^"), HostRules(allowed = setOf("a.com"))))
+        assertFalse(b.isBlocked("a.com"))
+    }
+
+    @Test fun repeatedLookupsAreStable() {
+        val b = HostBlocker(FilterParser.parse("||a.com^"))
+        repeat(3) { assertTrue(b.isBlocked("A.com.")) ; assertFalse(b.isBlocked("z.org")) }
+    }
+}

@@ -48,6 +48,38 @@ object LocalSites {
         return withScheme.takeIf { Hosts.of(it) != null }
     }
 
+    /** Réglages avancés d'un site perso. */
+    data class SiteOptions(
+        val allowedDomains: List<String> = emptyList(),
+        val blockedDomains: List<String> = emptyList(),
+        val relaxed: Boolean = false,
+    )
+
+    private const val MAX_DOMAINS = 30
+
+    /**
+     * Lit une liste de domaines saisie à la main (séparés par virgule, point-virgule, espace ou saut
+     * de ligne). Accepte `exemple.org`, `https://www.exemple.org/page`. Renvoie (domaines, erreur).
+     */
+    fun parseDomains(text: String): Pair<List<String>, String?> {
+        val out = linkedSetOf<String>()
+        for (part in text.split(',', ';', ' ', '\n')) {
+            val t = part.trim()
+            if (t.isEmpty()) continue
+            val host = Hosts.of(if (t.contains("://")) t else "https://$t")?.removePrefix("www.")
+            if (host == null || !Hosts.isValidHostname(host)) return emptyList<String>() to "Domaine invalide : $t"
+            out += host
+        }
+        if (out.size > MAX_DOMAINS) return emptyList<String>() to "Trop de domaines ($MAX_DOMAINS maximum)."
+        return out.toList() to null
+    }
+
+    fun domainsToText(domains: List<String>): String = domains.joinToString(", ")
+
+    /** Domaines d'une liste de règles `||domaine^` (les autres règles sont ignorées). */
+    fun blockedDomainsOf(rules: List<String>): List<String> =
+        rules.mapNotNull { r -> r.trim().takeIf { it.startsWith("||") && it.endsWith("^") }?.removePrefix("||")?.removeSuffix("^") }
+
     sealed interface Built {
         data class Ok(val site: Site) : Built
         data class Error(val message: String) : Built
@@ -57,7 +89,13 @@ object LocalSites {
      * Construit un site local à partir de ce que l'utilisateur a saisi.
      * `http://` est accepté (serveur du réseau local) et marque le site `allowInsecure`.
      */
-    fun build(name: String, rawUrl: String, taken: Set<String>, keepId: String? = null): Built {
+    fun build(
+        name: String,
+        rawUrl: String,
+        taken: Set<String>,
+        keepId: String? = null,
+        options: SiteOptions = SiteOptions(),
+    ): Built {
         val cleanName = name.trim()
         if (cleanName.isEmpty()) return Built.Error("Donne un nom au site.")
         if (cleanName.length > MAX_NAME) return Built.Error("Nom trop long ($MAX_NAME caractères maximum).")
@@ -69,8 +107,11 @@ object LocalSites {
             id = id,
             name = cleanName,
             url = url,
+            allowedDomains = options.allowedDomains,
+            rules = options.blockedDomains.map { "||$it^" },
             scripts = listOf("block-popups"),
             allowInsecure = scheme == "http",
+            navigation = if (options.relaxed) Navigation.RELAXED else Navigation.STRICT,
         )
         val problem = ConfigParser.validateSite(site, if (keepId != null) taken - keepId else taken)
         return if (problem != null) Built.Error(problem) else Built.Ok(site)

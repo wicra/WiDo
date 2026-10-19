@@ -1,9 +1,13 @@
 package dev.wido.tv
 
+import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
+import android.animation.ValueAnimator
 import android.app.AlertDialog
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
 import android.os.SystemClock
@@ -18,6 +22,9 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -25,6 +32,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import dev.wido.core.Hosts
 import dev.wido.core.Site
 import kotlinx.coroutines.launch
 
@@ -42,6 +50,13 @@ class PlayerActivity : ComponentActivity() {
     private var customCallback: WebChromeClient.CustomViewCallback? = null
     private var cursorMode = true
     private var backLongPressed = false
+    private var site: Site? = null
+
+    private lateinit var overlay: FrameLayout
+    private lateinit var loadingLabel: TextView
+    private lateinit var topBar: ProgressBar
+    private var overlayAnimator: ObjectAnimator? = null
+    private var overlayVisible = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,30 +69,37 @@ class PlayerActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
 
-        val loading = TextView(this).apply {
-            setText(R.string.player_loading)
-            setTextColor(Color.WHITE)
-            textSize = 22f
-            gravity = Gravity.CENTER
-        }
-        root.addView(loading, FrameLayout.LayoutParams(MATCH, MATCH))
+        overlay = buildLoadingOverlay()
+        root.addView(overlay, FrameLayout.LayoutParams(MATCH, MATCH))
+        // Sécurité : si la page ne se dessine jamais, on retire l'écran de chargement après 20 s.
+        root.postDelayed({ hideOverlay() }, OVERLAY_TIMEOUT_MS)
 
         val siteId = intent.getStringExtra(EXTRA_SITE).orEmpty()
         val app = application as WiDoApp
         lifecycleScope.launch {
             val site = app.repository.findSite(siteId)
+            this@PlayerActivity.site = site
             if (site == null) {
                 Toast.makeText(this@PlayerActivity, getString(R.string.player_unknown_site, siteId), Toast.LENGTH_LONG).show()
                 finish()
                 return@launch
             }
             val blocker = app.repository.blockerFor(site)
-            root.removeView(loading)
-            start(site, WiDoWebViewClient(site, blocker, ScriptInjector(this@PlayerActivity, site)) { url ->
-                runOnUiThread {
-                    Toast.makeText(this@PlayerActivity, getString(R.string.toast_navigation_blocked, url.take(60)), Toast.LENGTH_SHORT).show()
-                }
-            })
+            loadingLabel.text = getString(R.string.loading_site, site.name)
+            start(
+                site,
+                WiDoWebViewClient(
+                    site,
+                    blocker,
+                    ScriptInjector(this@PlayerActivity, site),
+                    onNavigationBlocked = { url ->
+                        runOnUiThread {
+                            Toast.makeText(this@PlayerActivity, getString(R.string.toast_navigation_blocked, url.take(60)), Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onPageVisible = { runOnUiThread { hideOverlay() } },
+                ),
+            )
             // Rafraîchit la configuration pour la prochaine ouverture, sans bloquer la lecture.
             launch { app.repository.refresh() }
         }
@@ -121,6 +143,12 @@ class PlayerActivity : ComponentActivity() {
 
             override fun onHideCustomView() = exitCustomView()
 
+            override fun onProgressChanged(view: WebView, newProgress: Int) {
+                if (overlayVisible) return
+                topBar.visibility = if (newProgress < 100) View.VISIBLE else View.GONE
+                topBar.progress = newProgress
+            }
+
             // Pas de micro ni de caméra pour les sites.
             override fun onPermissionRequest(request: PermissionRequest) = request.deny()
         }
@@ -130,6 +158,15 @@ class PlayerActivity : ComponentActivity() {
         cursor = CursorView(this)
         root.addView(cursor, FrameLayout.LayoutParams(MATCH, MATCH))
         cursor.wake()
+
+        topBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            progressTintList = ColorStateList.valueOf(ACCENT)
+            progressBackgroundTintList = ColorStateList.valueOf(0x33FFFFFF)
+            visibility = View.GONE
+        }
+        root.addView(topBar, FrameLayout.LayoutParams(MATCH, (4 * resources.displayMetrics.density).toInt(), Gravity.TOP))
+        overlay.bringToFront()
 
         wv.requestFocus()
         wv.loadUrl(site.url)
@@ -219,9 +256,13 @@ class PlayerActivity : ComponentActivity() {
         when (event.action) {
             KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) {
                 tapDownTime = SystemClock.uptimeMillis()
+                cursor.pressedState = true
                 sendTouch(target, MotionEvent.ACTION_DOWN)
             }
-            KeyEvent.ACTION_UP -> sendTouch(target, MotionEvent.ACTION_UP)
+            KeyEvent.ACTION_UP -> {
+                cursor.pressedState = false
+                sendTouch(target, MotionEvent.ACTION_UP)
+            }
         }
         cursor.wake()
         return true
@@ -254,27 +295,121 @@ class PlayerActivity : ComponentActivity() {
 
     private fun showPanel() {
         val c = client
-        val items = arrayOf(
-            getString(R.string.panel_resume),
-            getString(R.string.panel_reload),
-            getString(if (cursorMode) R.string.panel_cursor_on else R.string.panel_cursor_off),
-            getString(R.string.panel_menu),
-            getString(R.string.panel_blocked, c?.blockedRequests?.get() ?: 0, c?.blockedNavigations?.get() ?: 0),
-        )
+        val current = site
+        val entries = mutableListOf<Pair<String, () -> Unit>>()
+        entries += getString(R.string.panel_resume) to {}
+        entries += getString(R.string.panel_reload) to { webView?.reload() }
+        entries += getString(if (cursorMode) R.string.panel_cursor_on else R.string.panel_cursor_off) to { toggleCursor() }
+
+        // La dernière redirection refusée : l'autoriser pour ce site, ou l'ouvrir une seule fois.
+        val blockedUrl = c?.lastBlockedUrl
+        val blockedHost = blockedUrl?.let { Hosts.of(it) }
+        if (blockedUrl != null && blockedHost != null && current != null) {
+            entries += getString(R.string.panel_allow, blockedHost) to { allowDomain(current, blockedHost, blockedUrl) }
+            entries += getString(R.string.panel_open_once, blockedHost) to {
+                c.allowOnce(blockedUrl)
+                webView?.loadUrl(blockedUrl)
+            }
+        }
+
+        entries += getString(R.string.panel_save_page) to { saveCurrentPage() }
+        entries += getString(R.string.panel_menu) to { finish() }
+        entries += getString(R.string.panel_blocked, c?.blockedRequests?.get() ?: 0, c?.blockedNavigations?.get() ?: 0) to {}
+
         AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
             .setTitle(R.string.panel_title)
-            .setItems(items) { _, which ->
-                when (which) {
-                    1 -> webView?.reload()
-                    2 -> {
-                        cursorMode = !cursorMode
-                        cursor.visibility = if (cursorMode) View.VISIBLE else View.GONE
-                        if (cursorMode) cursor.wake()
-                    }
-                    3 -> finish()
-                }
-            }
+            .setItems(entries.map { it.first }.toTypedArray()) { _, which -> entries[which].second() }
             .show()
+    }
+
+    private fun toggleCursor() {
+        cursorMode = !cursorMode
+        cursor.visibility = if (cursorMode) View.VISIBLE else View.GONE
+        if (cursorMode) cursor.wake()
+    }
+
+    /** Autorise `host` pour ce site (gardé localement), recharge les règles puis ouvre la page refusée. */
+    private fun allowDomain(current: Site, host: String, thenOpen: String) {
+        val repository = (application as WiDoApp).repository
+        val error = repository.allowDomain(current.id, host)
+        if (error != null) {
+            Toast.makeText(this, error, Toast.LENGTH_LONG).show()
+            return
+        }
+        Toast.makeText(this, getString(R.string.toast_allowed, host), Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val updated = repository.findSite(current.id) ?: return@launch
+            site = updated
+            client?.update(updated, repository.blockerFor(updated))
+            webView?.loadUrl(thenOpen)
+        }
+    }
+
+    /** Enregistre la page affichée comme site perso (son adresse racine). */
+    private fun saveCurrentPage() {
+        val url = webView?.url
+        val host = url?.let { Hosts.of(it) }
+        val scheme = url?.let { Hosts.schemeOf(it) }
+        if (host == null || (scheme != "https" && scheme != "http")) return
+        val name = host.removePrefix("www.")
+        val error = (application as WiDoApp).repository.addLocalSite(name, "$scheme://$host")
+        Toast.makeText(this, error ?: getString(R.string.toast_saved, name), Toast.LENGTH_LONG).show()
+    }
+
+    // --- Écran de chargement ----------------------------------------------------------------
+
+    private fun buildLoadingOverlay(): FrameLayout {
+        val density = resources.displayMetrics.density
+        val logo = ImageView(this).apply {
+            setImageResource(R.drawable.wido_logo)
+            layoutParams = LinearLayout.LayoutParams((150 * density).toInt(), (150 * density).toInt())
+        }
+        loadingLabel = TextView(this).apply {
+            setText(R.string.player_loading)
+            setTextColor(0xFFF4F7FC.toInt())
+            textSize = 20f
+            gravity = Gravity.CENTER
+            setPadding(0, (22 * density).toInt(), 0, 0)
+        }
+        val bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = true
+            indeterminateTintList = ColorStateList.valueOf(ACCENT)
+            layoutParams = LinearLayout.LayoutParams((280 * density).toInt(), (4 * density).toInt()).apply {
+                topMargin = (18 * density).toInt()
+            }
+        }
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            addView(logo)
+            addView(loadingLabel)
+            addView(bar)
+        }
+        // Le logo « respire » pendant l'attente.
+        overlayAnimator = ObjectAnimator.ofPropertyValuesHolder(
+            logo,
+            PropertyValuesHolder.ofFloat(View.ALPHA, 0.6f, 1f),
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 0.95f, 1.04f),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 0.95f, 1.04f),
+        ).apply {
+            duration = 900
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            start()
+        }
+        return FrameLayout(this).apply {
+            setBackgroundColor(0xFF070B14.toInt())
+            addView(column, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        }
+    }
+
+    private fun hideOverlay() {
+        if (!overlayVisible) return
+        overlayVisible = false
+        overlayAnimator?.cancel()
+        overlay.animate().alpha(0f).setDuration(250).withEndAction {
+            if (overlay.parent != null) root.removeView(overlay)
+        }.start()
     }
 
     // --- Cycle de vie -----------------------------------------------------------------------
@@ -290,6 +425,7 @@ class PlayerActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        overlayAnimator?.cancel()
         customCallback?.onCustomViewHidden()
         webView?.let {
             root.removeView(it)
@@ -302,6 +438,8 @@ class PlayerActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_SITE = "site"
+        private const val ACCENT = 0xFF1E90FF.toInt()
+        private const val OVERLAY_TIMEOUT_MS = 20_000L
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val LONG_PRESS_MS = 600L
         private const val DESKTOP_UA =

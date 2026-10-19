@@ -9,6 +9,7 @@ import dev.wido.core.HostRules
 import dev.wido.core.LocalSites
 import dev.wido.core.Hosts
 import dev.wido.core.NavigationPolicy
+import dev.wido.core.SiteOverrides
 import dev.wido.core.Site
 import dev.wido.core.WiDoConfig
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +53,12 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     private val localFile get() = File(context.filesDir, "local-sites.json")
 
     /** Sites ajoutés depuis l'app : fichier à part, que ni l'actualisation ni les mises à jour ne touchent. */
+    private val overridesFile get() = File(context.filesDir, "site-overrides.json")
+
+    /** Domaines autorisés par l'utilisateur sur des sites de la config distante (jamais écrasés par elle). */
+    @Volatile private var overrides: Map<String, List<String>> =
+        runCatching { SiteOverrides.decode(overridesFile.readText()) }.getOrDefault(emptyMap())
+
     private val _local = MutableStateFlow(readLocalSites())
     val localSites: StateFlow<List<Site>> = _local.asStateFlow()
 
@@ -91,25 +98,49 @@ class ConfigRepository(private val context: Context, private val settings: Setti
 
     suspend fun findSite(id: String): Site? {
         val config = ensureLoaded()
-        return LocalSites.merge(config.sites, _local.value).firstOrNull { it.id == id && it.enabled }
+        return LocalSites.merge(config.sites, _local.value)
+            .firstOrNull { it.id == id && it.enabled }
+            ?.let { SiteOverrides.apply(it, overrides) }
+    }
+
+    /**
+     * Autorise un domaine pour un site (après une redirection refusée, par exemple). Un site perso est
+     * modifié directement ; pour un site de la config distante, le choix est gardé à part, localement.
+     * Renvoie un message d'erreur, ou null si c'est fait.
+     */
+    @Synchronized
+    fun allowDomain(siteId: String, rawDomain: String): String? {
+        val domain = Hosts.normalize(rawDomain).removePrefix("www.")
+        if (!Hosts.isValidHostname(domain)) return "Domaine invalide."
+        val local = _local.value.firstOrNull { it.id == siteId }
+        if (local != null) {
+            if (domain in local.allowedDomains) return null
+            if (local.allowedDomains.size >= 30) return "Trop de domaines autorisés (30 maximum)."
+            saveLocal(_local.value.map { if (it.id == siteId) it.copy(allowedDomains = it.allowedDomains + domain) else it })
+            return null
+        }
+        val next = SiteOverrides.withDomain(overrides, siteId, domain) ?: return "Limite de domaines atteinte."
+        writeAtomically(overridesFile, SiteOverrides.encode(next))
+        overrides = next
+        return null
     }
 
     /** Ajoute un site local. Renvoie un message d'erreur, ou null si c'est fait. */
     @Synchronized
-    fun addLocalSite(name: String, url: String): String? {
+    fun addLocalSite(name: String, url: String, options: LocalSites.SiteOptions = LocalSites.SiteOptions()): String? {
         val local = _local.value
         if (local.size >= LocalSites.MAX_LOCAL) return "Limite de ${LocalSites.MAX_LOCAL} sites atteinte."
-        return when (val built = LocalSites.build(name, url, takenIds())) {
+        return when (val built = LocalSites.build(name, url, takenIds(), options = options)) {
             is LocalSites.Built.Error -> built.message
             is LocalSites.Built.Ok -> { saveLocal(local + built.site); null }
         }
     }
 
     @Synchronized
-    fun updateLocalSite(id: String, name: String, url: String): String? {
+    fun updateLocalSite(id: String, name: String, url: String, options: LocalSites.SiteOptions = LocalSites.SiteOptions()): String? {
         val local = _local.value
         if (local.none { it.id == id }) return "Site introuvable."
-        return when (val built = LocalSites.build(name, url, takenIds(), keepId = id)) {
+        return when (val built = LocalSites.build(name, url, takenIds(), keepId = id, options = options)) {
             is LocalSites.Built.Error -> built.message
             is LocalSites.Built.Ok -> { saveLocal(local.map { if (it.id == id) built.site else it }); null }
         }
@@ -139,7 +170,8 @@ class ConfigRepository(private val context: Context, private val settings: Setti
             val inline = FilterParser.parse((config.globalRules + site.rules).asSequence())
             // Le domaine du site et ceux qu'il peut ouvrir ne sont jamais bloqués : c'est ton choix explicite.
             val allowed = (config.whitelist.map(Hosts::normalize) + NavigationPolicy.allowedDomains(site)).toSet()
-            HostBlocker(HostRules.merge(lists + inline + HostRules(allowed = allowed)))
+            // Couches conservées telles quelles : pas de recopie des listes à chaque ouverture.
+            HostBlocker(lists + inline + HostRules(allowed = allowed))
         }
     }
 

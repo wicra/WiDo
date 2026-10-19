@@ -3,27 +3,56 @@ package dev.wido.tv
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
 import android.view.View
 
 /**
- * Curseur dessiné par-dessus la page, déplacé aux flèches de la télécommande : la plupart des
- * sites de streaming ne se pilotent pas au focus. Il se masque seul après un moment d'inactivité.
+ * Curseur de souris dessiné par-dessus la page, déplacé aux flèches de la télécommande : la plupart des
+ * sites de streaming ne se pilotent pas au focus. La pointe de la flèche est le point de clic.
+ * Il devient bleu pendant l'appui sur OK et se masque seul après un moment d'inactivité.
  */
 class CursorView(context: Context) : View(context) {
     private val density = resources.displayMetrics.density
-    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = 3f * density
-        color = 0xFFFFFFFF.toInt()
-        setShadowLayer(6f * density, 0f, 0f, 0xFF000000.toInt())
+    private val scale = 1.8f * density
+
+    // Flèche classique, pointe en (0, 0), tracée sur une grille d'environ 13 x 20.
+    private val arrow = Path().apply {
+        moveTo(0f, 0f)
+        lineTo(0f, 17f)
+        lineTo(4.6f, 13.2f)
+        lineTo(7.6f, 20f)
+        lineTo(10.2f, 18.9f)
+        lineTo(7.3f, 12.2f)
+        lineTo(13f, 12.2f)
+        close()
     }
-    private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF7C5CFF.toInt() }
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = IDLE_COLOR
+        setShadowLayer(2.5f, 1f, 1.5f, 0x99000000.toInt())
+    }
+    private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.4f
+        strokeJoin = Paint.Join.ROUND
+        color = 0xFF0A0E1A.toInt()
+    }
     private val hide = Runnable { alpha = 0f }
 
     var px = 0f
         private set
     var py = 0f
         private set
+
+    /** Vrai pendant l'appui sur OK. */
+    var pressedState = false
+        set(value) {
+            if (field == value) return
+            field = value
+            fill.color = if (value) PRESSED_COLOR else IDLE_COLOR
+            wake()
+            invalidate()
+        }
 
     init {
         isFocusable = false
@@ -57,12 +86,21 @@ class CursorView(context: Context) : View(context) {
     }
 
     override fun onDraw(canvas: Canvas) {
-        canvas.drawCircle(px, py, 14f * density, ring)
-        canvas.drawCircle(px, py, 4f * density, dot)
+        canvas.save()
+        canvas.translate(px, py)
+        canvas.scale(scale, scale)
+        canvas.drawPath(arrow, fill)
+        canvas.drawPath(arrow, outline)
+        canvas.restore()
     }
 
     override fun onDetachedFromWindow() {
         removeCallbacks(hide)
         super.onDetachedFromWindow()
+    }
+
+    private companion object {
+        const val IDLE_COLOR = 0xFFFFFFFF.toInt()
+        const val PRESSED_COLOR = 0xFF1E90FF.toInt()
     }
 }

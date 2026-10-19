@@ -40,4 +40,16 @@
     <string name="action_delete">Supprimer</string>
     <string name="action_delete_confirm">Confirmer la suppression</string>
     <string name="editor_hint">Les sites ajoutés ici restent sur cet appareil : ni l\'actualisation de la configuration, ni les mises à jour de l\'app ne les effacent.</string>
+    <string name="loading_site">Chargement de %1$s…</string>
+    <string name="panel_allow">Autoriser %1$s pour ce site</string>
+    <string name="panel_open_once">Ouvrir %1$s une seule fois</string>
+    <string name="panel_save_page">Enregistrer cette page comme site perso</string>
+    <string name="toast_allowed">%1$s autorisé pour ce site</string>
+    <string name="toast_saved">Site enregistré : %1$s</string>
+    <string name="field_allowed">Domaines autorisés (redirections utiles), séparés par une virgule</string>
+    <string name="field_blocked">Domaines à bloquer (pubs), séparés par une virgule</string>
+    <string name="nav_strict">Redirections : strictes</string>
+    <string name="nav_relaxed">Redirections : souples</string>
+    <string name="nav_strict_hint">Le site ne peut ouvrir que son propre domaine et ceux autorisés ci-dessus. Recommandé contre les pubs.</string>
+    <string name="nav_relaxed_hint">Toute redirection est permise, sauf vers les pubs connues des listes de blocage. Pour YouTube, les connexions…</string>
 </resources>

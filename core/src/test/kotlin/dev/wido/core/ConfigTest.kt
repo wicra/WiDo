@@ -61,3 +61,17 @@ class ConfigTest {
         assertEquals(1, p.warnings.size)
     }
 }
+
+class NavigationConfigTest {
+    @Test fun navigationDefaultsToStrictAndUnknownIsCoerced() {
+        val p = ConfigParser.parse(
+            """{"sites":[
+              {"id":"a","name":"A","url":"https://a.example/"},
+              {"id":"b","name":"B","url":"https://b.example/","navigation":"RELAXED"},
+              {"id":"c","name":"C","url":"https://c.example/","navigation":"nimporte"}
+            ]}""",
+        )
+        assertEquals(listOf("strict", "relaxed", "strict"), p.config.sites.map { it.navigation })
+        assertEquals(1, p.warnings.size)
+    }
+}

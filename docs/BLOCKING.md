@@ -32,6 +32,23 @@ La fenêtre ne peut ouvrir que : le domaine du site (sans `www.`), ses sous-doma
 
 C'est le filtre le plus efficace contre les redirections publicitaires, et il ne gêne pas le lecteur vidéo (qui charge ses ressources par des sous-requêtes, jugées par le filtre n° 1).
 
+### Deux modes : `strict` et `relaxed`
+
+| Mode | Navigation permise | Pour qui |
+|---|---|---|
+| `strict` (défaut) | Le domaine du site, ses sous-domaines, `allowedDomains`. | Sites de streaming : la plupart des pop-ups et redirections de pub sont ainsi coupés. |
+| `relaxed` | **Tout** domaine web, sauf ceux bloqués par les listes et règles. | Sites qui ont besoin de redirections utiles : connexion, consentement, YouTube. |
+
+En `relaxed`, une redirection vers une régie **présente dans les listes** reste refusée ; une régie inconnue des listes passerait. C'est le compromis : choisis `relaxed` seulement quand `strict` casse le site.
+
+### Apprendre au fil de l'eau : le menu rapide
+
+Quand une navigation est refusée, un message « Redirection bloquée : … » s'affiche. Ouvre alors le **menu rapide** (appui long sur Retour) :
+
+- **Autoriser <domaine> pour ce site** : le domaine est ajouté aux domaines autorisés de ce site et la page s'ouvre. Pour un site de la configuration distante, le choix est gardé **localement** (fichier `site-overrides.json`) : la config distante n'est pas modifiée, et le choix survit à son actualisation comme aux mises à jour.
+- **Ouvrir <domaine> une seule fois** : laisse passer cette navigation sans rien retenir.
+- **Enregistrer cette page comme site perso** : ajoute la page affichée à ton menu.
+
 ## 3. Scripts et sélecteurs
 
 Voir [SCRIPTS](SCRIPTS.md) : retirer des bandeaux, des calques, des pop-ups que les filtres 1 et 2 ne peuvent pas atteindre.
