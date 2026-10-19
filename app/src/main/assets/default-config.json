@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "revision": 0,
+  "blocklists": [],
+  "globalRules": [],
+  "whitelist": [],
+  "sites": [
+    {
+      "id": "exemple",
+      "name": "Exemple",
+      "url": "https://example.org/",
+      "scripts": ["block-popups"],
+      "color": "#7C5CFF"
+    }
+  ]
+}

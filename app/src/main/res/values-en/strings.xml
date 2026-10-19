@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WiDo</string>
+    <string name="menu_title">What do you want to watch?</string>
+    <string name="menu_hint">Long-press Back for the quick menu while playing</string>
+    <string name="status_loading">Loading configuration…</string>
+    <string name="status_ok">Configuration up to date · revision %1$d</string>
+    <string name="status_offline">Offline: cached configuration · revision %1$d</string>
+    <string name="status_bundled">Built-in configuration (network unavailable)</string>
+    <string name="status_warnings">%1$d warning(s) in the configuration</string>
+    <string name="empty_title">No site configured</string>
+    <string name="empty_body">Add sites to the remote configuration file, then restart the app. See docs/CONFIGURATION.md.</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="update_available">Update %1$s available</string>
+    <string name="update_install">Install</string>
+    <string name="update_downloading">Downloading… %1$d %%</string>
+    <string name="update_no_hash">Update refused: no SHA-256 checksum published with this release.</string>
+    <string name="update_bad_hash">Update refused: the APK does not match the published SHA-256 checksum.</string>
+    <string name="update_failed">Update failed: %1$s</string>
+    <string name="update_permission">Allow WiDo to install apps, then start the install again.</string>
+    <string name="version_footer">WiDo %1$s</string>
+    <string name="player_loading">Loading configuration…</string>
+    <string name="player_unknown_site">Site not found or disabled: %1$s</string>
+    <string name="panel_title">Quick menu</string>
+    <string name="panel_resume">Resume</string>
+    <string name="panel_reload">Reload page</string>
+    <string name="panel_cursor_on">Cursor: on (switch to focus navigation)</string>
+    <string name="panel_cursor_off">Cursor: off (turn the cursor on)</string>
+    <string name="panel_menu">Back to the site menu</string>
+    <string name="panel_blocked">%1$d request(s) blocked · %2$d navigation(s) refused</string>
+    <string name="toast_navigation_blocked">Redirect blocked: %1$s</string>
+</resources>

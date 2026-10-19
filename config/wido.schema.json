@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Configuration WiDo",
+  "type": "object",
+  "properties": {
+    "schema": { "type": "integer", "const": 1, "description": "Version du format (pas du contenu)." },
+    "revision": { "type": "integer", "minimum": 0, "description": "Numéro libre pour suivre tes modifications." },
+    "blocklists": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^https://" },
+      "description": "Listes de blocage distantes (format AdBlock ou hosts), en https."
+    },
+    "globalRules": { "type": "array", "maxItems": 5000, "items": { "type": "string" } },
+    "whitelist": { "type": "array", "items": { "type": "string" }, "description": "Domaines jamais bloqués." },
+    "sites": {
+      "type": "array",
+      "maxItems": 100,
+      "items": { "$ref": "#/$defs/site" }
+    }
+  },
+  "$defs": {
+    "site": {
+      "type": "object",
+      "required": ["id", "name", "url"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$" },
+        "name": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "pattern": "^https?://" },
+        "allowedDomains": { "type": "array", "items": { "type": "string" } },
+        "rules": { "type": "array", "maxItems": 5000, "items": { "type": "string" } },
+        "scripts": {
+          "type": "array",
+          "items": { "enum": ["block-popups", "remove-overlays", "hide-cookie-banners"] }
+        },
+        "hideSelectors": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
+        "enabled": { "type": "boolean", "default": true },
+        "userAgent": { "type": "string", "default": "default", "description": "default, desktop ou une chaîne complète." },
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "allowInsecure": { "type": "boolean", "default": false, "description": "Autorise http (serveur local)." }
+      }
+    }
+  }
+}

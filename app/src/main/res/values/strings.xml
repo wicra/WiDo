@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WiDo</string>
+    <string name="menu_title">Que veux-tu regarder ?</string>
+    <string name="menu_hint">Appui long sur Retour pour le menu rapide pendant la lecture</string>
+    <string name="status_loading">Chargement de la configuration…</string>
+    <string name="status_ok">Configuration à jour · révision %1$d</string>
+    <string name="status_offline">Hors ligne : configuration en cache · révision %1$d</string>
+    <string name="status_bundled">Configuration intégrée à l\'app (réseau indisponible)</string>
+    <string name="status_warnings">%1$d avertissement(s) dans la configuration</string>
+    <string name="empty_title">Aucun site configuré</string>
+    <string name="empty_body">Ajoute des sites dans le fichier de configuration distant, puis relance l\'app. Voir docs/CONFIGURATION.md.</string>
+    <string name="action_refresh">Actualiser</string>
+    <string name="update_available">Mise à jour %1$s disponible</string>
+    <string name="update_install">Installer</string>
+    <string name="update_downloading">Téléchargement… %1$d %%</string>
+    <string name="update_no_hash">Mise à jour refusée : pas de somme SHA-256 publiée avec cette version.</string>
+    <string name="update_bad_hash">Mise à jour refusée : l\'APK ne correspond pas à la somme SHA-256 publiée.</string>
+    <string name="update_failed">Échec de la mise à jour : %1$s</string>
+    <string name="update_permission">Autorise WiDo à installer des apps, puis relance l\'installation.</string>
+    <string name="version_footer">WiDo %1$s</string>
+    <string name="player_loading">Chargement de la configuration…</string>
+    <string name="player_unknown_site">Site introuvable ou désactivé : %1$s</string>
+    <string name="panel_title">Menu rapide</string>
+    <string name="panel_resume">Reprendre</string>
+    <string name="panel_reload">Recharger la page</string>
+    <string name="panel_cursor_on">Curseur : activé (passer en navigation par focus)</string>
+    <string name="panel_cursor_off">Curseur : désactivé (activer le curseur)</string>
+    <string name="panel_menu">Retour au menu des sites</string>
+    <string name="panel_blocked">%1$d requête(s) bloquée(s) · %2$d navigation(s) refusée(s)</string>
+    <string name="toast_navigation_blocked">Redirection bloquée : %1$s</string>
+</resources>

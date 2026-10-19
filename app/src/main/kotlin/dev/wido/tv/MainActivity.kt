@@ -1,0 +1,46 @@
+package dev.wido.tv
+
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.wido.tv.ui.MenuScreen
+import dev.wido.tv.ui.WiDoTheme
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        handleIntent(intent)
+        setContent {
+            WiDoTheme {
+                val vm: MenuViewModel = viewModel()
+                MenuScreen(vm) { site -> startActivity(PlayerActivity.intent(this, site.id)) }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    /**
+     * Extras acceptés (utiles depuis `adb` / Home Assistant) :
+     * - `config_url` : change l'URL de configuration (https uniquement, mémorisée) ;
+     * - `site` : ouvre directement ce site.
+     */
+    private fun handleIntent(intent: Intent) {
+        val app = application as WiDoApp
+        intent.getStringExtra(EXTRA_CONFIG_URL)?.let { app.settings.configUrl = it }
+        intent.getStringExtra(PlayerActivity.EXTRA_SITE)?.let {
+            intent.removeExtra(PlayerActivity.EXTRA_SITE)
+            startActivity(PlayerActivity.intent(this, it))
+        }
+    }
+
+    private companion object {
+        const val EXTRA_CONFIG_URL = "config_url"
+    }
+}

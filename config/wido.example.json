@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "revision": 12,
+  "blocklists": [
+    "https://raw.githubusercontent.com/OWNER/REPO/main/lists/mes-filtres.txt"
+  ],
+  "globalRules": [
+    "||pub.regie-exemple.net^",
+    "@@||cdn.lecteur-exemple.com^"
+  ],
+  "whitelist": ["cdn.lecteur-exemple.com"],
+  "sites": [
+    {
+      "id": "site-a",
+      "name": "Site A",
+      "url": "https://www.site-a.example/",
+      "allowedDomains": ["player.site-a-cdn.example"],
+      "rules": ["||tracker.site-a.example^"],
+      "scripts": ["block-popups", "hide-cookie-banners"],
+      "hideSelectors": [".banniere-promo", "#popup-newsletter"],
+      "userAgent": "desktop",
+      "color": "#E5484D"
+    },
+    {
+      "id": "nas",
+      "name": "Médiathèque maison",
+      "url": "http://192.168.1.20:8096/",
+      "allowInsecure": true,
+      "color": "#2F9E44"
+    },
+    {
+      "id": "ancien-site",
+      "name": "Site désactivé",
+      "url": "https://www.ancien.example/",
+      "enabled": false
+    }
+  ]
+}
