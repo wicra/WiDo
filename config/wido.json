@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": 3,
+  "revision": 4,
   "blocklists": [
     "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
   ],
@@ -8,21 +8,8 @@
   "whitelist": [],
   "sites": [
     {
-      "id": "Adresse-Wiflix",
-      "name": "Adresse Wiflix",
-      "url": "https://wiflix-adresses.fun",
-      "scripts": [
-        "block-popups"
-      ]
-    },
-    {
-      "id": "Wiflix",
-      "name": "Wiflix",
-      "url": "https://flemmix.land"
-    },
-    {
-      "id": "Youtube",
-      "name": "Youtube",
+      "id": "youtube",
+      "name": "YouTube",
       "url": "https://youtube.com",
       "scripts": [
         "block-popups"
