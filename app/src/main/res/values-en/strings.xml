@@ -4,7 +4,6 @@
     <string name="menu_title">Now showing</string>
     <string name="add_site">Add</string>
     <string name="tag_local">own</string>
-    <string name="hint_options">Long press: options</string>
     <string name="empty_title">No sites</string>
     <string name="empty_body">Choose "Add" to get started.</string>
     <string name="action_refresh">Refresh</string>
@@ -66,22 +65,21 @@
     <string name="osd_zoom">Zoom %1$d %%</string>
     <string name="help_body">Remote\n\n◀ ▲ ▼ ▶   Jumps to the next link (hold: free)\nOK   Click\nBack   Previous page · long: menu\n❚❚ ◀◀ ▶▶   Player\nColors   Shortcuts\nCH + / −   Scroll\n\nPress any key</string>
     <string name="settings_title">Settings</string>
-    <string name="settings_hint">◀ ▶ to change</string>
     <string name="settings_close">Close</string>
     <string name="settings_reset">Reset</string>
-    <string name="s_cursor_speed">Cursor speed</string>
-    <string name="s_cursor_size">Cursor size</string>
-    <string name="s_cursor_hide">Hide cursor after</string>
-    <string name="s_snap">Snapping cursor</string>
+    <string name="s_cursor_speed">Speed</string>
+    <string name="s_cursor_size">Size</string>
+    <string name="s_cursor_hide">Auto-hide</string>
+    <string name="s_snap">Snapping (jumps to link)</string>
     <string name="s_zoom">Text zoom</string>
     <string name="s_seek">Skip forward / back</string>
     <string name="s_osd">Bar duration</string>
     <string name="s_volume">Volume</string>
     <string name="s_fs_keys">Fullscreen: arrows</string>
-    <string name="s_key_red">Red key</string>
-    <string name="s_key_green">Green key</string>
-    <string name="s_key_yellow">Yellow key</string>
-    <string name="s_key_blue">Blue key</string>
+    <string name="s_key_red">Red</string>
+    <string name="s_key_green">Green</string>
+    <string name="s_key_yellow">Yellow</string>
+    <string name="s_key_blue">Blue</string>
     <string name="s_startup">On startup</string>
     <string name="s_new_relaxed">Default redirects</string>
     <string name="v_on">On</string>
@@ -113,4 +111,8 @@
     <string name="a_quick_menu">Quick menu</string>
     <string name="a_save_page">Save the page</string>
     <string name="a_top">Top of page</string>
+    <string name="sec_cursor">Cursor</string>
+    <string name="sec_player">Playback</string>
+    <string name="sec_keys">Color keys</string>
+    <string name="sec_general">General</string>
 </resources>

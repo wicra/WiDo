@@ -53,6 +53,27 @@ fun WiDoTheme(content: @Composable () -> Unit) {
     )
 }
 
+/** Zoom, halo coloré et contour clair quand `active`. Sert aux éléments à plusieurs zones de focus (carte + bouton « ••• »). */
+@Composable
+fun Modifier.focusEffect(
+    active: Boolean,
+    shape: Shape,
+    glow: Color,
+    focusScale: Float = 1.07f,
+    glowElevation: Dp = 24.dp,
+    ring: Boolean = true,
+): Modifier {
+    val scale by animateFloatAsState(if (active) focusScale else 1f, label = "focusScale")
+    val elevation by animateDpAsState(if (active) glowElevation else 0.dp, label = "focusGlow")
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .shadow(elevation, shape, ambientColor = glow, spotColor = glow)
+        .then(if (ring) Modifier.border(3.dp, if (active) Palette.Highlight else Color.Transparent, shape) else Modifier)
+}
+
 /**
  * Rend un élément activable à la télécommande : zoom, halo coloré et contour clair quand il a le
  * focus, clic au bouton OK et clic long en option.

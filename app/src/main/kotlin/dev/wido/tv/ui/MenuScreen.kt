@@ -4,8 +4,12 @@ import android.view.KeyEvent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -245,6 +250,12 @@ private fun rememberEntrance(index: Int): Modifier {
     }
 }
 
+/**
+ * Carte d'un site. Un site perso a deux zones de focus, l'une sous l'autre et sans se superposer :
+ * le corps (OK ouvre le site) et la bande « ••• » en bas (OK ouvre les options). Le halo et le zoom
+ * suivent la carte entière ; le contour clair montre la zone active.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SiteCard(
     entry: MenuSite,
@@ -261,10 +272,11 @@ private fun SiteCard(
     }
     // Couleur : celle de la config si elle en impose une, sinon celle de l'icône du site.
     val accent = parseColor(site.color) ?: icon?.color ?: Palette.Accent
-    var focused by remember { mutableStateOf(false) }
+    var bodyFocused by remember { mutableStateOf(false) }
+    var dotsFocused by remember { mutableStateOf(false) }
 
-    // Options d'un site perso : appui long sur OK, ou touche Menu.
-    val optionsKey = if (entry.local) {
+    // Raccourcis en plus du bouton : touche Menu de la télécommande.
+    val menuKey = if (entry.local) {
         Modifier.onKeyEvent { e ->
             val handled = e.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_MENU && e.nativeKeyEvent.action == KeyEvent.ACTION_UP
             if (handled) onOptions()
@@ -277,38 +289,65 @@ private fun SiteCard(
     Column(
         modifier
             .then(rememberEntrance(index))
-            .then(optionsKey)
+            .then(menuKey)
             .fillMaxWidth()
             .aspectRatio(1.3f)
-            .tvFocusable(
-                CardShape,
-                glow = accent,
-                onFocusChange = { focused = it; if (it) onFocus(accent) },
-                onLongClick = if (entry.local) onOptions else null,
-                onClick = onClick,
-            )
-            .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.55f), Palette.Surface)))
-            .padding(14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+            .focusEffect(active = bodyFocused || dotsFocused, shape = CardShape, glow = accent, ring = false)
+            .border(3.dp, if (bodyFocused) Palette.Highlight else Color.Transparent, CardShape)
+            .clip(CardShape)
+            .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.55f), Palette.Surface))),
     ) {
-        IconBubble(icon, site.name)
-        Spacer(Modifier.height(10.dp))
-        Text(
-            site.name,
-            color = Color.White,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-        )
-        val sub = when {
-            focused && entry.local -> stringResource(R.string.hint_options)
-            entry.local -> "${Hosts.of(site.url).orEmpty()} · ${stringResource(R.string.tag_local)}"
-            else -> Hosts.of(site.url).orEmpty()
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .onFocusChanged {
+                    bodyFocused = it.isFocused
+                    if (it.isFocused) onFocus(accent)
+                }
+                .combinedClickable(onClick = onClick, onLongClick = if (entry.local) onOptions else null)
+                .padding(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            IconBubble(icon, site.name)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                site.name,
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
+            val host = Hosts.of(site.url).orEmpty()
+            Text(
+                if (entry.local) "$host · ${stringResource(R.string.tag_local)}" else host,
+                color = Color.White.copy(alpha = 0.65f),
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
         }
-        Text(sub, color = Color.White.copy(alpha = 0.65f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+        if (entry.local) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(34.dp)
+                    .onFocusChanged {
+                        dotsFocused = it.isFocused
+                        if (it.isFocused) onFocus(accent)
+                    }
+                    .border(2.dp, if (dotsFocused) Palette.Highlight else Color.Transparent, CardShape)
+                    .background(if (dotsFocused) Palette.Accent.copy(alpha = 0.55f) else Color.Black.copy(alpha = 0.28f))
+                    .clickable(onClick = onOptions),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("•••", color = Color.White, fontSize = 16.sp, letterSpacing = 3.sp, maxLines = 1)
+            }
+        }
     }
 }
 
