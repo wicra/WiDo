@@ -24,7 +24,7 @@ jobs:
         run: |
           # Les erreurs Gradle sont répétées en annotation : lisibles sans télécharger les journaux.
           if ! ./gradlew :app:assembleDebug --console=plain > build.log 2>&1; then
-            MSG=$(grep -E '^e: |^w: .*Wi|What went wrong|^> |Execution failed|error:' build.log | head -60 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            MSG=$({ grep -E '^e: ' build.log; grep -A25 'What went wrong' build.log; grep -E 'Caused by' build.log; } | head -80 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
             echo "::error title=Gradle build failed::$MSG"
             exit 1
           fi
