@@ -21,7 +21,13 @@ jobs:
       - name: Tests du module core
         run: ./gradlew :core:test
       - name: APK debug
-        run: ./gradlew :app:assembleDebug
+        run: |
+          # Les erreurs Gradle sont répétées en annotation : lisibles sans télécharger les journaux.
+          if ! ./gradlew :app:assembleDebug --console=plain > build.log 2>&1; then
+            MSG=$(grep -E '^e: |^w: .*Wi|What went wrong|^> |Execution failed|error:' build.log | head -60 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=Gradle build failed::$MSG"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: wido-debug-apk
