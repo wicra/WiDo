@@ -4,6 +4,13 @@ La CI construit, signe et publie l'APK quand tu pousses un tag `vX.Y.Z`.
 
 ## Une seule fois : la clé de signature
 
+**Raccourci** : `scripts/setup-signing.sh` fait tout ce qui suit (clé + 4 secrets) en une commande, sur ton ordinateur. Les étapes manuelles restent décrites ci-dessous.
+
+```sh
+gh auth login                    # une fois, si besoin
+scripts/setup-signing.sh wicra/WiDo
+```
+
 La clé doit rester **la même pour toutes les versions** : Android refuse une mise à jour signée par une autre clé.
 
 ```sh
@@ -41,6 +48,13 @@ Pourquoi des *secrets GitHub* plutôt que des fichiers dans le dépôt : le dép
 - **Tu les crées toi-même** sur ton ordinateur ; je ne les vois jamais et je ne les ai pas demandés pour travailler : ils ne servent qu'à la CI de release.
 - **Ils ne sont pas nécessaires pour tester.** La CI `build.yml` produit une APK *debug* sans aucun secret (signée avec la clé de debug automatique d'Android). Les secrets ne servent qu'au moment de publier une vraie release.
 - **Perdre la clé** veut dire que plus personne ne pourra mettre à jour l'app existante : il faudrait désinstaller puis réinstaller. Sauvegarde le keystore hors du dépôt.
+
+## Pré-release de test (sans secrets)
+
+Si les secrets sont absents, le workflow ne s'arrête pas : il publie une **pré-release** dont l'APK est signée avec la clé de debug d'Android. C'est pratique pour tester sur la TV (par exemple avec Downloader), mais :
+
+- elle est marquée *pre-release* sur GitHub, donc **l'app ne la propose pas comme mise à jour** (`releases/latest` l'ignore) ;
+- une release signée avec ta vraie clé ne pourra pas l'écraser : il faudra d'abord `adb uninstall dev.wido.tv` ou la désinstaller depuis les réglages de la TV.
 
 ## Pré-release de test (sans secrets)
 
