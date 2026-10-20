@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -166,8 +167,10 @@ fun MenuScreen(
                         onAdd = { showCatalog = true },
                         pins = current?.let { c -> pins.filter { it.siteId == c.site.id } }.orEmpty(),
                         onPin = onOpenPin,
-                        // Avec la rangée « Reprendre », la scène se fait plus compacte pour tout faire tenir.
+                        // Avec la rangée « Reprendre », la scène se fait plus compacte pour tout faire tenir ;
+                        // sur un écran court, encore plus (titre seul, sans adresse ni épingles) : rien ne défile sous l'en-tête.
                         compact = watching.isNotEmpty(),
+                        tight = watching.isNotEmpty() && viewport < 520.dp,
                     )
                   }
                   Column {
@@ -189,7 +192,7 @@ fun MenuScreen(
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.Bottom,
                         contentPadding = PaddingValues(start = 44.dp, end = 52.dp, top = 12.dp),
-                        modifier = Modifier.fillMaxWidth().height(if (watching.isNotEmpty()) 156.dp else 170.dp),
+                        modifier = Modifier.fillMaxWidth().height(if (watching.isNotEmpty()) 146.dp else 166.dp),
                     ) {
                         itemsIndexed(sites, key = { _, it -> it.site.id }) { index, entry ->
                             SiteCard(
@@ -397,6 +400,8 @@ internal fun Hero(
     pins: List<Pin>,
     onPin: (Pin) -> Unit,
     compact: Boolean = false,
+    /** Écran court : titre plus petit, sans adresse ni épingles (elles restent dans Options). */
+    tight: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -413,8 +418,8 @@ internal fun Hero(
             }
             Text(
                 title,
-                fontSize = if (watch != null) 34.sp else if (compact) 42.sp else 56.sp,
-                lineHeight = if (watch != null) 40.sp else if (compact) 46.sp else 60.sp,
+                fontSize = if (watch != null || tight) 34.sp else if (compact) 42.sp else 56.sp,
+                lineHeight = if (watch != null || tight) 40.sp else if (compact) 46.sp else 60.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-2).sp,
                 maxLines = 1,
@@ -433,7 +438,7 @@ internal fun Hero(
             empty -> stringResource(R.string.empty_body)
             else -> ""
         }
-        if (subtitle.isNotEmpty()) {
+        if (subtitle.isNotEmpty() && (!tight || watch != null)) {
             Text(subtitle, color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -448,7 +453,7 @@ internal fun Hero(
             }
         }
         // Pages épinglées de ce site : ouvertes directement.
-        if (pins.isNotEmpty() && watch == null) {
+        if (pins.isNotEmpty() && watch == null && !tight) {
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -535,7 +540,7 @@ internal fun SiteCard(
                     .size(CIRCLE)
                     .then(menuKey)
                     .then(moveKeys)
-                    .onGloballyPositioned { if (focused) LaunchOrigin.remember(it) }
+                    .onGloballyPositioned { if (focused) LaunchOrigin.remember(it, accent) }
                     .onFocusChanged {
                         focused = it.isFocused
                         if (it.isFocused) onFocus(accent)
@@ -614,8 +619,8 @@ internal fun AddCard(index: Int, onClick: () -> Unit, onFocus: () -> Unit) {
     }
 }
 
-private val CIRCLE = 92.dp
-private val CIRCLE_SLOT = 112.dp
+private val CIRCLE = 86.dp
+private val CIRCLE_SLOT = 104.dp
 
 /**
  * Où se trouve l'élément qui ouvre un site (cercle ou vignette sélectionnée) : la page s'agrandit
@@ -625,9 +630,14 @@ object LaunchOrigin {
     @Volatile var bounds: android.graphics.Rect? = null
         private set
 
-    fun remember(coordinates: androidx.compose.ui.layout.LayoutCoordinates) {
+    /** Couleur de l'élément (celle du site), pour le cercle qui s'agrandit. */
+    @Volatile var color: Int = 0xFF1E5BFF.toInt()
+        private set
+
+    fun remember(coordinates: androidx.compose.ui.layout.LayoutCoordinates, color: Color) {
         val r = coordinates.boundsInWindow()
         bounds = android.graphics.Rect(r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt())
+        this.color = color.toArgb()
     }
 }
 
@@ -666,7 +676,7 @@ private fun ContinueRow(
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 10.dp, bottom = 6.dp),
-            modifier = Modifier.fillMaxWidth().height(136.dp),
+            modifier = Modifier.fillMaxWidth().height(126.dp),
         ) {
             itemsIndexed(entries, key = { _, it -> it.url }) { index, entry ->
                 WatchCard(entry, siteMap[entry.siteId], { onOpen(entry) }, { onRemove(entry) }, { onFocus(entry) }, if (index == 0) firstModifier else Modifier)
@@ -682,8 +692,8 @@ private fun WatchCard(entry: WatchEntry, site: Site?, onClick: () -> Unit, onRem
     var focused by remember { mutableStateOf(false) }
     Box(
         modifier
-            .size(192.dp, 108.dp)
-            .onGloballyPositioned { if (focused) LaunchOrigin.remember(it) }
+            .size(178.dp, 100.dp)
+            .onGloballyPositioned { if (focused) LaunchOrigin.remember(it, Palette.Accent) }
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus()

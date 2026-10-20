@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity(), RemoteTarget {
                 val vm: MenuViewModel = viewModel()
                 val onOpen = { site: dev.wido.core.Site -> openPlayer(PlayerActivity.intent(this, site.id)) }
                 val onOpenPin = { pin: dev.wido.core.Pin -> openPlayer(PlayerActivity.intent(this, pin.siteId, pin.url)) }
-                val onOpenWatch = { entry: dev.wido.core.WatchEntry -> openPlayer(PlayerActivity.intent(this, entry.siteId, entry.url, entry.position)) }
+                val onOpenWatch = { entry: dev.wido.core.WatchEntry -> openPlayer(PlayerActivity.intent(this, entry.siteId, entry.url, entry.position, autoplay = true)) }
                 if (app.isTv && !app.settings.onboardingDone) {
                     // Premier lancement : présentation en trois écrans.
                     Onboarding(vm) { app.settings.onboardingDone = true }
@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity(), RemoteTarget {
                         onOpenPin = onOpenPin,
                         onOpenWatch = onOpenWatch,
                         // « Reprendre sur le téléphone » : la page de la TV, à la même seconde.
-                        onPlayHere = { now -> startActivity(PlayerActivity.intent(this, ConfigRepository.LINK_SITE_ID, now.url, now.position)) },
+                        onPlayHere = { now -> startActivity(PlayerActivity.intent(this, ConfigRepository.LINK_SITE_ID, now.url, now.position, autoplay = true)) },
                         pairTarget = target,
                         onPairTargetHandled = { pairTarget.value = null },
                     )
@@ -66,11 +66,19 @@ class MainActivity : ComponentActivity(), RemoteTarget {
         }
     }
 
-    /** TV : la page s'agrandit depuis le cercle ou la vignette sélectionnée. */
+    /**
+     * TV : le lecteur s'ouvre sans animation du système (saccadée avec une page web) ; c'est lui qui
+     * agrandit le cercle sélectionné jusqu'à remplir l'écran, sur le fond de l'appli.
+     */
     private fun openPlayer(intent: Intent) {
         val from = if (app.isTv) dev.wido.tv.ui.LaunchOrigin.bounds else null
-        val options = from?.let { android.app.ActivityOptions.makeScaleUpAnimation(window.decorView, it.left, it.top, it.width(), it.height()).toBundle() }
-        startActivity(intent, options)
+        if (from != null) {
+            intent.putExtra(PlayerActivity.EXTRA_ORIGIN, intArrayOf(from.left, from.top, from.right, from.bottom))
+                .putExtra(PlayerActivity.EXTRA_COLOR, dev.wido.tv.ui.LaunchOrigin.color)
+        }
+        startActivity(intent)
+        @Suppress("DEPRECATION")
+        if (from != null) overridePendingTransition(0, 0)
     }
 
     override fun onStart() {

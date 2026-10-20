@@ -159,6 +159,13 @@ class TvRemoteService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Toujours au premier plan d'abord : Android ferme l'appli si un service lancé ainsi s'arrête avant.
+        if (!started) {
+            started = true
+            val first = notifier.build(PlaybackInfo(getString(R.string.notif_tv_title), link.selectedPeer()?.name.orEmpty(), 0.0, 0.0, true), ACTION_REWIND, ACTION_TOGGLE, ACTION_FORWARD)
+            ServiceCompat.startForeground(this, ID, first, if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0)
+            if (intent?.action != ACTION_STOP) scope.launch { follow() }
+        }
         when (intent?.action) {
             ACTION_STOP -> {
                 stopSelf()
@@ -167,12 +174,6 @@ class TvRemoteService : Service() {
             ACTION_TOGGLE -> link.key(RemoteKey.PLAY_PAUSE)
             ACTION_REWIND -> link.key(RemoteKey.REWIND)
             ACTION_FORWARD -> link.key(RemoteKey.FORWARD)
-        }
-        if (!started) {
-            started = true
-            val first = notifier.build(PlaybackInfo(getString(R.string.notif_tv_title), link.selectedPeer()?.name.orEmpty(), 0.0, 0.0, true), ACTION_REWIND, ACTION_TOGGLE, ACTION_FORWARD)
-            ServiceCompat.startForeground(this, ID, first, if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0)
-            scope.launch { follow() }
         }
         return START_NOT_STICKY
     }
@@ -206,6 +207,7 @@ class TvRemoteService : Service() {
     }
 
     override fun onDestroy() {
+        requested = false
         scope.cancel()
         notifier.release()
         super.onDestroy()
@@ -225,11 +227,19 @@ class TvRemoteService : Service() {
             val peer = app.link.selectedPeer() ?: return
             val state = app.link.states.value[peer.id] ?: return
             if (!state.online || state.status?.playing == null) return
-            runCatching { ContextCompat.startForegroundService(context, Intent(context, TvRemoteService::class.java)) }
+            runCatching { ContextCompat.startForegroundService(context, Intent(context, TvRemoteService::class.java)) }.onSuccess { requested = true }
         }
 
+        @Volatile private var requested = false
+
+        /**
+         * Arrêt demandé au service lui-même (il passe au premier plan puis s'arrête) : un simple
+         * stopService avant son démarrage complet ferait fermer l'appli par Android.
+         */
         fun stop(context: Context) {
-            context.stopService(Intent(context, TvRemoteService::class.java))
+            if (!requested) return
+            requested = false
+            runCatching { context.startService(Intent(context, TvRemoteService::class.java).setAction(ACTION_STOP)) }
         }
     }
 }
@@ -265,7 +275,7 @@ class BackgroundPlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        notifier = PlaybackNotifier(this, "WiDoBackground", ACTION_STOP)
+        notifier = PlaybackNotifier(this, "WiDoBackground", ACTION_PAUSE_STOP)
         notifier.session.setCallback(object : MediaSessionCompat.Callback() {
             override fun onPlay() = send("play")
             override fun onPause() = send("pause")
@@ -283,16 +293,7 @@ class BackgroundPlayService : Service() {
 
     @SuppressLint("WakelockTimeout")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_STOP -> {
-                send("pause")
-                stopSelf()
-                return START_NOT_STICKY
-            }
-            ACTION_TOGGLE -> send("toggle")
-            ACTION_REWIND -> send("rewind")
-            ACTION_FORWARD -> send("forward")
-        }
+        // Premier plan d'abord, quelle que soit la demande (voir TvRemoteService).
         if (!started) {
             started = true
             val info = BackgroundBridge.info ?: PlaybackInfo(getString(R.string.app_name), "", 0.0, 0.0, true)
@@ -300,6 +301,20 @@ class BackgroundPlayService : Service() {
             wake = (getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "WiDo:background").apply { acquire() }
             @Suppress("DEPRECATION")
             wifi = (applicationContext.getSystemService(WIFI_SERVICE) as WifiManager).createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "WiDo:background").apply { acquire() }
+        }
+        when (intent?.action) {
+            ACTION_STOP -> {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_PAUSE_STOP -> {
+                send("pause")
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_TOGGLE -> send("toggle")
+            ACTION_REWIND -> send("rewind")
+            ACTION_FORWARD -> send("forward")
         }
         return START_NOT_STICKY
     }
@@ -310,6 +325,7 @@ class BackgroundPlayService : Service() {
     }
 
     override fun onDestroy() {
+        requested = false
         BackgroundBridge.listener = null
         runCatching { wake?.release() }
         runCatching { wifi?.release() }
@@ -320,16 +336,23 @@ class BackgroundPlayService : Service() {
     companion object {
         private const val ID = 42
         private const val ACTION_STOP = "dev.wido.tv.bg.STOP"
+        /** Notification balayée : la vidéo se met en pause et la notification disparaît. */
+        private const val ACTION_PAUSE_STOP = "dev.wido.tv.bg.PAUSE_STOP"
         private const val ACTION_TOGGLE = "dev.wido.tv.bg.TOGGLE"
         private const val ACTION_REWIND = "dev.wido.tv.bg.REWIND"
         private const val ACTION_FORWARD = "dev.wido.tv.bg.FORWARD"
 
+        @Volatile private var requested = false
+
         fun start(context: Context) {
-            runCatching { ContextCompat.startForegroundService(context, Intent(context, BackgroundPlayService::class.java)) }
+            runCatching { ContextCompat.startForegroundService(context, Intent(context, BackgroundPlayService::class.java)) }.onSuccess { requested = true }
         }
 
+        /** Voir TvRemoteService.stop : l'arrêt passe par le service lui-même. */
         fun stop(context: Context) {
-            context.stopService(Intent(context, BackgroundPlayService::class.java))
+            if (!requested) return
+            requested = false
+            runCatching { context.startService(Intent(context, BackgroundPlayService::class.java).setAction(ACTION_STOP)) }
         }
     }
 }

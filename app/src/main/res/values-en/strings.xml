@@ -286,15 +286,15 @@
     <string name="action_resume">Resume</string>
     <string name="action_remove">Remove</string>
     <string name="tile_on_tv">On TV</string>
-    <string name="tile_native">Player</string>
-    <string name="tile_next">Next</string>
-    <string name="tile_hide">Hide</string>
-    <string name="tile_site_home">Home</string>
-    <string name="tile_cursor_on">Cursor ✓</string>
-    <string name="tile_cursor_off">Cursor</string>
+    <string name="tile_native">Native player</string>
+    <string name="tile_next">Next episode</string>
+    <string name="tile_hide">Hide an element</string>
+    <string name="tile_site_home">Site home</string>
+    <string name="tile_cursor_on">Cursor on</string>
+    <string name="tile_cursor_off">Cursor off</string>
     <string name="tile_play">Play</string>
     <string name="tile_pause">Pause</string>
-    <string name="tile_restart">Start</string>
+    <string name="tile_restart">Start over</string>
     <string name="tile_more">More…</string>
     <string name="osd_next_episode">Next episode</string>
     <string name="osd_next_none">No next episode on this page</string>
@@ -335,4 +335,6 @@
     <string name="notif_forward">Forward</string>
     <string name="notif_tv_title">TV</string>
     <string name="notif_on_tv">On %1$s</string>
+    <string name="s_auto_fullscreen">Automatic fullscreen</string>
+    <string name="osd_cinema">Fullscreen · Back to see the page</string>
 </resources>

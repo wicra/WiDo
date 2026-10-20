@@ -178,7 +178,7 @@ class ScreenLink(private val app: WiDoApp) {
     /** « Sur la TV » : la page s'ouvre (le site du menu qui la connaît, sinon un site éphémère), à la position donnée. */
     private fun openOnTv(play: HandoffPlay, current: RemoteTarget?) {
         (current as? android.app.Activity)?.takeIf { it !is MainActivity }?.finish()
-        val intent = PlayerActivity.intent(app, ConfigRepository.LINK_SITE_ID, play.url, play.position)
+        val intent = PlayerActivity.intent(app, ConfigRepository.LINK_SITE_ID, play.url, play.position, autoplay = true)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         app.startActivity(intent)
     }

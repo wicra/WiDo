@@ -33,7 +33,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.toArgb
+import androidx.core.animation.doOnEnd
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -133,7 +133,13 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         lifecycleScope.launch {
             // Lien envoyé depuis le téléphone : le site du menu qui le connaît, ou un site éphémère.
             val linkUrl = intent.getStringExtra(EXTRA_URL)
-            val site = if (siteId == ConfigRepository.LINK_SITE_ID && linkUrl != null) app.repository.siteForUrl(linkUrl) else app.repository.findSite(siteId)
+            // Une page précise (Reprendre, épingle, envoi du téléphone) que le site ne couvre plus (domaine
+            // changé, lien éphémère) : le site qui la connaît, sinon un site éphémère. Jamais l'accueil à la place.
+            val known = if (siteId == ConfigRepository.LINK_SITE_ID) null else app.repository.findSite(siteId)
+            val site = when {
+                linkUrl != null && (known == null || ResumeUrl.toRemember(known, linkUrl) == null) -> app.repository.siteForUrl(linkUrl)
+                else -> known
+            }
             this@PlayerActivity.site = site
             if (site == null) {
                 Toast.makeText(this@PlayerActivity, getString(R.string.player_unknown_site, siteId), Toast.LENGTH_LONG).show()
@@ -164,10 +170,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                             hideOverlay()
                             captureMeta()
                             startResumeSeek()
+                            startAutoPlay()
                             publishNowPlaying(mediaState.value)
                         }
                     },
                     onPageStart = {
+                        cinema = false
                         bridge?.reset()
                         mediaState.value = null
                         streamHinted = false
@@ -312,6 +320,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
         wv.requestFocus()
         pendingSeek = intent.getDoubleExtra(EXTRA_POSITION, 0.0)
+        autoStart = intent.getBooleanExtra(EXTRA_AUTOPLAY, false)
         // Une page épinglée, sinon la dernière page visitée du site (réglage « Reprendre »), sinon son accueil.
         val pinned = intent.getStringExtra(EXTRA_URL)?.let { ResumeUrl.toRemember(site, it) }
         wv.loadUrl(pinned ?: if (settings.resumeLastPage) ResumeUrl.startUrl(site, settings.lastUrlFor(site.id)) else site.url)
@@ -417,7 +426,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
 
         // Plein écran vidéo : les flèches pilotent le lecteur.
-        if (customView != null && settings.fullscreenPlayerKeys) {
+        if ((customView != null || cinema) && settings.fullscreenPlayerKeys) {
             if (fullscreenKey(event)) return true
         }
 
@@ -453,9 +462,14 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private fun goBackOrExit() {
         val wv = webView
         when {
+            cinema -> setCinema(false)
             customView != null -> exitCustomView()
             wv != null && wv.canGoBack() -> wv.goBack()
-            else -> finish()
+            else -> {
+                // Ouvert depuis le téléphone ou Home Assistant sans l'accueil derrière : on y revient au lieu de quitter.
+                if (isTaskRoot) startActivity(Intent(this, MainActivity::class.java))
+                finish()
+            }
         }
     }
 
@@ -644,6 +658,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         mediaState.value = state
         mediaAt = SystemClock.elapsedRealtime()
         if (backgrounded) BackgroundBridge.update(playbackInfo(state))
+        applyAutoStart(state)
         publishNowPlaying(state)
         if (!state.paused) captureFrame()
         applyPendingSeek(state)
@@ -1047,6 +1062,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         return FrameLayout(this).apply {
             background = haloDrawable()
             addView(column, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            post { playOpening(column) }
         }
     }
 
@@ -1059,14 +1075,6 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
      */
     private fun dressOverlay(site: Site) {
         val favicons = (application as WiDoApp).favicons
-        fun paint(color: Int) {
-            overlay.background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(blend(color, 0xFFFFFFFF.toInt(), 0.12f), blend(color, 0xFF000000.toInt(), 0.45f)),
-            )
-        }
-        val configured = site.color?.let { runCatching { Color.parseColor(it) }.getOrNull() }
-        (configured ?: favicons.cachedColor(site)?.let { it.toArgb() })?.let { paint(it) }
         lifecycleScope.launch {
             val icon = favicons.load(site) ?: return@launch
             if (!overlayVisible) return@launch
@@ -1075,13 +1083,53 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 visibility = View.VISIBLE
             }
             wordmark?.visibility = View.INVISIBLE
-            if (configured == null) icon.color?.let { paint(it.toArgb()) }
         }
     }
 
-    private fun blend(a: Int, b: Int, t: Float): Int {
-        fun ch(shift: Int) = (((a shr shift) and 0xFF) * (1 - t) + ((b shr shift) and 0xFF) * t).toInt() and 0xFF
-        return (0xFF shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+    /**
+     * Ouverture depuis l'accueil (TV) : le cercle du site, à sa place exacte, s'agrandit en douceur
+     * jusqu'à couvrir l'écran, puis se fond dans l'écran d'attente (fond de l'appli, logo du site).
+     */
+    private fun playOpening(content: View) {
+        val origin = intent.getIntArrayExtra(EXTRA_ORIGIN)?.takeIf { it.size == 4 } ?: return
+        val reveal = RevealView(this, intent.getIntExtra(EXTRA_COLOR, 0xFF1E5BFF.toInt()))
+        overlay.addView(reveal, FrameLayout.LayoutParams(MATCH, MATCH))
+        content.alpha = 0f
+        reveal.post {
+            val cx = (origin[0] + origin[2]) / 2f
+            val cy = (origin[1] + origin[3]) / 2f
+            val start = (origin[2] - origin[0]) / 2f
+            val end = kotlin.math.hypot(maxOf(cx, reveal.width - cx), maxOf(cy, reveal.height - cy))
+            ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 420
+                interpolator = android.view.animation.DecelerateInterpolator(2.2f)
+                addUpdateListener { reveal.set(cx, cy, start + (end - start) * it.animatedFraction) }
+                doOnEnd {
+                    content.animate().alpha(1f).setDuration(220).start()
+                    reveal.animate().alpha(0f).setDuration(260).withEndAction { overlay.removeView(reveal) }.start()
+                }
+                start()
+            }
+        }
+    }
+
+    /** Un disque de la couleur du site, dessiné directement (fluide, même sur une petite clé TV). */
+    private class RevealView(context: Context, color: Int) : View(context) {
+        private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = color }
+        private var cx = 0f
+        private var cy = 0f
+        private var radius = 0f
+
+        fun set(x: Float, y: Float, r: Float) {
+            cx = x
+            cy = y
+            radius = r
+            invalidate()
+        }
+
+        override fun onDraw(canvas: android.graphics.Canvas) {
+            if (radius > 0) canvas.drawCircle(cx, cy, radius, paint)
+        }
     }
 
     override fun finish() {
@@ -1272,6 +1320,72 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         resumeAttempts = 0
         root.removeCallbacks(resumeSeek)
         root.postDelayed(resumeSeek, RESUME_POLL_MS)
+    }
+
+    // --- Lecture et plein écran automatiques (Reprendre, envoyé depuis le téléphone) ---------
+
+    /** La vidéo doit démarrer seule, puis passer en plein écran, dès qu'elle est prête. */
+    private var autoStart = false
+    private var autoAttempts = 0
+    /** Mode cinéma : la vidéo remplit l'écran (quand le site ne peut pas ouvrir son plein écran). */
+    private var cinema = false
+
+    private val autoStartPoll = object : Runnable {
+        override fun run() {
+            if (!autoStart || autoAttempts++ > AUTO_ATTEMPTS) return
+            passivePoll = true
+            media("state")
+            root.postDelayed(this, AUTO_POLL_MS)
+        }
+    }
+
+    private fun startAutoPlay() {
+        if (!autoStart) return
+        autoAttempts = 0
+        root.removeCallbacks(autoStartPoll)
+        root.postDelayed(autoStartPoll, AUTO_POLL_MS)
+    }
+
+    private fun applyAutoStart(state: MediaState) {
+        if (!autoStart || state.duration <= 0) return
+        autoStart = false
+        root.removeCallbacks(autoStartPoll)
+        if (state.paused) media("play")
+        if (settings.autoFullscreen && customView == null) root.postDelayed({ enterFullscreen() }, 700)
+    }
+
+    /**
+     * Plein écran : le bouton plein écran du site, touché pour de vrai (son propre lecteur, ses
+     * sous-titres) ; s'il n'y en a pas de visible, le mode cinéma.
+     */
+    private fun enterFullscreen() {
+        val wv = webView ?: return
+        if (customView != null || cinema) return
+        wv.evaluateJavascript(FULLSCREEN_BUTTON_SCRIPT) { raw ->
+            val target = parseSnapTarget(raw)
+            if (target != null) {
+                tapAt(target.first * wv.width, target.second * wv.height)
+                root.postDelayed({ if (customView == null && !cinema) setCinema(true) }, 1_500)
+            } else {
+                setCinema(true)
+            }
+        }
+    }
+
+    private fun tapAt(x: Float, y: Float) {
+        val wv = webView ?: return
+        val down = SystemClock.uptimeMillis()
+        for (action in intArrayOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+            val ev = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0)
+            wv.dispatchTouchEvent(ev)
+            ev.recycle()
+        }
+    }
+
+    private fun setCinema(on: Boolean) {
+        cinema = on
+        mediaJson(JSONObject().put("cmd", "cinema").put("on", on).toString())
+        if (on) osd.showText(getString(R.string.osd_cinema))
     }
 
     private fun applyPendingSeek(state: MediaState) {
@@ -1472,6 +1586,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         root.removeCallbacks(hideFieldCard)
         root.removeCallbacks(progressPoll)
         root.removeCallbacks(resumeSeek)
+        root.removeCallbacks(autoStartPoll)
         adWindow?.close()
         customCallback?.onCustomViewHidden()
         webView?.let {
@@ -1511,6 +1626,32 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         const val EXTRA_SITE = "site"
         const val EXTRA_URL = "url"
         const val EXTRA_POSITION = "position"
+        /** La vidéo démarre seule et passe en plein écran (Reprendre, envoyé depuis le téléphone). */
+        const val EXTRA_AUTOPLAY = "autoplay"
+        /** Ouverture depuis l'accueil : position (gauche, haut, droite, bas) et couleur du cercle sélectionné. */
+        const val EXTRA_ORIGIN = "origin"
+        const val EXTRA_COLOR = "origin_color"
+        private const val AUTO_POLL_MS = 800L
+        private const val AUTO_ATTEMPTS = 30
+        /** Le bouton plein écran visible du lecteur de la page (au premier plan à cet endroit), en fractions de l'écran. */
+        private const val FULLSCREEN_BUTTON_SCRIPT = """(function () {
+  var re = /(plein[ -]?(é|e)cran|full ?screen)/i;
+  var els = document.querySelectorAll('button,[role=button],a,[class*=fullscreen],[class*=Fullscreen]');
+  for (var i = 0; i < els.length; i++) {
+    var e = els[i];
+    var cls = typeof e.className === 'string' ? e.className : '';
+    var label = (e.getAttribute('aria-label') || '') + ' ' + (e.getAttribute('title') || '') + ' ' + (e.getAttribute('data-title-no-tooltip') || '') + ' ' + cls;
+    if (!re.test(label) || /(exit|quitter|sortir)/i.test(label)) continue;
+    var r = e.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8) continue;
+    var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    if (cx < 0 || cy < 0 || cx > innerWidth || cy > innerHeight) continue;
+    var top = document.elementFromPoint(cx, cy);
+    if (!top || !(top === e || e.contains(top))) continue;
+    return JSON.stringify({ x: cx / innerWidth, y: cy / innerHeight });
+  }
+  return null;
+})()"""
         private const val PROGRESS_POLL_MS = 10_000L
         private const val FOLLOW_POLL_MS = 2_000L
         private const val FRAME_EVERY_MS = 45_000L
@@ -1616,10 +1757,11 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
          * `url` : une page précise du site (page épinglée, « Reprendre »), vérifiée avant d'être ouverte ;
          * `positionSeconds` : où reprendre sa vidéo.
          */
-        fun intent(context: Context, siteId: String, url: String? = null, positionSeconds: Double = 0.0): Intent =
+        fun intent(context: Context, siteId: String, url: String? = null, positionSeconds: Double = 0.0, autoplay: Boolean = false): Intent =
             Intent(context, PlayerActivity::class.java).putExtra(EXTRA_SITE, siteId).apply {
                 if (url != null) putExtra(EXTRA_URL, url)
                 if (positionSeconds > 0) putExtra(EXTRA_POSITION, positionSeconds)
+                if (autoplay) putExtra(EXTRA_AUTOPLAY, true)
             }
     }
 }

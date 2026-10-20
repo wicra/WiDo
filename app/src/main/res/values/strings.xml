@@ -286,15 +286,15 @@
     <string name="action_resume">Reprendre</string>
     <string name="action_remove">Retirer</string>
     <string name="tile_on_tv">Sur la TV</string>
-    <string name="tile_native">Lecteur</string>
-    <string name="tile_next">Suivant</string>
-    <string name="tile_hide">Masquer</string>
-    <string name="tile_site_home">Accueil</string>
-    <string name="tile_cursor_on">Curseur ✓</string>
-    <string name="tile_cursor_off">Curseur</string>
+    <string name="tile_native">Lecteur natif</string>
+    <string name="tile_next">Épisode suivant</string>
+    <string name="tile_hide">Masquer un élément</string>
+    <string name="tile_site_home">Accueil du site</string>
+    <string name="tile_cursor_on">Curseur activé</string>
+    <string name="tile_cursor_off">Curseur désactivé</string>
     <string name="tile_play">Lecture</string>
     <string name="tile_pause">Pause</string>
-    <string name="tile_restart">Début</string>
+    <string name="tile_restart">Reprendre au début</string>
     <string name="tile_more">Plus…</string>
     <string name="osd_next_episode">Épisode suivant</string>
     <string name="osd_next_none">Pas d\'épisode suivant sur cette page</string>
@@ -335,4 +335,6 @@
     <string name="notif_forward">Avancer</string>
     <string name="notif_tv_title">TV</string>
     <string name="notif_on_tv">Sur %1$s</string>
+    <string name="s_auto_fullscreen">Plein écran automatique</string>
+    <string name="osd_cinema">Plein écran · Retour pour revoir la page</string>
 </resources>

@@ -180,7 +180,7 @@ object ContinueWatching {
     private val YOUTU_BE = Regex("^https?://youtu\\.be/([\\w-]{11})")
 
     /** Paramètres qui ne changent pas la vidéo : position, provenance, pistage. */
-    private val NOISE = setOf("t", "start", "time_continue", "si", "pp", "feature", "fbclid", "gclid", "igshid", "ab_channel", "ref", "from")
+    private val NOISE = setOf("t", "start", "time_continue", "si", "pp", "feature", "fbclid", "gclid", "igshid")
 
     /**
      * L'adresse qui identifie une vidéo, quelle que soit la façon dont on y est arrivé : `&t=95s`,

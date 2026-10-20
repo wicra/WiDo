@@ -97,11 +97,41 @@
     return state(v);
   }
 
+  // Mode cinéma : la plus grande vidéo (ou, à défaut, l'iframe du lecteur) occupe tout l'écran, sur
+  // fond noir, sans le reste de la page. Sert de plein écran quand le site ne peut pas l'ouvrir lui-même.
+  function cinema(on) {
+    var old = document.getElementById('__wido_cinema');
+    if (old) old.remove();
+    var marked = document.querySelectorAll('[data-wido-cinema]');
+    for (var i = 0; i < marked.length; i++) marked[i].removeAttribute('data-wido-cinema');
+    if (!on) return false;
+    var best = null, area = 0;
+    function pick(list) {
+      for (var j = 0; j < list.length; j++) {
+        var r = list[j].getBoundingClientRect(), a = r.width * r.height;
+        if (a > area) { area = a; best = list[j]; }
+      }
+    }
+    pick(document.querySelectorAll('video'));
+    if (!best) pick(document.querySelectorAll('iframe'));
+    if (!best || area < 10000) return false;
+    best.setAttribute('data-wido-cinema', '1');
+    var st = document.createElement('style');
+    st.id = '__wido_cinema';
+    st.textContent = '[data-wido-cinema]{position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;' +
+      'width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;margin:0!important;' +
+      'border:0!important;transform:none!important;z-index:2147483647!important;background:#000!important;object-fit:contain!important}' +
+      'html,body{overflow:hidden!important}';
+    (document.head || document.documentElement).appendChild(st);
+    return true;
+  }
+
   // Repli sans passerelle native : la page principale répond à evaluateJavascript.
   window.__widoCommand = function (json) {
     try {
       var m = JSON.parse(json);
       if (m.cmd === 'type') return window.__widoType ? String(window.__widoType(m.text, m.submit)) : null;
+      if (m.cmd === 'cinema') return String(cinema(!!m.on));
       var s = command(m);
       return s ? JSON.stringify(s) : null;
     } catch (e) {
@@ -116,6 +146,7 @@
       try {
         var m = JSON.parse(event.data);
         if (m.cmd === 'type') { if (window.__widoType) window.__widoType(m.text, m.submit); return; }
+        if (m.cmd === 'cinema') { cinema(!!m.on); return; }
         var s = command(m);
         if (s) bridge.postMessage(JSON.stringify({ type: 'media', s: s, top: isTop }));
       } catch (e) { /* message illisible : ignoré */ }

@@ -163,6 +163,9 @@ fun SettingsPane(
                     changed { settings.osdSeconds = OSDS[it] }
                 }
             }
+            SettingRow(stringResource(R.string.s_auto_fullscreen)) {
+                Segmented(listOf(on, off), if (settings.autoFullscreen) 0 else 1) { changed { settings.autoFullscreen = it == 0 } }
+            }
             if (!phone) SettingRow(stringResource(R.string.s_volume)) {
                 Segmented(
                     listOf(stringResource(R.string.v_volume_wido), stringResource(R.string.v_volume_system)),

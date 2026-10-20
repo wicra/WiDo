@@ -72,6 +72,11 @@ class Settings(private val context: Context) {
         get() = prefs.getInt("osd", 4)
         set(v) = prefs.edit().putInt("osd", v).apply()
 
+    /** Reprendre et « Sur la TV » : la vidéo démarre et passe en plein écran toute seule. */
+    var autoFullscreen: Boolean
+        get() = prefs.getBoolean("auto_fullscreen", true)
+        set(v) = prefs.edit().putBoolean("auto_fullscreen", v).apply()
+
     /** Les touches de volume règlent le volume du système avec l'indicateur de WiDo. */
     var customVolume: Boolean
         get() = prefs.getBoolean("custom_volume", true)

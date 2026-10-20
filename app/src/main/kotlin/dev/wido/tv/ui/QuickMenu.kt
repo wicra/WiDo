@@ -58,9 +58,9 @@ private val RedirectTint = Brush.linearGradient(listOf(Color(0x52FF9646), Color(
 
 /**
  * Menu rapide pendant la lecture : un plateau de verre en bas de l'écran, la page reste visible au-dessus.
- * La barre de lecture (si une vidéo est connue), puis des tuiles à icône, les plus utiles d'abord ; le
- * reste est sous « Plus… ». Une redirection qui vient d'être refusée prend la tête, sur un verre teinté
- * ambre, avec le focus sur « Ouvrir une fois ».
+ * La barre de lecture (si une vidéo est connue), puis une rangée de pastilles (petite icône et mot), les
+ * plus utiles d'abord, toutes à portée des flèches. Une redirection qui vient d'être refusée prend la
+ * tête, sur un verre teinté ambre, avec le focus sur « Ouvrir une fois ».
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -69,18 +69,15 @@ fun QuickMenu(
     redirect: BlockedRedirect?,
     actions: List<QuickAction>,
     counts: String,
-    /** Téléphone : plateau pleine largeur, tuiles plus petites, toucher à côté le ferme. */
+    /** Téléphone : plateau pleine largeur, pastilles sur plusieurs lignes, toucher à côté le ferme. */
     compact: Boolean = false,
     onDismiss: () -> Unit = {},
-    moreLabel: String = "",
+    @Suppress("UNUSED_PARAMETER") moreLabel: String = "",
 ) {
     val first = remember { FocusRequester() }
-    val firstMore = remember { FocusRequester() }
-    var expanded by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { if (!compact) runCatching { first.requestFocus() } }
-    LaunchedEffect(expanded) { if (expanded && !compact) runCatching { firstMore.requestFocus() } }
-    val main = actions.filterNot { it.more }
-    val extra = actions.filter { it.more }
+    // Les actions secondaires ferment la rangée : tout reste visible, rien n'est caché derrière « Plus ».
+    val ordered = actions.filterNot { it.more } + actions.filter { it.more }
 
     Box(
         Modifier
@@ -94,8 +91,8 @@ fun QuickMenu(
                 .fillMaxWidth()
                 .glassPanel(Palette.PanelSolid, elevation = 30.dp)
                 .clickable(remember { MutableInteractionSource() }, null) {}
-                .padding(horizontal = if (compact) 14.dp else 24.dp, vertical = if (compact) 14.dp else 20.dp),
-            verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 16.dp),
+                .padding(horizontal = if (compact) 14.dp else 24.dp, vertical = if (compact) 14.dp else 18.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 14.dp),
         ) {
             if (redirect != null) {
                 Column(
@@ -115,50 +112,26 @@ fun QuickMenu(
                 }
             }
             if (media != null && media.duration > 0) MediaBar(media, compact)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp)) {
-                main.forEachIndexed { index, action ->
-                    val focus = if (index == 0 && redirect == null) Modifier.focusRequester(first) else Modifier
-                    ActionTile(action, compact, focus)
+            if (compact) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ordered.forEach { action -> ActionButton(action.label, action.run, primary = false, compact = true, glyph = action.glyph) }
                 }
-                if (extra.isNotEmpty() && !expanded) {
-                    ActionTile(QuickAction(moreLabel, Glyph.More) { expanded = true }, compact)
-                }
-                if (expanded) {
-                    extra.forEachIndexed { index, action ->
-                        ActionTile(action, compact, if (index == 0) Modifier.focusRequester(firstMore) else Modifier, faint = true)
+                Text(counts, color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(vertical = 6.dp, horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ordered.forEachIndexed { index, action ->
+                            val focus = if (index == 0 && redirect == null) Modifier.focusRequester(first) else Modifier
+                            ActionButton(action.label, action.run, focus, primary = false, compact = true, glyph = action.glyph)
+                        }
                     }
+                    Spacer(Modifier.width(14.dp))
+                    Text(counts, color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
                 }
             }
-            Text(counts, color = Color.White.copy(alpha = 0.55f), fontSize = if (compact) 12.sp else 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-        }
-    }
-}
-
-/** Une tuile : l'icône au-dessus d'un mot court ; blanche au focus. */
-@Composable
-private fun ActionTile(action: QuickAction, compact: Boolean, modifier: Modifier = Modifier, faint: Boolean = false) {
-    FocusSurface(
-        action.run,
-        modifier.size(if (compact) 80.dp else 108.dp, if (compact) 72.dp else 88.dp),
-        shape = RowShape,
-        idle = if (faint) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.10f),
-        focusScale = 1.08f,
-    ) { focused ->
-        Column(
-            Modifier.padding(horizontal = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 8.dp),
-        ) {
-            GlyphIcon(action.glyph, onSurface(focused), if (compact) 22.dp else 28.dp)
-            Text(
-                action.label,
-                color = onSurface(focused, Color.White.copy(alpha = 0.85f)),
-                fontSize = if (compact) 11.sp else 13.sp,
-                fontWeight = if (focused) FontWeight.Bold else FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
         }
     }
 }
