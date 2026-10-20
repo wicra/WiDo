@@ -64,6 +64,18 @@ Tant que l'onglet TV est affiché, **les touches de volume du téléphone règle
 
 La télécommande dans le navigateur (QR code de Réglages → Téléphone) reste disponible pour un téléphone sans l'appli.
 
+## Envoyer des sites à une TV (ex. chez un proche)
+
+Pour préparer la TV d'une personne qui ne veut pas s'embêter :
+
+1. Lie ton téléphone à sa TV (en **Invité** suffit, voir plus haut).
+2. Onglet **TV** → **Envoyer des sites à Salon** : coche les sites, ou touche un **pack enregistré**.
+3. Sur la TV, une fenêtre **« Ajouter ces sites ? »** apparaît : chaque site se décoche, **Ajouter** ou **Refuser**. Rien n'est ajouté sans cette confirmation. Si la TV est en train de lire une vidéo, la fenêtre s'affiche au retour à l'accueil.
+
+Seuls le nom, l'adresse et les réglages de blocage voyagent, **jamais** les comptes, cookies ou mots de passe. Les sites déjà présents sur la TV sont ignorés.
+
+**Packs** : après avoir coché des sites, donne un nom (ex. « Mamie ») et **Enregistrer le pack** ; il reste sur ton téléphone pour le renvoyer plus tard en un geste (à une autre TV, ou après une réinstallation). Un pack du même nom est remplacé.
+
 ## Synchronisation : « Mon écran » et « Invité »
 
 Chaque écran garde sa propre session : regarder sur le téléphone ne change rien sur la TV tant que tu ne le demandes pas. Ce qui se synchronise entre **mes écrans** :

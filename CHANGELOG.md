@@ -12,6 +12,9 @@
 - **Accueil TV** : le titre n'est plus coupé sous l'en-tête en descendant vers les sites (la scène et les rangées tiennent dans l'écran).
 
 ### Nouveau
+- **Envoyer des sites à une TV** (option pour préparer la TV d'un proche) : depuis l'onglet TV du téléphone, coche des sites ou un **pack enregistré** (« Mamie »…) ; la TV demande **toujours** confirmation à l'écran, site par site. Seuls l'adresse et les réglages de blocage voyagent, jamais les comptes. Fonctionne aussi avec une TV liée en Invité.
+- **Rapport de plantage** (Réglages → Général) : la dernière erreur et les derniers arrêts de page, gardés sur l'appareil. Sur TV, un QR code permet de le récupérer avec le téléphone ; un message le signale au démarrage après une fermeture sur erreur.
+- **Accessibilité** : les boutons qui n'affichent qu'une icône (télécommande, lecture, actualiser…), les disques des sites et les vignettes de Reprendre ont un nom lu par le lecteur d'écran.
 - **Onglet Reprendre (TV)** à côté de Sites et Réglages, sur toute la page : grandes vignettes avec le titre en clair, le site et le temps restant, l'image de la vidéo sélectionnée floutée en fond. Plusieurs vidéos d'un même site ont chacune leur vignette. OK maintenu ou Menu : Reprendre, Retirer, Ouvrir le site.
 - **Les sites en vinyles** : chaque site est un disque net (sillons fins, anneau à sa couleur, logo sur l'étiquette blanche). Le disque choisi sort du bac, grandit et tourne ; ses voisins s'inclinent en vague, avec des mouvements souples même quand on enchaîne les flèches.
 - **Ouverture d'un site en un seul geste**, lente et douce : l'accueil reste à l'écran, le vinyle grandit en tournant et glisse vers le centre, puis se fond dans l'écran d'attente au logo WiDo.
@@ -25,6 +28,7 @@
 - **Télécommande par gestes** (téléphone, onglet TV) : glisser = flèches, toucher = OK, appui long = Retour.
 
 ### Amélioré
+- **Petites TV** : la capture de l'accueil à l'ouverture d'un site est faite par le GPU (plus d'à-coup au clic), l'animation d'ouverture ne crée plus d'objets à chaque image, et les anciens fichiers en cache (icônes floues, sons d'une version précédente) sont supprimés.
 - **OK maintenu fonctionne partout à la télécommande** (options d'un site, actions d'une vidéo de Reprendre).
 - **Déplacer un site** : le focus reste sur le disque à déplacer.
 - **Menu rapide** : Texte + / Texte − et Veille ne ferment plus le menu, on peut ajuster plusieurs fois de suite.

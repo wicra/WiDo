@@ -6,19 +6,19 @@ Un navigateur de streaming pour **Google TV / Android TV**, pensé pour la tél�
 
 > Né d'un besoin simple : sur un projecteur Google TV, pas d'Opera ni d'extension. WiDo reprend ce que fait une extension de blocage, mais sur la TV, avec une liste de sites et des règles que tu modifies depuis GitHub, sans réinstaller l'app.
 
-**Statut : MVP (v0.1).** Le module `core` est testé automatiquement. L'app Android n'a pas encore été essayée sur un appareil réel : voir [docs/ROADMAP.md](docs/ROADMAP.md).
+**Statut : utilisée au quotidien sur TV et téléphone.** Le module `core` et le lien entre écrans sont testés automatiquement (de bout en bout sur de vrais serveurs locaux) ; l'app Android est compilée, analysée (lint) et capturée en images à chaque envoi. Voir [docs/ROADMAP.md](docs/ROADMAP.md).
 
-## Ce que fait le MVP
+## Ce que fait WiDo
 
-- **Menu de sites** à la télécommande (grille, focus visible, état de la configuration).
-- **Lecture plein écran** dans une WebView, avec **curseur aimanté** (une flèche saute au prochain lien), clic à OK, clavier de la TV sur les champs de saisie, écran de pause, volume personnalisé, zoom du texte et touches de couleur configurables.
+- **Accueil TV** en trois onglets : **Sites** (chaque site est un vinyle ; celui qu'on choisit sort du bac en vague et s'agrandit à l'ouverture), **Reprendre** (toutes les vidéos en cours, à la seconde près) et **Réglages** (rangés par thème). Sons d'interface feutrés, ambiances de couleur, réglables.
+- **Lecture plein écran** dans une WebView, avec **curseur aimanté** (une flèche saute au prochain lien), clic à OK, clavier de la TV sur les champs de saisie, écran de pause, volume personnalisé, zoom du texte et touches de couleur configurables. Une page qui plante ne ferme pas l'appli, et un **rapport de plantage** se récupère par QR code.
 - **Blocage de pubs et de redirections** : listes de domaines (format AdBlock ou hosts), règles globales ou par site, politique de navigation qui refuse tout domaine non prévu.
 - **Configuration distante** : un fichier JSON sur GitHub (sites, listes, règles). Un site change de domaine ? Tu modifies une ligne.
 - **Mise à jour depuis les releases GitHub**, sans serveur : l'app télécharge l'APK, vérifie sa somme SHA-256, puis Android demande confirmation.
 - **Lancement depuis Home Assistant** : `adb shell am start … --es site <id>`.
-- **Sur téléphone** : la même appli en version tactile, **Sur la TV** / **Reprendre sur le téléphone** à la même seconde, télécommande (touches, pavé, clavier en direct), « Partager → WiDo », et synchro de « mes écrans » (Reprendre, sites perso, épingles) entre le téléphone et les TV.
+- **Sur téléphone** : la même appli en version tactile, **Sur la TV** / **Reprendre sur le téléphone** à la même seconde, télécommande (touches, pavé, clavier en direct), « Partager → WiDo », synchro de « mes écrans » (Reprendre, sites perso, épingles) entre le téléphone et les TV, et **envoi de sites** à la TV d'un proche (confirmé sur sa TV, packs enregistrés).
 
-Ce qu'il ne fait pas (encore) : API locale pour taper du texte à distance, profils, voir la [feuille de route](docs/ROADMAP.md).
+Ce qu'il ne fait pas (encore) : profils, contrôle hors du réseau local ; voir la [feuille de route](docs/ROADMAP.md).
 
 ## Démarrage rapide
 
