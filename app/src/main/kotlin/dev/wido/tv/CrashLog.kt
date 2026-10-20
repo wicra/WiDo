@@ -52,25 +52,28 @@ object CrashLog {
         if (Build.VERSION.SDK_INT < 30) return
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val since = exitsFile.takeIf { it.exists() }?.readText()?.trim()?.toLongOrNull() ?: 0L
-        val exits = am.getHistoricalProcessExitReasons(null, 0, 8).filter { it.timestamp > since }.sortedBy { it.timestamp }
+        val exits = am.getHistoricalProcessExitReasons(null, 0, 12).filter { it.timestamp > since }.sortedBy { it.timestamp }
         if (exits.isEmpty()) return
         exitsFile.writeText(exits.maxOf { it.timestamp }.toString())
+        val crashes = setOf(
+            android.app.ApplicationExitInfo.REASON_CRASH,
+            android.app.ApplicationExitInfo.REASON_CRASH_NATIVE,
+            android.app.ApplicationExitInfo.REASON_ANR,
+        )
         for (exit in exits) {
-            val serious = exit.reason in setOf(
-                android.app.ApplicationExitInfo.REASON_CRASH,
-                android.app.ApplicationExitInfo.REASON_CRASH_NATIVE,
-                android.app.ApplicationExitInfo.REASON_ANR,
-                android.app.ApplicationExitInfo.REASON_LOW_MEMORY,
-                android.app.ApplicationExitInfo.REASON_SIGNALED,
-                android.app.ApplicationExitInfo.REASON_INITIALIZATION_FAILURE,
-            ) || (exit.reason == android.app.ApplicationExitInfo.REASON_OTHER && exit.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE)
+            val main = exit.processName == context.packageName
+            // Le processus annexe des pages s'arrête avec l'appli ; on ne le note que s'il a planté.
+            if (!main && exit.reason !in crashes) continue
             val front = exit.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
+            val crashed = exit.reason in crashes ||
+                (front && exit.reason in setOf(android.app.ApplicationExitInfo.REASON_LOW_MEMORY, android.app.ApplicationExitInfo.REASON_SIGNALED))
+            if (main) lastExitCrashed = crashed
             val line = "Fermeture par Android : ${reasonName(exit.reason)}" +
-                (if (front) " (appli à l'écran)" else " (en arrière-plan)") +
-                " · mémoire ${exit.pss / 1024} Mo" +
+                (if (!main) " (moteur des pages)" else if (front) " (appli à l'écran)" else " (en arrière-plan)") +
+                (if (exit.pss > 0) " · mémoire ${exit.pss / 1024} Mo" else "") +
                 (exit.description?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
             eventAt(exit.timestamp, line)
-            if (serious && front) {
+            if (crashed) {
                 // Trace du plantage natif ou de l'ANR quand Android la fournit.
                 val trace = runCatching { exit.traceInputStream?.bufferedReader()?.use { it.readText() } }.getOrNull()
                 lastFile.writeText(header(exit.timestamp) + line + "\n\n" + (trace?.take(MAX_CHARS) ?: memory(context)))
@@ -78,6 +81,13 @@ object CrashLog {
             }
         }
     }
+
+    /**
+     * La dernière fermeture de l'appli était-elle un vrai plantage ? null : inconnu (Android 10 ou moins,
+     * ou rien de neuf depuis). Une fermeture pour mémoire en arrière-plan, une mise à jour… n'en sont pas.
+     */
+    @Volatile var lastExitCrashed: Boolean? = null
+        private set
 
     private fun reasonName(reason: Int): String = when (reason) {
         android.app.ApplicationExitInfo.REASON_CRASH -> "erreur de l'appli"
@@ -92,6 +102,10 @@ object CrashLog {
         android.app.ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "un composant dont elle dépend s'est arrêté"
         android.app.ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "autorisation modifiée"
         android.app.ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "échec au démarrage"
+        android.app.ApplicationExitInfo.REASON_OTHER -> "autre raison du système"
+        14 -> "appli gelée par le système"
+        15 -> "état de l'appli modifié"
+        16 -> "mise à jour de l'appli"
         else -> "autre ($reason)"
     }
 

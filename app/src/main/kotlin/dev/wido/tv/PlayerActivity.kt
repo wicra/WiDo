@@ -103,8 +103,18 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private val mediaState = mutableStateOf<MediaState?>(null)
     private var passivePoll = false
 
+    /** État gardé par Android quand il a fermé l'appli en arrière-plan (page et position du moment). */
+    private var restored: Bundle? = null
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        webView?.url?.let { outState.putString(STATE_URL, it) }
+        outState.putDouble(STATE_POSITION, currentPosition())
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        restored = savedInstanceState
         settings = (application as WiDoApp).settings
         if (tv) UiSound.init(this, settings.uiSounds)
         audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -323,13 +333,16 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         overlay.bringToFront()
 
         wv.requestFocus()
-        pendingSeek = intent.getDoubleExtra(EXTRA_POSITION, 0.0)
+        // Recréé par Android après l'avoir fermé en arrière-plan : la page et la position du moment, pas
+        // celles de l'ouverture ; la vidéo attend OK.
+        val back = restored?.getString(STATE_URL)?.takeIf { Hosts.schemeOf(it) == "https" || Hosts.schemeOf(it) == "http" }
+        pendingSeek = if (back != null) restored?.getDouble(STATE_POSITION) ?: 0.0 else intent.getDoubleExtra(EXTRA_POSITION, 0.0)
         // Une page épinglée, sinon la dernière page visitée du site (réglage « Reprendre »), sinon son accueil.
-        val pinned = intent.getStringExtra(EXTRA_URL)?.let { ResumeUrl.toRemember(site, it) }
-        autoStart = intent.getBooleanExtra(EXTRA_AUTOPLAY, false)
-        // Cette vidéo a fait tomber la session précédente : pas de lecture ni de plein écran automatiques,
-        // sinon le même plantage recommence aussitôt (et boucle vers l'accueil). Elle se lance avec OK.
-        if (autoStart && pinned != null && settings.openPage == pinned) {
+        val pinned = back ?: intent.getStringExtra(EXTRA_URL)?.let { ResumeUrl.toRemember(site, it) }
+        autoStart = back == null && intent.getBooleanExtra(EXTRA_AUTOPLAY, false)
+        // Cette vidéo a fait tomber la session précédente (vrai plantage, selon Android quand il le dit) :
+        // pas de lecture ni de plein écran automatiques, sinon le même plantage recommence aussitôt.
+        if (autoStart && pinned != null && settings.openPage == pinned && CrashLog.lastExitCrashed != false) {
             autoStart = false
             root.postDelayed({ osd.showText(getString(R.string.osd_autoplay_skipped), OsdView.Kind.Warning) }, 1_500)
         }
@@ -2048,6 +2061,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val FRAME_EVERY_MS = 90_000L
         private const val PAUSE_SCREEN_MS = 1_200L
         private const val DOUBLE_BACK_MS = 450L
+        private const val STATE_URL = "state_url"
+        private const val STATE_POSITION = "state_position"
         /** Étiquette du vinyle de l'accueil, rapportée au rayon du disque (50 dp sur 86 dp au focus). */
         private const val LABEL_RATIO = 0.58f
         private const val KEEP_VISIBLE_SCRIPT = """(function () {
