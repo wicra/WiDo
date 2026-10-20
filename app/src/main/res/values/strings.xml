@@ -400,4 +400,29 @@
         <item quantity="one">%1$s · %2$d site</item>
         <item quantity="other">%1$s · %2$d sites</item>
     </plurals>
+    <string name="s_crash_report">Rapport de plantage</string>
+    <string name="crash_none">Aucun plantage enregistré</string>
+    <string name="crash_show">Voir le rapport</string>
+    <string name="crash_clear">Effacer</string>
+    <string name="crash_copy">Copier</string>
+    <string name="crash_copied">Rapport copié</string>
+    <string name="crash_share">Partager</string>
+    <string name="crash_scan">Scanne avec le téléphone pour récupérer le rapport</string>
+    <string name="crash_toast">WiDo s\'est fermé sur une erreur : le rapport est dans Réglages → Général</string>
+    <string name="action_close">Fermer</string>
+    <string name="a11y_up">Haut</string>
+    <string name="a11y_down">Bas</string>
+    <string name="a11y_left">Gauche</string>
+    <string name="a11y_right">Droite</string>
+    <string name="a11y_back">Retour</string>
+    <string name="a11y_home">Accueil</string>
+    <string name="a11y_menu">Menu</string>
+    <string name="a11y_volume_down">Baisser le volume</string>
+    <string name="a11y_volume_up">Monter le volume</string>
+    <string name="a11y_mute">Couper le son</string>
+    <string name="a11y_rewind">Reculer</string>
+    <string name="a11y_forward">Avancer</string>
+    <string name="a11y_play_pause">Lecture ou pause</string>
+    <string name="a11y_refresh">Actualiser</string>
+    <string name="a11y_close">Fermer</string>
 </resources>

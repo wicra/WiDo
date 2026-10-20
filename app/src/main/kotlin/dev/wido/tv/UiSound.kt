@@ -49,6 +49,8 @@ object UiSound {
         }
         pool = sp
         val dir = File(context.cacheDir, "ui-sounds").apply { mkdirs() }
+        // Les sons d'une version précédente ne servent plus.
+        dir.listFiles()?.filterNot { it.name.endsWith("-v$VERSION.wav") }?.forEach { it.delete() }
         Thread {
             Kind.entries.forEach { kind ->
                 runCatching {

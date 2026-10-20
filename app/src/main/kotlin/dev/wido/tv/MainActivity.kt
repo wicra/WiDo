@@ -41,6 +41,11 @@ class MainActivity : ComponentActivity(), RemoteTarget {
         val launched = handleIntent(intent)
         // Option « Rouvrir le dernier site » : seulement au lancement depuis l'accueil de la TV.
         val settings = app.settings
+        // L'appli s'est fermée sur une erreur la dernière fois : on le dit une fois, le rapport est dans les réglages.
+        if (savedInstanceState == null && CrashLog.hasUnseenCrash()) {
+            CrashLog.markSeen()
+            android.widget.Toast.makeText(this, R.string.crash_toast, android.widget.Toast.LENGTH_LONG).show()
+        }
         if (app.isTv) UiSound.init(this, settings.uiSounds)
         if (app.isTv && !launched && savedInstanceState == null && intent.action == Intent.ACTION_MAIN && settings.startupLastSite) {
             settings.lastSiteId?.let { startActivity(PlayerActivity.intent(this, it)) }
@@ -91,15 +96,18 @@ class MainActivity : ComponentActivity(), RemoteTarget {
      */
     private fun openPlayer(intent: Intent) {
         val from = if (app.isTv) dev.wido.tv.ui.LaunchOrigin.bounds else null
-        if (from != null) {
-            LaunchSnapshot.capture(this)
-            intent.putExtra(PlayerActivity.EXTRA_ORIGIN, intArrayOf(from.left, from.top, from.right, from.bottom))
-                .putExtra(PlayerActivity.EXTRA_COLOR, dev.wido.tv.ui.LaunchOrigin.color)
-        }
         if (app.isTv) UiSound.open()
-        startActivity(intent)
-        @Suppress("DEPRECATION")
-        if (from != null) overridePendingTransition(0, 0)
+        if (from == null) {
+            startActivity(intent)
+            return
+        }
+        intent.putExtra(PlayerActivity.EXTRA_ORIGIN, intArrayOf(from.left, from.top, from.right, from.bottom))
+            .putExtra(PlayerActivity.EXTRA_COLOR, dev.wido.tv.ui.LaunchOrigin.color)
+        LaunchSnapshot.capture(this) {
+            startActivity(intent)
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+        }
     }
 
     override fun onStart() {

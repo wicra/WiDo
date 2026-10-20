@@ -30,7 +30,17 @@ data class SiteIcon(val image: ImageBitmap, val color: Color?)
  * servie tout de suite et rafraîchie en arrière-plan.
  */
 class FaviconRepository(private val context: Context) {
-    private val dir by lazy { File(context.filesDir, "favicons").apply { mkdirs() } }
+    private val dir by lazy {
+        File(context.filesDir, "favicons").apply {
+            mkdirs()
+            // Une seule fois : les icônes de l'ancien format (petites, floues) sont supprimées.
+            val marker = File(this, ".v2")
+            if (!marker.exists()) {
+                listFiles()?.forEach { it.delete() }
+                marker.writeText("")
+            }
+        }
+    }
     private val memory = ConcurrentHashMap<String, SiteIcon>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val refreshing = ConcurrentHashMap.newKeySet<String>()

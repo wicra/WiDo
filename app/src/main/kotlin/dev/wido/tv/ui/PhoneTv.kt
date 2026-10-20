@@ -313,7 +313,7 @@ internal fun NowPlayingCard(peer: Peer, state: ScreenLink.ScreenState, link: Scr
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                     RoundButton(Glyph.Rewind, { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); link.key(RemoteKey.REWIND) }, size = 52.dp)
                     Box(
-                        Modifier.size(64.dp).clip(CircleShape).background(Color.White).clickable {
+                        Modifier.size(64.dp).clip(CircleShape).background(Color.White).describedAs(glyphLabel(Glyph.Play)).clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             link.key(RemoteKey.PLAY_PAUSE)
                         },
@@ -395,7 +395,7 @@ private fun KeysPad(link: ScreenLink) {
 @Composable
 private fun BoxScope.DpadArrow(glyph: Glyph, alignment: Alignment, onClick: () -> Unit) {
     Box(
-        Modifier.align(alignment).size(72.dp).clip(CircleShape).clickable(onClick = onClick),
+        Modifier.align(alignment).size(72.dp).clip(CircleShape).describedAs(glyphLabel(glyph)).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { GlyphIcon(glyph, Color.White.copy(alpha = 0.9f), 30.dp) }
 }
@@ -405,7 +405,7 @@ private fun KeyRow(keys: List<Pair<Glyph, RemoteKey>>, onPress: (RemoteKey) -> U
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         keys.forEach { (glyph, key) ->
             Box(
-                Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(18.dp)).background(Palette.Glass).clickable { onPress(key) },
+                Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(18.dp)).background(Palette.Glass).describedAs(glyphLabel(glyph)).clickable { onPress(key) },
                 contentAlignment = Alignment.Center,
             ) { GlyphIcon(glyph, Color.White, 24.dp) }
         }

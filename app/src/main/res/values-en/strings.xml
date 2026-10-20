@@ -400,4 +400,29 @@
         <item quantity="one">%1$s · %2$d site</item>
         <item quantity="other">%1$s · %2$d sites</item>
     </plurals>
+    <string name="s_crash_report">Crash report</string>
+    <string name="crash_none">No crash recorded</string>
+    <string name="crash_show">Show report</string>
+    <string name="crash_clear">Clear</string>
+    <string name="crash_copy">Copy</string>
+    <string name="crash_copied">Report copied</string>
+    <string name="crash_share">Share</string>
+    <string name="crash_scan">Scan with your phone to get the report</string>
+    <string name="crash_toast">WiDo closed on an error: the report is in Settings → General</string>
+    <string name="action_close">Close</string>
+    <string name="a11y_up">Up</string>
+    <string name="a11y_down">Down</string>
+    <string name="a11y_left">Left</string>
+    <string name="a11y_right">Right</string>
+    <string name="a11y_back">Back</string>
+    <string name="a11y_home">Home</string>
+    <string name="a11y_menu">Menu</string>
+    <string name="a11y_volume_down">Volume down</string>
+    <string name="a11y_volume_up">Volume up</string>
+    <string name="a11y_mute">Mute</string>
+    <string name="a11y_rewind">Rewind</string>
+    <string name="a11y_forward">Fast forward</string>
+    <string name="a11y_play_pause">Play or pause</string>
+    <string name="a11y_refresh">Refresh</string>
+    <string name="a11y_close">Close</string>
 </resources>

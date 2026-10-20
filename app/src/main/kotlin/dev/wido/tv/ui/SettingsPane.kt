@@ -93,6 +93,7 @@ fun SettingsPane(
     val remote = app.remote
     val phone = LocalPhone.current
     val peers by app.link.peers.collectAsState()
+    var showCrash by remember { mutableStateOf(false) }
     val on = stringResource(R.string.v_on)
     val off = stringResource(R.string.v_off)
 
@@ -275,6 +276,15 @@ fun SettingsPane(
                 NAVIGATIONS.indexOf(settings.newSitesNavigation).coerceAtLeast(0),
             ) { changed { settings.newSitesNavigation = NAVIGATIONS[it] } }
         }
+        SettingRow(stringResource(R.string.s_crash_report)) {
+            val report = remember(refresh) { dev.wido.tv.CrashLog.report() }
+            if (report == null) {
+                Text(stringResource(R.string.crash_none), color = Palette.TextSecondary, fontSize = 14.sp)
+            } else {
+                Chip(stringResource(R.string.crash_show), { showCrash = true }, glyph = Glyph.Warning)
+                Chip(stringResource(R.string.crash_clear), { changed { dev.wido.tv.CrashLog.clear() } }, idleText = Color.White.copy(alpha = 0.6f))
+            }
+        }
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             ActionButton(stringResource(R.string.settings_reset), { changed { settings.resetComfort() } }, primary = false, idleText = Color.White.copy(alpha = 0.7f))
@@ -290,6 +300,8 @@ fun SettingsPane(
         SettingsSection(if (phone) R.string.sec_device else R.string.sec_screens, if (phone) Glyph.Phone else Glyph.Tv, screens),
         SettingsSection(R.string.sec_general, Glyph.Sites, general),
     )
+
+    if (showCrash) dev.wido.tv.CrashLog.report()?.let { CrashReportDialog(it) { showCrash = false } }
 
     if (phone) {
         // Téléphone : tous les thèmes à la suite, dans une seule liste.
@@ -337,6 +349,54 @@ fun SettingsPane(
         }
     }
 }
+
+/**
+ * Le rapport de plantage : en texte, et en QR code sur la TV (le scanner avec le téléphone pour le
+ * transmettre sans câble). Sur téléphone : copier ou partager.
+ */
+@Composable
+private fun CrashReportDialog(report: String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val phone = LocalPhone.current
+    DialogFrame(
+        title = stringResource(R.string.s_crash_report),
+        onDismiss = onDismiss,
+        buttons = {
+            if (phone) {
+                ActionButton(stringResource(R.string.crash_copy), {
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("WiDo", report))
+                    android.widget.Toast.makeText(context, R.string.crash_copied, android.widget.Toast.LENGTH_SHORT).show()
+                })
+                ActionButton(stringResource(R.string.crash_share), {
+                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, report)
+                    context.startActivity(android.content.Intent.createChooser(send, null))
+                }, primary = false)
+            }
+            ActionButton(stringResource(R.string.action_close), onDismiss, primary = false)
+        },
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            if (!phone) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.clip(RoundedCornerShape(14.dp)).background(Color.White).padding(10.dp)) { QrCode(report.take(QR_CHARS), 220.dp) }
+                    Text(stringResource(R.string.crash_scan), color = Palette.TextSecondary, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.width(240.dp))
+                }
+            }
+            Text(
+                report.take(3_000),
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                color = Palette.TextSecondary,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+/** Ce qu'un QR code lisible tient du rapport (le début : version, appareil, erreur). */
+private const val QR_CHARS = 1_200
 
 /** Un thème des réglages : titre, icône et contenu. */
 private class SettingsSection(val title: Int, val glyph: Glyph, val content: @Composable () -> Unit)

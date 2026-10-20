@@ -1,5 +1,9 @@
 package dev.wido.tv.ui
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -314,4 +318,32 @@ fun ColumnScope.DialogBody(
     Spacer(Modifier.height(16.dp))
     // Les boutons vont à la ligne s'ils ne tiennent pas (téléphone en portrait).
     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { buttons() }
+}
+
+/** Nom lu par le lecteur d'écran pour un bouton qui n'affiche qu'une icône. */
+@Composable
+fun glyphLabel(glyph: Glyph): String? = when (glyph) {
+    Glyph.Up -> R.string.a11y_up
+    Glyph.Down -> R.string.a11y_down
+    Glyph.Left -> R.string.a11y_left
+    Glyph.Right -> R.string.a11y_right
+    Glyph.Back -> R.string.a11y_back
+    Glyph.Home -> R.string.a11y_home
+    Glyph.Menu -> R.string.a11y_menu
+    Glyph.VolumeDown -> R.string.a11y_volume_down
+    Glyph.VolumeUp -> R.string.a11y_volume_up
+    Glyph.Mute -> R.string.a11y_mute
+    Glyph.Rewind -> R.string.a11y_rewind
+    Glyph.Forward -> R.string.a11y_forward
+    Glyph.Play, Glyph.Pause -> R.string.a11y_play_pause
+    Glyph.Refresh -> R.string.a11y_refresh
+    Glyph.Close -> R.string.a11y_close
+    Glyph.Plus -> R.string.add_site
+    else -> null
+}?.let { androidx.compose.ui.res.stringResource(it) }
+
+/** Rend un bouton-icône lisible au lecteur d'écran (TalkBack) : son nom et son rôle de bouton. */
+fun Modifier.describedAs(label: String?): Modifier = if (label == null) this else semantics {
+    contentDescription = label
+    role = Role.Button
 }

@@ -35,6 +35,11 @@ class WiDoApp : Application() {
     }
     val updates by lazy { UpdateManager(this, BuildConfig.GITHUB_REPO) }
 
+    override fun onCreate() {
+        super.onCreate()
+        CrashLog.install(this)
+    }
+
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) WebViewPool.clear()

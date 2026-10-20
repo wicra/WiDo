@@ -634,6 +634,7 @@ internal fun SiteCard(
                     .clip(CircleShape)
                     .then(if (moving) Modifier.border(2.5.dp, Color.White, CircleShape) else Modifier)
                     .then(if (moving) Modifier else Modifier.dpadLongPress(onOptions, onClick))
+                    .describedAs(site.name)
                     .combinedClickable(onClick = onClick, onLongClick = onOptions),
                 contentAlignment = Alignment.Center,
             ) {
@@ -683,7 +684,7 @@ internal fun AddCard(index: Int, onClick: () -> Unit, onFocus: () -> Unit, dista
         Box(Modifier.size(CIRCLE_SLOT).then(rackWave(distance ?: if (focused) 0 else null, focused)), contentAlignment = Alignment.Center) {
             FocusSurface(
                 onClick,
-                Modifier.size(CIRCLE).border(1.5.dp, if (focused) Color.Transparent else Color.White.copy(alpha = 0.2f), CircleShape),
+                Modifier.size(CIRCLE).border(1.5.dp, if (focused) Color.Transparent else Color.White.copy(alpha = 0.2f), CircleShape).describedAs(stringResource(R.string.add_site)),
                 shape = CircleShape,
                 idle = Color.White.copy(alpha = 0.06f),
                 focusScale = 1f,
@@ -956,6 +957,7 @@ private fun WatchTile(entry: WatchEntry, site: Site?, onClick: () -> Unit, onRem
                 .background(Palette.Glass)
                 .then(if (focused) Modifier.border(3.dp, Color.White, CardShape) else Modifier)
                 .dpadLongPress(onRemove, onClick)
+                .describedAs(listOfNotNull(entry.title, siteName.takeIf { it.isNotEmpty() }, left).joinToString(", "))
                 .combinedClickable(onClick = onClick, onLongClick = onRemove),
         ) {
             VideoArt(rememberWatchImage(entry), site, entry.url, Modifier.matchParentSize(), badge = 30.dp)

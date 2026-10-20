@@ -1212,13 +1212,24 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
      * et étiquette blanche avec le logo, comme sur l'accueil. Dessiné directement (fluide sur une clé TV).
      */
     private class RevealView(context: Context, color: Int) : View(context) {
-        private val disc = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        // Dégradés créés une seule fois (rayon 1, centre 0,0), placés à chaque image par une matrice :
+        // aucune allocation pendant l'animation.
+        private val placement = android.graphics.Matrix()
+        private val discShader = android.graphics.RadialGradient(
+            0f, 0f, 1f, intArrayOf(0xFF1E1E24.toInt(), 0xFF0B0B0E.toInt()), null, android.graphics.Shader.TileMode.CLAMP,
+        )
+        private val sheenShader = android.graphics.SweepGradient(
+            0f, 0f,
+            intArrayOf(0, 0x26FFFFFF, 0, 0, 0x26FFFFFF, 0, 0),
+            floatArrayOf(0f, 0.07f, 0.11f, 0.5f, 0.57f, 0.61f, 1f),
+        )
+        private val disc = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { shader = discShader }
         private val groove = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             style = android.graphics.Paint.Style.STROKE
             this.color = Color.WHITE
             strokeWidth = 1.5f
         }
-        private val sheen = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        private val sheen = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { shader = sheenShader }
         private val ring = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             style = android.graphics.Paint.Style.STROKE
             this.color = color
@@ -1253,9 +1264,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
         override fun onDraw(canvas: android.graphics.Canvas) {
             if (radius <= 0) return
-            disc.shader = android.graphics.RadialGradient(
-                cx, cy, radius, intArrayOf(0xFF1E1E24.toInt(), 0xFF0B0B0E.toInt()), null, android.graphics.Shader.TileMode.CLAMP,
-            )
+            placement.setScale(radius, radius)
+            placement.postTranslate(cx, cy)
+            discShader.setLocalMatrix(placement)
             canvas.drawCircle(cx, cy, radius, disc)
             // Sillons : de l'anneau au bord, un trait fin tous les 14 px environ.
             val inner = labelRadius * 1.12f
@@ -1267,15 +1278,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                     canvas.drawCircle(cx, cy, inner + (outer - inner) * i / count, groove)
                 }
             }
-            canvas.save()
-            canvas.rotate(spin, cx, cy)
-            sheen.shader = android.graphics.SweepGradient(
-                cx, cy,
-                intArrayOf(0, 0x26FFFFFF, 0, 0, 0x26FFFFFF, 0, 0),
-                floatArrayOf(0f, 0.07f, 0.11f, 0.5f, 0.57f, 0.61f, 1f),
-            )
+            placement.setRotate(spin)
+            placement.postTranslate(cx, cy)
+            sheenShader.setLocalMatrix(placement)
             canvas.drawCircle(cx, cy, radius * 0.95f, sheen)
-            canvas.restore()
             ring.strokeWidth = maxOf(3f, labelRadius * 0.06f)
             canvas.drawCircle(cx, cy, labelRadius * 1.06f, ring)
             canvas.drawCircle(cx, cy, labelRadius, label)
@@ -1536,6 +1542,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private fun onRendererGone() {
         rendererLost = true
         val current = site
+        CrashLog.event("Page arrêtée (moteur du navigateur) : ${current?.name.orEmpty()} ${Hosts.of(webView?.url.orEmpty()).orEmpty()}")
         val dead = webView
         val url = dead?.url
         val position = currentPosition()

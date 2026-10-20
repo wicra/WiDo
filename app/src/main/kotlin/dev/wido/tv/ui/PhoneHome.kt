@@ -462,7 +462,7 @@ internal fun MiniPlayer(now: NowPlaying, receivedAt: Long, tvName: String, onTog
                     Text(tvName, color = Palette.Ok, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
             }
-            Box(Modifier.size(40.dp).clip(CircleShape).background(Color.White).clickable(onClick = onToggle), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(Color.White).describedAs(glyphLabel(Glyph.Play)).clickable(onClick = onToggle), contentAlignment = Alignment.Center) {
                 GlyphIcon(if (now.playing) Glyph.Pause else Glyph.Play, Palette.Ink, 20.dp)
             }
         }
@@ -689,7 +689,7 @@ internal fun VideoArt(image: ImageBitmap?, site: Site?, url: String, modifier: M
 @Composable
 internal fun RoundButton(glyph: Glyph, onClick: () -> Unit, size: Dp = 42.dp) {
     Box(
-        Modifier.size(size).clip(CircleShape).background(Palette.Glass).clickable(onClick = onClick),
+        Modifier.size(size).clip(CircleShape).background(Palette.Glass).describedAs(glyphLabel(glyph)).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { GlyphIcon(glyph, Color.White, size * 0.5f) }
 }
