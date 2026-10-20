@@ -16,6 +16,10 @@
 ### 📱 Le téléphone comme télécommande
 - **Pavé tactile, touches, texte et liens** depuis le téléphone, appairé une fois par QR code.
 
+### Divers
+- **Domaines autorisés et bloqués** saisissables à la main (clavier ou téléphone), et interrupteur **« Même site, autres extensions »** : un site qui redirige vers lui-même sous un autre domaine n'est plus bloqué.
+- **Logos des sites** en petite tuile discrète sur les cartes et à côté du grand titre.
+
 ## 0.6.1
 
 ### Corrigé

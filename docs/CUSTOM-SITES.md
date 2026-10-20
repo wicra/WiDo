@@ -25,14 +25,14 @@ Chaque bouton s'allume (✓) quand il est actif :
 | **Connexions (Google, Microsoft…)** | Autorise les pages de connexion Google, YouTube, Microsoft, Apple et Facebook. | Désactivé |
 | **Redirections strictes / souples / mixtes** | Chaque appui passe au mode suivant. Strictes : le site ne peut aller que sur son propre domaine. Souples : partout, sauf vers les pubs connues des listes. Mixtes : la pub s'ouvre dans une fenêtre fermée seule une fois affichée. Voir [BLOCKING](BLOCKING.md). | Strictes |
 
-## Domaines autorisés et bloqués : on choisit, on ne saisit pas
+## Domaines autorisés et bloqués
 
-Taper un nom de domaine à la télécommande est pénible : WiDo retient donc ce que le site a **réellement essayé de faire** et te le propose en boutons. Ces suggestions apparaissent dans la fenêtre de modification d'un site, **après l'avoir utilisé** (rien ne s'affiche pour un site neuf).
+Deux sections du formulaire, toujours visibles :
 
-- **Domaines autorisés** : les redirections refusées. Un bouton `+ domaine` l'autorise, un bouton `✓ domaine` le retire.
-- **Domaines bloqués** : les domaines tiers que le site contacte (souvent des régies ou des traqueurs). Un bouton `+ domaine` le bloque, `✓ domaine` le débloque.
+- **Domaines autorisés** : le site peut toujours y aller (redirections, lecteurs, connexions). L'interrupteur **« Même site, autres extensions (site.*) »** autorise le même nom sous toutes ses extensions : `wiflix.bio` peut alors rediriger vers `wiflix.cloud` sans être bloqué. Pratique pour les sites qui changent souvent d'adresse ou redirigent vers un domaine frère.
+- **Domaines bloqués** : jamais chargés, même s'ils ne sont dans aucune liste.
 
-Les domaines déjà autorisés, déjà bloqués ou propres au site ne sont jamais proposés. Ces informations restent **sur l'appareil**.
+Dans chaque section : les domaines déjà retenus (OK pour retirer), ceux que le site a réellement tenté de joindre pendant tes visites (OK pour ajouter), et **« + Ajouter un domaine »** pour en saisir un : `exemple.org`, une adresse complète, ou `site.*`. Le petit téléphone à droite du champ permet de le taper depuis ton téléphone.
 
 ## Options d'un site : le bouton « Options »
 
