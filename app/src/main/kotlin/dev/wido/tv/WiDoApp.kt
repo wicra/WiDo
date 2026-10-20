@@ -8,8 +8,14 @@ class WiDoApp : Application() {
     val repository by lazy { ConfigRepository(this, settings) }
     val favicons by lazy { FaviconRepository(this) }
     val thumbnails by lazy { Thumbnails(this) }
+    /** Lien avec les autres écrans (téléphone, autres TV) : appairage, pilotage, synchro. */
+    val link by lazy { ScreenLink(this) }
+
+    /** TV ou téléphone : l'interface s'adapte (télécommande et curseur, ou écran tactile). */
+    val isTv: Boolean get() = link.isTv
+
     val remote by lazy {
-        RemoteServer(settings) {
+        RemoteServer(settings, { link }) {
             dev.wido.core.RemoteProtocol.Labels(
                 touchpad = getString(R.string.remote_touchpad),
                 keys = getString(R.string.remote_keys),

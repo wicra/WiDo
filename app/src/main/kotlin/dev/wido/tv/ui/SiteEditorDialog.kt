@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -136,13 +138,13 @@ fun SiteEditorDialog(
             Modifier
                 .fillMaxSize()
                 .halo(listOf(Glow(Palette.Amber, 0.85f, 0.1f, 0.6f, 0.7f), Glow(Palette.Accent, 0.05f, 0.95f, 0.6f, 0.7f)))
-                .padding(horizontal = 150.dp, vertical = 28.dp),
+                .then(if (LocalPhone.current) Modifier.systemBarsPadding().imePadding().padding(10.dp) else Modifier.padding(horizontal = 150.dp, vertical = 28.dp)),
         ) {
             Column(
                 Modifier
                     .fillMaxSize()
                     .glassPanel(elevation = 30.dp)
-                    .padding(horizontal = 30.dp, vertical = 26.dp),
+                    .padding(horizontal = if (LocalPhone.current) 18.dp else 30.dp, vertical = if (LocalPhone.current) 18.dp else 26.dp),
             ) {
                 DialogBody(
                     title = stringResource(if (initial == null) R.string.editor_title_add else R.string.editor_title_edit),
@@ -304,6 +306,7 @@ private fun DomainChips(
 }
 
 /** Saisie d'un domaine (`exemple.org`, une adresse complète, ou `site.*`), au clavier ou au téléphone. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AddDomainRow(target: MutableList<String>, onPhone: () -> Unit, onDone: () -> Unit) {
     var draft by remember { mutableStateOf("") }
@@ -317,13 +320,14 @@ private fun AddDomainRow(target: MutableList<String>, onPhone: () -> Unit, onDon
         domains.forEach { if (it !in target) target.add(it) }
         onDone()
     }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    // Téléphone : le champ sur toute la largeur, les boutons dessous.
+    FlowRow(verticalArrangement = Arrangement.spacedBy(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         GlassTextField(
             value = draft,
             onValueChange = { draft = it; problem = null },
             label = stringResource(R.string.domain_field),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
-            modifier = Modifier.weight(1f),
+            modifier = if (LocalPhone.current) Modifier.fillMaxWidth() else Modifier.weight(1f),
             onPhone = onPhone,
         )
         ActionButton(stringResource(R.string.domain_add_confirm), { add() })

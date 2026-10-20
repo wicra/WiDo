@@ -81,7 +81,7 @@
     };
   }
 
-  // cmd : 'state' | 'toggle' | 'play' | 'pause' | 'seek' (by, en secondes) | 'vol' (by, entre -1 et 1)
+  // cmd : 'state' | 'toggle' | 'play' | 'pause' | 'seek' (by, en secondes) | 'seekTo' (to, en secondes) | 'vol' (by, entre -1 et 1)
   function command(c) {
     var v = bestVideo();
     if (!v) return null;
@@ -90,6 +90,7 @@
       case 'play': v.play(); break;
       case 'pause': v.pause(); break;
       case 'seek': v.currentTime = Math.max(0, Math.min(isFinite(v.duration) ? v.duration : 1e9, v.currentTime + c.by)); break;
+      case 'seekTo': v.currentTime = Math.max(0, Math.min(isFinite(v.duration) ? v.duration : 1e9, c.to)); break;
       case 'vol': v.muted = false; v.volume = Math.max(0, Math.min(1, v.volume + c.by)); break;
       default: break;
     }

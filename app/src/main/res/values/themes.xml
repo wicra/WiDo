@@ -6,4 +6,12 @@
         <item name="android:navigationBarColor">@color/wido_bg</item>
         <item name="android:colorAccent">@color/wido_accent</item>
     </style>
+
+    <!-- Fenêtre de partage : posée sur l'appli d'origine, fond assombri. -->
+    <style name="Theme.WiDo.Translucent" parent="Theme.WiDo">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+    </style>
 </resources>

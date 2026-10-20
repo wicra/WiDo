@@ -1,6 +1,11 @@
 package dev.wido.tv.ui
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,20 +57,34 @@ private val RedirectTint = Brush.linearGradient(listOf(Color(0x52FF9646), Color(
  * La barre de lecture (si une vidéo est connue), puis une rangée de pastilles. Une redirection qui vient
  * d'être refusée prend la tête, sur un verre teinté ambre, avec le focus sur « Ouvrir une fois ».
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun QuickMenu(media: MediaState?, redirect: BlockedRedirect?, actions: List<QuickAction>, counts: String) {
+fun QuickMenu(
+    media: MediaState?,
+    redirect: BlockedRedirect?,
+    actions: List<QuickAction>,
+    counts: String,
+    /** Téléphone : plateau pleine largeur, pastilles sur plusieurs lignes, toucher à côté le ferme. */
+    compact: Boolean = false,
+    onDismiss: () -> Unit = {},
+) {
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(Unit) { if (!compact) runCatching { first.requestFocus() } }
 
-    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .then(if (compact) Modifier.background(Color.Black.copy(alpha = 0.35f)).clickable(remember { MutableInteractionSource() }, null, onClick = onDismiss) else Modifier),
+    ) {
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
-                .padding(start = 40.dp, end = 40.dp, bottom = 32.dp)
+                .then(if (compact) Modifier.navigationBarsPadding().padding(10.dp) else Modifier.padding(start = 40.dp, end = 40.dp, bottom = 32.dp))
                 .fillMaxWidth()
                 .glassPanel(Palette.PanelSolid, elevation = 30.dp)
-                .padding(horizontal = 24.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+                .clickable(remember { MutableInteractionSource() }, null) {}
+                .padding(horizontal = if (compact) 16.dp else 24.dp, vertical = if (compact) 16.dp else 20.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 14.dp else 18.dp),
         ) {
             if (redirect != null) {
                 Column(
@@ -74,15 +93,20 @@ fun QuickMenu(media: MediaState?, redirect: BlockedRedirect?, actions: List<Quic
                 ) {
                     Text(redirect.title.uppercase(), color = Palette.Warning, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                     Text(redirect.host, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         ActionButton(redirect.openOnce.label, redirect.openOnce.run, Modifier.focusRequester(first))
                         ActionButton(redirect.allow.label, redirect.allow.run, primary = false)
                         ActionButton(redirect.ignore.label, redirect.ignore.run, primary = false, idleText = Color.White.copy(alpha = 0.7f))
                     }
                 }
             }
-            if (media != null && media.duration > 0) MediaBar(media)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            if (media != null && media.duration > 0) MediaBar(media, compact)
+            if (compact) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    actions.forEach { action -> ActionButton(action.label, action.run, primary = false, compact = true) }
+                }
+                Text(counts, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            } else Row(verticalAlignment = Alignment.CenterVertically) {
                 Row(
                     Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(vertical = 6.dp, horizontal = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -101,7 +125,7 @@ fun QuickMenu(media: MediaState?, redirect: BlockedRedirect?, actions: List<Quic
 
 /** Temps écoulé, barre de progression blanche, temps restant et volume. */
 @Composable
-private fun MediaBar(media: MediaState) {
+private fun MediaBar(media: MediaState, compact: Boolean = false) {
     val progress = (media.time / media.duration).toFloat().coerceIn(0f, 1f)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(if (media.paused) "❚❚" else "▶", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -110,6 +134,6 @@ private fun MediaBar(media: MediaState) {
             Box(Modifier.fillMaxHeight().fillMaxWidth(progress).clip(RoundedCornerShape(3.dp)).background(Color.White))
         }
         Text("−" + PlayerFormat.time(media.duration - media.time), color = Palette.TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        Text("· ${PlayerFormat.percent(media.volume)} %", color = Palette.TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        if (!compact) Text("· ${PlayerFormat.percent(media.volume)} %", color = Palette.TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }

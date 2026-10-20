@@ -52,6 +52,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.platform.LocalConfiguration
 
 /** Bouton pilule activable à la télécommande. `primary` : verre plus clair. `compact` : version discrète. */
 @Composable
@@ -197,7 +200,8 @@ fun GlassTextField(
                 }
             }
         }
-        if (onPhone != null) {
+        // Sur téléphone, on tape directement : pas de bouton « saisir au téléphone ».
+        if (onPhone != null && !LocalPhone.current) {
             FocusSurface(onPhone, Modifier.size(58.dp), shape = RowShape, idle = Color.White.copy(alpha = 0.10f)) { focused ->
                 PhoneIcon(onSurface(focused))
             }
@@ -246,13 +250,18 @@ fun DialogFrame(
     buttons: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val phone = LocalPhone.current
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        // Téléphone : presque toute la largeur, et la hauteur qu'il faut (le contenu défile au-delà).
+        val size = if (phone) {
+            Modifier.fillMaxWidth(0.94f).heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.86f).dp)
+        } else {
+            Modifier.width(width).heightIn(max = 480.dp)
+        }
         Column(
-            Modifier
-                .width(width)
-                .heightIn(max = 480.dp)
+            size
                 .glassPanel(Palette.PanelSolid, elevation = 30.dp)
-                .padding(horizontal = 30.dp, vertical = 26.dp),
+                .padding(horizontal = if (phone) 20.dp else 30.dp, vertical = if (phone) 20.dp else 26.dp),
         ) {
             DialogBody(title, buttons, content = content)
         }
@@ -260,6 +269,7 @@ fun DialogFrame(
 }
 
 /** Titre, contenu défilant et boutons : le corps commun des fenêtres. `fill` : les boutons restent collés en bas. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ColumnScope.DialogBody(
     title: String,
@@ -270,7 +280,7 @@ fun ColumnScope.DialogBody(
     Text(
         title,
         color = Palette.TextPrimary,
-        fontSize = 28.sp,
+        fontSize = if (LocalPhone.current) 24.sp else 28.sp,
         fontWeight = FontWeight.ExtraBold,
         letterSpacing = (-1).sp,
         maxLines = 1,
@@ -284,5 +294,6 @@ fun ColumnScope.DialogBody(
         content()
     }
     Spacer(Modifier.height(16.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { buttons() }
+    // Les boutons vont à la ligne s'ils ne tiennent pas (téléphone en portrait).
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { buttons() }
 }

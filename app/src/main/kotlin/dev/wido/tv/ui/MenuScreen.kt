@@ -332,7 +332,7 @@ private fun StatusPill(state: ConfigState, onRefresh: () -> Unit, modifier: Modi
 }
 
 @Composable
-private fun UpdateBanner(update: UpdateUi, onInstall: (ReleaseInfo) -> Unit) {
+internal fun UpdateBanner(update: UpdateUi, onInstall: (ReleaseInfo) -> Unit, horizontal: androidx.compose.ui.unit.Dp = 52.dp) {
     val (message, info) = when (update) {
         is UpdateUi.Available -> stringResource(R.string.update_available, update.info.tag) to update.info
         is UpdateUi.Downloading -> stringResource(R.string.update_downloading, update.percent) to null
@@ -342,7 +342,7 @@ private fun UpdateBanner(update: UpdateUi, onInstall: (ReleaseInfo) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 52.dp, vertical = 8.dp)
+            .padding(horizontal = horizontal, vertical = 8.dp)
             .glassPanel(Palette.Glass, PillShape)
             .padding(start = 20.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -565,7 +565,7 @@ private fun Footer(update: UpdateUi) {
     }
 }
 
-private fun parseColor(hex: String?): Color? = hex?.let {
+internal fun parseColor(hex: String?): Color? = hex?.let {
     runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull()
 }
 
@@ -633,7 +633,7 @@ private fun WatchCard(entry: WatchEntry, siteName: String, onClick: () -> Unit, 
  * `focused` : tuile blanche, pour que le logo ressorte sur la couleur du site ; sinon du verre.
  */
 @Composable
-private fun SiteLogo(icon: SiteIcon?, name: String, size: androidx.compose.ui.unit.Dp, focused: Boolean, modifier: Modifier = Modifier) {
+internal fun SiteLogo(icon: SiteIcon?, name: String, size: androidx.compose.ui.unit.Dp, focused: Boolean, modifier: Modifier = Modifier) {
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(size * 0.3f)
     Box(
         modifier.size(size).clip(shape).background(if (focused) Color.White.copy(alpha = 0.94f) else Color.White.copy(alpha = 0.14f)),

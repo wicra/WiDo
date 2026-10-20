@@ -16,8 +16,11 @@ class PhoneLink(
 ) {
     private val token = ByteArray(16).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
     private val main = Handler(Looper.getMainLooper())
-    private val server = MiniHttpServer("WiDoPhoneLink", token) { method, path, body ->
+    private val server = MiniHttpServer("WiDoPhoneLink") { request, body ->
+        val method = request.method
+        val path = request.path
         when {
+            !PhoneProtocol.tokenMatches(token, request.query["t"]) -> MiniHttpServer.FORBIDDEN
             method == "GET" && path == "/" -> MiniHttpServer.Response(200, "text/html; charset=utf-8", PhoneProtocol.page(token, labels))
             method == "POST" && path == "/send" -> {
                 val message = PhoneProtocol.parseMessage(body)

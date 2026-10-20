@@ -24,6 +24,9 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import dev.wido.core.MediaStream
+import dev.wido.core.NowPlaying
+import dev.wido.core.RemoteCommand
+import dev.wido.core.RemoteKey
 
 /**
  * « Lire dans WiDo » : le flux vidéo repéré dans la page, lu par le lecteur natif d'Android (Media3).
@@ -34,7 +37,7 @@ import dev.wido.core.MediaStream
  * eux, beaucoup de serveurs vidéo refusent la lecture.
  */
 @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
-class NativePlayerActivity : ComponentActivity() {
+class NativePlayerActivity : ComponentActivity(), RemoteTarget {
     private lateinit var player: ExoPlayer
     private lateinit var view: PlayerView
     private lateinit var settings: Settings
@@ -133,6 +136,68 @@ class NativePlayerActivity : ComponentActivity() {
         return view.dispatchKeyEvent(event) || super.dispatchKeyEvent(event)
     }
 
+    // --- Lien avec les autres écrans : télécommande, « En cours sur la TV » ---
+
+    private val publish = object : Runnable {
+        override fun run() {
+            publishNowPlaying()
+            view.postDelayed(this, PUBLISH_MS)
+        }
+    }
+
+    private fun publishNowPlaying() {
+        val app = application as WiDoApp
+        if (!app.isTv || !::player.isInitialized) return
+        val page = intent.getStringExtra(EXTRA_PAGE) ?: return
+        val duration = player.duration
+        app.link.nowPlaying.value = NowPlaying(
+            siteId = intent.getStringExtra(EXTRA_SITE).orEmpty(),
+            url = page,
+            title = intent.getStringExtra(EXTRA_TITLE).orEmpty(),
+            image = intent.getStringExtra(EXTRA_IMAGE),
+            position = player.currentPosition / 1000.0,
+            duration = if (duration > 0) duration / 1000.0 else 0.0,
+            playing = player.isPlaying,
+            at = System.currentTimeMillis(),
+            native = true,
+        )
+    }
+
+    override fun onRemote(command: RemoteCommand) {
+        if (!::player.isInitialized) return
+        when (command) {
+            is RemoteCommand.Key -> when (command.key) {
+                RemoteKey.PLAY -> player.play()
+                RemoteKey.PAUSE -> player.pause()
+                RemoteKey.PLAY_PAUSE, RemoteKey.OK -> if (player.isPlaying) player.pause() else player.play()
+                RemoteKey.REWIND, RemoteKey.LEFT -> player.seekBack()
+                RemoteKey.FORWARD, RemoteKey.RIGHT -> player.seekForward()
+                RemoteKey.BACK, RemoteKey.HOME -> finish()
+                RemoteKey.MENU -> dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MENU))
+                else -> return
+            }
+            is RemoteCommand.Seek -> player.seekTo((command.position * 1000).toLong())
+            else -> return
+        }
+        publishNowPlaying()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!::player.isInitialized) return
+        (application as WiDoApp).remote.attach(this)
+        view.post(publish)
+    }
+
+    override fun onPause() {
+        if (::player.isInitialized) {
+            view.removeCallbacks(publish)
+            (application as WiDoApp).remote.detach(this)
+            if ((application as WiDoApp).isTv) (application as WiDoApp).link.nowPlaying.value = null
+        }
+        super.onPause()
+    }
+
     override fun onStop() {
         if (::player.isInitialized) {
             savePosition()
@@ -165,6 +230,7 @@ class NativePlayerActivity : ComponentActivity() {
     }
 
     companion object {
+        private const val PUBLISH_MS = 2_000L
         private const val EXTRA_URL = "url"
         private const val EXTRA_KIND = "kind"
         private const val EXTRA_REFERER = "referer"

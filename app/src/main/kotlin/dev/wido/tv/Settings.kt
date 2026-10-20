@@ -15,7 +15,7 @@ enum class KeyAction {
 }
 
 /** Réglages locaux, modifiables depuis l'écran « Réglages » du menu. */
-class Settings(context: Context) {
+class Settings(private val context: Context) {
     private val prefs = context.getSharedPreferences("wido", Context.MODE_PRIVATE)
 
     /** Ce que l'app retient en usage (dernière page de chaque site, ordre des cartes) : jamais touché par « Réinitialiser ». */
@@ -170,6 +170,48 @@ class Settings(context: Context) {
         state.edit().putString("remote_token", token).apply()
         return token
     }
+
+    // --- Écrans liés (application sur téléphone, autres TV) -----------------------------------
+    /** Les applis WiDo du réseau (téléphone, autres TV) peuvent trouver cette TV et demander à s'y lier. */
+    var screenLink: Boolean
+        get() = prefs.getBoolean("screen_link", true)
+        set(v) = prefs.edit().putBoolean("screen_link", v).apply()
+
+    /** Identifiant stable de cet appareil, tiré au hasard au premier lancement. */
+    val deviceId: String
+        get() = state.getString("device_id", null) ?: dev.wido.core.LinkProtocol.randomToken(8).also {
+            state.edit().putString("device_id", it).apply()
+        }
+
+    /** Nom montré aux autres écrans (« Salon », « Pixel de Sergio »…). */
+    var deviceName: String
+        get() = state.getString("device_name", null) ?: defaultDeviceName()
+        set(v) = state.edit().putString("device_name", v.trim().take(40).ifEmpty { defaultDeviceName() }).apply()
+
+    private fun defaultDeviceName(): String =
+        runCatching { android.provider.Settings.Global.getString(context.contentResolver, "device_name") }.getOrNull()
+            ?.takeIf { it.isNotBlank() } ?: android.os.Build.MODEL.orEmpty().ifBlank { "WiDo" }
+
+    /** Appareils liés (JSON), vus depuis celui-ci. */
+    var peersJson: String
+        get() = state.getString("peers", null) ?: "[]"
+        set(v) = state.edit().putString("peers", v).apply()
+
+    /** Groupe de « mes écrans » (JSON), ou null tant qu'aucun n'est lié. */
+    var groupJson: String?
+        get() = state.getString("group", null)
+        set(v) = state.edit().putString("group", v).apply()
+
+    /** Clé du QR code d'appairage de la TV : changée après chaque utilisation. */
+    val pairKey: String
+        get() = state.getString("pair_key", null) ?: newPairKey()
+
+    fun newPairKey(): String = dev.wido.core.LinkProtocol.randomToken(8).also { state.edit().putString("pair_key", it).apply() }
+
+    /** Téléphone : la TV pilotée par défaut. */
+    var selectedScreen: String?
+        get() = state.getString("selected_screen", null)
+        set(v) = state.edit().putString("selected_screen", v).apply()
 
     var helpSeen: Boolean
         get() = prefs.getBoolean("help_seen", false)

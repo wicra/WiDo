@@ -2,6 +2,8 @@ package dev.wido.tv
 
 import android.os.Handler
 import android.os.Looper
+import dev.wido.core.LinkProtocol
+import dev.wido.core.PhoneProtocol
 import dev.wido.core.RemoteCommand
 import dev.wido.core.RemoteProtocol
 
@@ -11,15 +13,21 @@ fun interface RemoteTarget {
 }
 
 /**
- * Télécommande sur téléphone : un serveur local permanent, ouvert tant que WiDo est à l'écran et que le
- * réglage est actif. Le téléphone est appairé une fois en scannant le QR code des réglages : l'adresse
- * contient un jeton permanent (changeable), sans lequel la TV refuse tout.
+ * Serveur local de la TV, ouvert tant que WiDo est à l'écran :
+ * - télécommande dans le navigateur du téléphone (réglage « Télécommande sur téléphone ») : appairée
+ *   une fois par QR code, l'adresse contient un jeton permanent (changeable) ;
+ * - lien avec les applis WiDo du réseau (réglage « Écrans liés ») : annoncé par mDNS, chaque appareil
+ *   lié a son propre jeton (voir [ScreenLink]).
  *
  * Les commandes sont transmises, sur le fil principal, à l'écran actif ([attach] / [detach]).
  */
-class RemoteServer(private val settings: Settings, private val labels: () -> RemoteProtocol.Labels) {
+class RemoteServer(
+    private val settings: Settings,
+    private val link: () -> ScreenLink,
+    private val labels: () -> RemoteProtocol.Labels,
+) {
     private val main = Handler(Looper.getMainLooper())
-    private var target: RemoteTarget? = null
+    @Volatile private var target: RemoteTarget? = null
     private var server: MiniHttpServer? = null
     private var port: Int? = null
 
@@ -33,11 +41,29 @@ class RemoteServer(private val settings: Settings, private val labels: () -> Rem
             return "http://$ip:$p/?t=${settings.remoteToken}"
         }
 
-    /** Un écran passe au premier plan : il reçoit les commandes ; le serveur s'ouvre si le réglage est actif. */
+    /** QR code d'appairage de l'appli WiDo sur téléphone (`wido://pair…`), ou null si le serveur n'est pas ouvert. */
+    val pairUri: String?
+        get() {
+            val p = port ?: return null
+            val ip = MiniHttpServer.localAddress() ?: return null
+            return LinkProtocol.pairUri(ip, p, settings.pairKey, settings.deviceName)
+        }
+
+    /** L'adresse à saisir à la main dans l'appli du téléphone. */
+    val address: String?
+        get() {
+            val p = port ?: return null
+            val ip = MiniHttpServer.localAddress() ?: return null
+            return if (p == LinkProtocol.PORT) ip else "$ip:$p"
+        }
+
+    private val wanted: Boolean get() = link().isTv && (settings.phoneRemote || settings.screenLink)
+
+    /** Un écran passe au premier plan : il reçoit les commandes ; le serveur s'ouvre si un réglage le demande. */
     fun attach(screen: RemoteTarget) {
         target = screen
         main.removeCallbacks(stopLater)
-        if (settings.phoneRemote) start()
+        if (wanted) start()
     }
 
     /** L'écran quitte le premier plan. Le serveur se ferme si aucun écran ne prend le relais. */
@@ -47,42 +73,67 @@ class RemoteServer(private val settings: Settings, private val labels: () -> Rem
         main.postDelayed(stopLater, STOP_DELAY_MS)
     }
 
-    /** Après un changement de réglage ou de jeton. */
+    /** Après un changement de réglage, de jeton ou de nom. */
     fun restart() {
         stop()
-        if (settings.phoneRemote && target != null) start()
+        if (wanted && target != null) start()
+    }
+
+    /** Le groupe ou le nom a changé : l'annonce sur le réseau est refaite. */
+    fun readvertise() {
+        val p = port ?: return
+        advertise(p)
     }
 
     private fun start() {
         if (server?.isRunning == true) return
-        val token = settings.remoteToken
-        val http = MiniHttpServer("WiDoRemote", token) { method, path, body ->
-            when {
-                method == "GET" && path == "/" -> MiniHttpServer.Response(200, "text/html; charset=utf-8", RemoteProtocol.page(token, labels()))
-                method == "POST" && path == "/cmd" -> {
-                    val command = RemoteProtocol.parse(body)
-                    if (command == null) {
-                        MiniHttpServer.Response(400, body = "Bad command")
-                    } else {
-                        main.post { target?.onRemote(command) }
-                        MiniHttpServer.Response(200, body = "ok")
-                    }
-                }
-                else -> MiniHttpServer.Response(404, body = "Not found")
-            }
-        }
-        port = http.start(PORT)
+        val http = MiniHttpServer("WiDoRemote", LinkProtocol.MAX_BODY) { request, body -> route(request, body) }
+        val p = http.start(LinkProtocol.PORT) ?: return
+        port = p
         server = http
+        advertise(p)
+    }
+
+    private fun advertise(p: Int) {
+        val l = link()
+        if (!settings.screenLink) {
+            l.discovery.unregister()
+            return
+        }
+        l.discovery.register(settings.deviceName, p, LinkProtocol.txt(l.device, l.groupHash))
+        // Une TV de « mes écrans » cherche les autres pour se synchroniser avec elles.
+        if (l.groupHash != null) l.discovery.start() else l.discovery.stop()
+    }
+
+    private fun route(request: PhoneProtocol.Request, body: String): MiniHttpServer.Response {
+        val token = request.query["t"]
+        val browser = settings.phoneRemote && PhoneProtocol.tokenMatches(settings.remoteToken, token)
+        return when {
+            request.method == "GET" && request.path == "/" ->
+                if (browser) MiniHttpServer.Response(200, "text/html; charset=utf-8", RemoteProtocol.page(settings.remoteToken, labels())) else MiniHttpServer.FORBIDDEN
+            request.path == "/cmd" -> {
+                if (!browser && !(settings.screenLink && link().peerForToken(token) != null)) return MiniHttpServer.FORBIDDEN
+                if (request.method != "POST") return MiniHttpServer.BAD_REQUEST
+                val command = RemoteProtocol.parse(body) ?: return MiniHttpServer.Response(400, body = "Bad command")
+                main.post { target?.onRemote(command) }
+                MiniHttpServer.Response(200, body = "ok")
+            }
+            settings.screenLink -> link().handle(request, body) { target } ?: MiniHttpServer.NOT_FOUND
+            else -> MiniHttpServer.NOT_FOUND
+        }
     }
 
     private fun stop() {
         server?.stop()
         server = null
         port = null
+        if (link().isTv) {
+            link().discovery.unregister()
+            link().discovery.stop()
+        }
     }
 
     private companion object {
-        const val PORT = 8766
         /** Le temps de passer d'un écran à l'autre (accueil → lecteur) sans couper la télécommande. */
         const val STOP_DELAY_MS = 5_000L
     }

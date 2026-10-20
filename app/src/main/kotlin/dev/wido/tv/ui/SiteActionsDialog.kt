@@ -27,18 +27,23 @@ fun SiteActionsDialog(
     local: Boolean,
     pins: List<Pin>,
     onOpen: () -> Unit,
-    onMove: () -> Unit,
+    /** Déplacer la carte (télécommande) ; null sur téléphone. */
+    onMove: (() -> Unit)?,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onRemovePin: (Pin) -> Unit,
     hiddenCount: Int,
     onClearHides: () -> Unit,
     onDismiss: () -> Unit,
+    /** Téléphone lié à une TV : ouvrir le site sur la TV. */
+    onOpenOnTv: (() -> Unit)? = null,
+    tvName: String? = null,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
     DialogFrame(title = site.name, onDismiss = onDismiss, width = 520.dp) {
         ActionButton(stringResource(R.string.action_open), onOpen, Modifier.fillMaxWidth())
-        ActionButton(stringResource(R.string.action_move), onMove, Modifier.fillMaxWidth(), primary = false)
+        if (onOpenOnTv != null) ActionButton(stringResource(R.string.panel_send_to_tv, tvName.orEmpty()), onOpenOnTv, Modifier.fillMaxWidth(), primary = false)
+        if (onMove != null) ActionButton(stringResource(R.string.action_move), onMove, Modifier.fillMaxWidth(), primary = false)
         if (local) {
             ActionButton(stringResource(R.string.action_edit), onEdit, Modifier.fillMaxWidth(), primary = false)
             ActionButton(

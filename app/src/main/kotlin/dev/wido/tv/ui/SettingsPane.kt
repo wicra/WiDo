@@ -1,6 +1,11 @@
 package dev.wido.tv.ui
 
+import androidx.compose.foundation.ExperimentalLayoutApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -83,7 +88,10 @@ fun SettingsPane(
         version++
     }
 
-    val remote = (LocalContext.current.applicationContext as WiDoApp).remote
+    val app = LocalContext.current.applicationContext as WiDoApp
+    val remote = app.remote
+    val phone = LocalPhone.current
+    val peers by app.link.peers.collectAsState()
     val on = stringResource(R.string.v_on)
     val off = stringResource(R.string.v_off)
 
@@ -92,7 +100,7 @@ fun SettingsPane(
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(start = 52.dp, end = 52.dp, top = 20.dp, bottom = 56.dp),
+                .padding(start = if (phone) 18.dp else 52.dp, end = if (phone) 18.dp else 52.dp, top = 20.dp, bottom = 56.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // `refresh` est lu ici pour que tout soit recalculé à chaque changement.
@@ -113,6 +121,7 @@ fun SettingsPane(
             }
             ListsRow(lists, onUpdate = { onUpdateLists(true) })
 
+            if (!phone) {
             SectionLabel(stringResource(R.string.sec_cursor), Modifier.padding(top = 10.dp))
             SettingRow(stringResource(R.string.s_cursor_speed)) {
                 Segmented(
@@ -135,6 +144,7 @@ fun SettingsPane(
             SettingRow(stringResource(R.string.s_snap)) {
                 Segmented(listOf(on, off), if (settings.snapNavigation) 0 else 1) { changed { settings.snapNavigation = it == 0 } }
             }
+            }
 
             SectionLabel(stringResource(R.string.sec_player), Modifier.padding(top = 10.dp))
             SettingRow(stringResource(R.string.s_zoom)) {
@@ -152,30 +162,32 @@ fun SettingsPane(
                     changed { settings.osdSeconds = OSDS[it] }
                 }
             }
-            SettingRow(stringResource(R.string.s_volume)) {
+            if (!phone) SettingRow(stringResource(R.string.s_volume)) {
                 Segmented(
                     listOf(stringResource(R.string.v_volume_wido), stringResource(R.string.v_volume_system)),
                     if (settings.customVolume) 0 else 1,
                 ) { changed { settings.customVolume = it == 0 } }
             }
-            SettingRow(stringResource(R.string.s_field_qr)) {
+            if (!phone) SettingRow(stringResource(R.string.s_field_qr)) {
                 Segmented(listOf(on, off), if (settings.fieldPhoneQr) 0 else 1) { changed { settings.fieldPhoneQr = it == 0 } }
             }
-            SettingRow(stringResource(R.string.s_fs_keys)) {
+            if (!phone) SettingRow(stringResource(R.string.s_fs_keys)) {
                 Segmented(
                     listOf(stringResource(R.string.v_fs_player), stringResource(R.string.v_fs_cursor)),
                     if (settings.fullscreenPlayerKeys) 0 else 1,
                 ) { changed { settings.fullscreenPlayerKeys = it == 0 } }
             }
 
-            SectionLabel(stringResource(R.string.sec_keys), Modifier.padding(top = 10.dp))
-            KeyRow(R.string.s_key_red, KEY_RED, settings.keyRed) { changed { settings.keyRed = it } }
-            KeyRow(R.string.s_key_green, KEY_GREEN, settings.keyGreen) { changed { settings.keyGreen = it } }
-            KeyRow(R.string.s_key_yellow, KEY_YELLOW, settings.keyYellow) { changed { settings.keyYellow = it } }
-            KeyRow(R.string.s_key_blue, KEY_BLUE, settings.keyBlue) { changed { settings.keyBlue = it } }
+            if (!phone) {
+                SectionLabel(stringResource(R.string.sec_keys), Modifier.padding(top = 10.dp))
+                KeyRow(R.string.s_key_red, KEY_RED, settings.keyRed) { changed { settings.keyRed = it } }
+                KeyRow(R.string.s_key_green, KEY_GREEN, settings.keyGreen) { changed { settings.keyGreen = it } }
+                KeyRow(R.string.s_key_yellow, KEY_YELLOW, settings.keyYellow) { changed { settings.keyYellow = it } }
+                KeyRow(R.string.s_key_blue, KEY_BLUE, settings.keyBlue) { changed { settings.keyBlue = it } }
+            }
 
             SectionLabel(stringResource(R.string.sec_general), Modifier.padding(top = 10.dp))
-            SettingRow(stringResource(R.string.s_startup)) {
+            if (!phone) SettingRow(stringResource(R.string.s_startup)) {
                 Segmented(
                     listOf(stringResource(R.string.v_startup_menu), stringResource(R.string.v_startup_last)),
                     if (settings.startupLastSite) 1 else 0,
@@ -194,6 +206,31 @@ fun SettingsPane(
                 ) { changed { settings.newSitesNavigation = NAVIGATIONS[it] } }
             }
 
+            if (!phone) {
+            SectionLabel(stringResource(R.string.sec_screens), Modifier.padding(top = 10.dp))
+            SettingRow(stringResource(R.string.s_screen_link)) {
+                Segmented(listOf(on, off), if (settings.screenLink) 0 else 1) {
+                    changed { settings.screenLink = it == 0 }
+                    remote.restart()
+                }
+            }
+            if (settings.screenLink) {
+                SettingRow(stringResource(R.string.s_device_name)) {
+                    DeviceNameField(settings.deviceName) {
+                        changed { settings.deviceName = it }
+                        remote.readvertise()
+                    }
+                }
+                LinkPairingCard(remote.pairUri, remote.address)
+                LinkedDevices(
+                    peers,
+                    onLevel = { peer, level -> app.link.setLevel(peer.id, level) },
+                    onForget = { peer -> app.link.forget(peer.id) },
+                )
+            } else {
+                Text(stringResource(R.string.link_off_hint), color = Palette.TextSecondary, fontSize = 13.sp)
+            }
+
             SectionLabel(stringResource(R.string.sec_phone), Modifier.padding(top = 10.dp))
             SettingRow(stringResource(R.string.s_phone_remote)) {
                 Segmented(listOf(on, off), if (settings.phoneRemote) 0 else 1) {
@@ -208,6 +245,12 @@ fun SettingsPane(
                 }
             } else {
                 Text(stringResource(R.string.remote_off_hint), color = Palette.TextSecondary, fontSize = 13.sp)
+            }
+            } else {
+                SectionLabel(stringResource(R.string.sec_device), Modifier.padding(top = 10.dp))
+                SettingRow(stringResource(R.string.s_device_name_phone)) {
+                    DeviceNameField(settings.deviceName) { changed { settings.deviceName = it } }
+                }
             }
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -293,9 +336,38 @@ private fun actionLabel(action: KeyAction): Int = when (action) {
     KeyAction.NATIVE_PLAYER -> R.string.a_native
 }
 
-/** Une ligne : le libellé dans une colonne fixe, puis les choix à la suite. */
+/** Nom de l'appareil, tel que les autres écrans le voient. Enregistré en fin de saisie. */
+@Composable
+private fun DeviceNameField(current: String, onSave: (String) -> Unit) {
+    var text by remember(current) { mutableStateOf(current) }
+    // Enregistré une fois la saisie posée (l'annonce sur le réseau n'est pas refaite à chaque lettre).
+    androidx.compose.runtime.LaunchedEffect(text) {
+        kotlinx.coroutines.delay(1_200)
+        if (text.isNotBlank() && text != current) onSave(text)
+    }
+    GlassTextField(
+        value = text,
+        onValueChange = { text = it.take(40) },
+        label = stringResource(R.string.s_device_name_label),
+        modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth(),
+        keyboardOptions = KeyboardOptions.Default,
+    )
+}
+
+/**
+ * Une ligne : le libellé dans une colonne fixe, puis les choix à la suite. Sur téléphone, le libellé
+ * passe au-dessus et les choix vont à la ligne au besoin.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SettingRow(label: String, swatch: Color? = null, controls: @Composable RowScope.() -> Unit) {
+    if (LocalPhone.current) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = { controls() })
+        }
+        return
+    }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.width(240.dp), verticalAlignment = Alignment.CenterVertically) {
             if (swatch != null) {

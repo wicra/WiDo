@@ -39,7 +39,9 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import dev.wido.core.HandoffPlay
 import dev.wido.core.Hosts
+import dev.wido.core.NowPlaying
 import dev.wido.core.Navigation
 import dev.wido.core.RemoteCommand
 import dev.wido.core.RemoteKey
@@ -47,6 +49,7 @@ import dev.wido.core.ResumeUrl
 import dev.wido.core.Site
 import dev.wido.core.Zoom
 import dev.wido.tv.ui.BlockedRedirect
+import dev.wido.tv.ui.PairPrompt
 import dev.wido.tv.ui.PhoneCornerCard
 import dev.wido.tv.ui.PhoneOverlay
 import dev.wido.tv.ui.QuickAction
@@ -77,6 +80,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private var customView: View? = null
     private var customCallback: WebChromeClient.CustomViewCallback? = null
     private var cursorMode = true
+    /** TV : curseur et télécommande. Téléphone : la page se touche directement, un bouton ouvre le menu. */
+    private val tv by lazy { (application as WiDoApp).isTv }
+    private var menuButton: View? = null
     private var backLongPressed = false
     private var site: Site? = null
 
@@ -154,6 +160,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                             hideOverlay()
                             captureMeta()
                             startResumeSeek()
+                            publishNowPlaying(mediaState.value)
                         }
                     },
                     onPageStart = {
@@ -168,6 +175,22 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             // Rafraîchit la configuration pour la prochaine ouverture, sans bloquer la lecture.
             launch { app.repository.refresh() }
         }
+        // TV : un téléphone demande à se lier pendant la lecture → confirmation par-dessus la page.
+        if (tv) lifecycleScope.launch { app.link.pairRequests.collect { showPairPrompt(it.firstOrNull()) } }
+    }
+
+    private var pairShown = false
+
+    private fun showPairPrompt(pending: dev.wido.core.PairingDesk.Pending?) {
+        if (pairShown) {
+            pairShown = false
+            hidePanel()
+        }
+        if (pending == null || webView == null) return
+        hidePanel()
+        val link = (application as WiDoApp).link
+        showOverlay { PairPrompt(pending) { approved, level -> link.decidePair(pending, approved, level) } }
+        pairShown = true
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -235,6 +258,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 wv.visibility = View.GONE
                 cursor.bringToFront()
                 osd.bringToFront()
+                menuButton?.bringToFront()
             }
 
             override fun onHideCustomView() = exitCustomView()
@@ -256,7 +280,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             hideDelayMs = settings.cursorHideSeconds * 1000L
         }
         root.addView(cursor, FrameLayout.LayoutParams(MATCH, MATCH))
-        cursor.wake()
+        if (tv) {
+            cursor.wake()
+        } else {
+            cursorMode = false
+            cursor.visibility = View.GONE
+        }
 
         osd = OsdView(this).apply { hideSeconds = settings.osdSeconds }
         root.addView(osd, osd.layoutParamsForRoot())
@@ -268,6 +297,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             visibility = View.GONE
         }
         root.addView(topBar, FrameLayout.LayoutParams(MATCH, (4 * resources.displayMetrics.density).toInt(), Gravity.TOP))
+        if (!tv) addMenuButton()
         overlay.bringToFront()
 
         wv.requestFocus()
@@ -350,7 +380,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 return true
             }
             KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> {
-                if (!settings.customVolume || audio.isVolumeFixed) return super.dispatchKeyEvent(event)
+                if (!tv || !settings.customVolume || audio.isVolumeFixed) return super.dispatchKeyEvent(event)
                 if (event.action == KeyEvent.ACTION_DOWN) {
                     adjustVolume(
                         when (code) {
@@ -568,8 +598,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     /** Commande envoyée au lecteur vidéo de la page, dans n'importe quelle frame. */
-    private fun media(cmd: String, by: Double? = null) {
-        val json = JSONObject().put("cmd", cmd).apply { if (by != null) put("by", by) }.toString()
+    private fun media(cmd: String, by: Double? = null) =
+        mediaJson(JSONObject().put("cmd", cmd).apply { if (by != null) put("by", by) }.toString())
+
+    private fun mediaJson(json: String) {
         val b = bridge
         if (b != null) {
             b.send(json)
@@ -584,6 +616,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val passive = passivePoll
         passivePoll = false
         mediaState.value = state
+        mediaAt = SystemClock.elapsedRealtime()
+        publishNowPlaying(state)
         applyPendingSeek(state)
         osd.showMedia(state, passive)
         root.removeCallbacks(poll)
@@ -624,19 +658,22 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
 
         val native = c?.stream?.let { listOf(action(getString(R.string.panel_native)) { openNative() }) }.orEmpty()
-        val actions = native + listOf(
+        // Téléphone lié à une TV : la vidéo passe sur la TV, à la même seconde.
+        val screen = if (!tv) (application as WiDoApp).link.selectedPeer() else null
+        val toTv = screen?.let { listOf(action(getString(R.string.panel_send_to_tv, it.name)) { sendToTv() }) }.orEmpty()
+        val actions = toTv + native + listOfNotNull(
             action("▶  " + getString(R.string.panel_resume)) {},
             action(getString(R.string.panel_reload)) { webView?.reload() },
             action(getString(R.string.panel_home)) { current?.let { webView?.loadUrl(it.url) } },
-            action(getString(if (cursorMode) R.string.panel_cursor_on else R.string.panel_cursor_off)) { toggleCursor() },
+            if (tv) action(getString(if (cursorMode) R.string.panel_cursor_on else R.string.panel_cursor_off)) { toggleCursor() } else null,
             action(getString(R.string.panel_zoom_out_short)) { changeZoom(-1) },
             action(getString(R.string.panel_zoom_in_short)) { changeZoom(1) },
-            action(getString(R.string.panel_phone)) { showPhone() },
+            if (tv) action(getString(R.string.panel_phone)) { showPhone() } else null,
             action(getString(R.string.panel_pin)) { pinCurrentPage() },
-            action(getString(R.string.panel_hide_element)) { startPicking() },
+            if (tv) action(getString(R.string.panel_hide_element)) { startPicking() } else null,
             action(getString(R.string.panel_save_short)) { saveCurrentPage() },
             action(sleepLabel()) { cycleSleep() },
-            action(getString(R.string.panel_help)) { showHelp() },
+            if (tv) action(getString(R.string.panel_help)) { showHelp() } else null,
             action(getString(R.string.panel_sites)) { finish() },
         )
 
@@ -659,7 +696,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
         val counts = getString(R.string.panel_blocked, c?.blockedRequests?.get() ?: 0, c?.blockedNavigations?.get() ?: 0)
 
-        showOverlay { QuickMenu(mediaState.value, redirect, actions, counts) }
+        showOverlay { QuickMenu(mediaState.value, redirect, actions, counts, compact = !tv, onDismiss = { hidePanel() }) }
     }
 
     /** Affiche un calque Compose par-dessus la page (menu rapide, téléphone) ; Retour le ferme. */
@@ -716,14 +753,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     /** Un champ de la page est sélectionné : le QR code s'affiche en coin, tant que le champ garde le focus. */
     private fun onPageField(focused: Boolean) {
         root.removeCallbacks(hideFieldCard)
-        root.removeCallbacks(progressPoll)
-        root.removeCallbacks(resumeSeek)
         if (!focused) {
             // Le focus passe souvent d'un champ à l'autre : on attend un peu avant de retirer la carte.
             root.postDelayed(hideFieldCard, FIELD_CARD_GRACE_MS)
             return
         }
-        if (!settings.fieldPhoneQr || fieldCard != null || panelView != null) return
+        if (!tv || !settings.fieldPhoneQr || fieldCard != null || panelView != null) return
         val card = ComposeView(this).apply {
             isFocusable = false
             setContent {
@@ -803,10 +838,6 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val next = SLEEP_STEPS[(SLEEP_STEPS.indexOf(sleepMinutes) + 1) % SLEEP_STEPS.size]
         root.removeCallbacks(sleepWarning)
         root.removeCallbacks(sleepNow)
-        root.removeCallbacks(hideFieldCard)
-        root.removeCallbacks(progressPoll)
-        root.removeCallbacks(resumeSeek)
-        adWindow?.close()
         sleepMinutes = next
         if (next == 0) {
             sleepAt = 0L
@@ -945,7 +976,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             if (overlay.parent != null) root.removeView(overlay)
         }.start()
         // Première utilisation : rappel des commandes.
-        if (!settings.helpSeen) {
+        if (tv && !settings.helpSeen) {
             settings.helpSeen = true
             root.postDelayed({ showHelp() }, 500)
         }
@@ -962,6 +993,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     override fun onPause() {
         (application as WiDoApp).remote.detach(this)
+        if (tv) (application as WiDoApp).link.nowPlaying.value = null
         root.removeCallbacks(progressPoll)
         webView?.onPause()
         saveSeen()
@@ -1002,6 +1034,15 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             RemoteCommand.Tap -> {
                 if (panelView == null && !cursorMode) toggleCursor()
                 pressKey(KeyEvent.KEYCODE_DPAD_CENTER)
+            }
+            is RemoteCommand.Seek -> {
+                if (mediaState.value == null) {
+                    pendingSeek = command.position
+                    startResumeSeek()
+                } else {
+                    mediaJson(JSONObject().put("cmd", "seekTo").put("to", command.position).toString())
+                    root.postDelayed({ passivePoll = true; media("state") }, 400)
+                }
             }
             is RemoteCommand.Scroll -> webView?.scrollBy(0, (command.dy * resources.displayMetrics.density).toInt())
             is RemoteCommand.Type -> {
@@ -1045,7 +1086,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 passivePoll = true
                 media("state")
             }
-            root.postDelayed(this, PROGRESS_POLL_MS)
+            // Un téléphone suit la lecture (« En cours sur la TV ») : la position est relevée plus souvent.
+            root.postDelayed(this, if (tv && (application as WiDoApp).link.followed) FOLLOW_POLL_MS else PROGRESS_POLL_MS)
         }
     }
 
@@ -1105,6 +1147,77 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         )
     }
 
+    /** Heure (horloge système) du dernier état du lecteur, pour estimer la position en cours. */
+    private var mediaAt = 0L
+
+    /** Position estimée de la vidéo, maintenant. */
+    private fun currentPosition(): Double {
+        val state = mediaState.value ?: return 0.0
+        val elapsed = if (state.paused) 0.0 else (SystemClock.elapsedRealtime() - mediaAt) / 1000.0
+        return (state.time + elapsed).let { if (state.duration > 0) it.coerceAtMost(state.duration) else it }
+    }
+
+    /** TV : ce qui passe à l'écran, pour les téléphones liés (« En cours sur la TV »). */
+    private fun publishNowPlaying(state: MediaState?) {
+        if (!tv) return
+        val current = site ?: return
+        val url = webView?.url ?: return
+        val page = ResumeUrl.toRemember(current, url) ?: url
+        (application as WiDoApp).link.nowPlaying.value = NowPlaying(
+            siteId = current.id,
+            siteName = current.name,
+            url = page,
+            title = webView?.title.orEmpty(),
+            image = pageImage,
+            position = state?.time ?: 0.0,
+            duration = state?.duration ?: 0.0,
+            playing = state != null && !state.paused,
+            at = System.currentTimeMillis(),
+        )
+    }
+
+    /** Téléphone : « Sur la TV ». La page s'ouvre sur la TV choisie, à la même seconde ; ici, la vidéo se met en pause. */
+    private fun sendToTv() {
+        val app = application as WiDoApp
+        val peer = app.link.selectedPeer() ?: return
+        val current = site
+        val url = webView?.url ?: return
+        val page = current?.let { ResumeUrl.toRemember(it, url) } ?: url
+        val play = HandoffPlay(page, current?.id, webView?.title, currentPosition())
+        osd.showText(getString(R.string.osd_sending_to_tv, peer.name))
+        lifecycleScope.launch {
+            if (app.link.play(peer, play)) {
+                media("pause")
+                Toast.makeText(this@PlayerActivity, getString(R.string.toast_sent_to_tv, peer.name), Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this@PlayerActivity, getString(R.string.toast_tv_unreachable, peer.name), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /** Téléphone : bouton rond en haut à droite, qui ouvre le menu rapide (il n'y a pas de touche Menu). */
+    private fun addMenuButton() {
+        val density = resources.displayMetrics.density
+        val size = (44 * density).toInt()
+        val button = TextView(this).apply {
+            text = "⋯"
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 22f
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0x991A1A26.toInt())
+                setStroke((1 * density).toInt(), 0x33FFFFFF)
+            }
+            elevation = 12 * density
+            contentDescription = getString(R.string.panel_open_menu)
+            setOnClickListener { if (panelView == null) showPanel() else hidePanel() }
+        }
+        val margin = (14 * density).toInt()
+        root.addView(button, FrameLayout.LayoutParams(size, size, Gravity.TOP or Gravity.END).apply { setMargins(margin, margin + (8 * density).toInt(), margin, margin) })
+        menuButton = button
+    }
+
     /** Garde ce que le site a tenté (redirections refusées, domaines tiers) pour proposer des choix dans les réglages du site. */
     private fun saveSeen() {
         val id = site?.id ?: return
@@ -1160,6 +1273,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         const val EXTRA_URL = "url"
         const val EXTRA_POSITION = "position"
         private const val PROGRESS_POLL_MS = 10_000L
+        private const val FOLLOW_POLL_MS = 2_000L
         private const val RESUME_POLL_MS = 1_500L
         private const val RESUME_ATTEMPTS = 20
         private const val META_SCRIPT =
@@ -1239,4 +1353,6 @@ fun keyCodeOf(key: RemoteKey): Int = when (key) {
     RemoteKey.VOLUME_DOWN -> KeyEvent.KEYCODE_VOLUME_DOWN
     RemoteKey.MUTE -> KeyEvent.KEYCODE_VOLUME_MUTE
     RemoteKey.DEL -> KeyEvent.KEYCODE_DEL
+    RemoteKey.PLAY -> KeyEvent.KEYCODE_MEDIA_PLAY
+    RemoteKey.PAUSE -> KeyEvent.KEYCODE_MEDIA_PAUSE
 }

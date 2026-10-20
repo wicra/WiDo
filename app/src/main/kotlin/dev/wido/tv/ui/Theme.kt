@@ -14,6 +14,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,8 +88,17 @@ val Jakarta = FontFamily(
         .map { Font(R.font.plus_jakarta_sans, it) },
 )
 
+/** Vrai sur téléphone ou tablette : mises en page tactiles, adaptées aux écrans étroits. */
+val LocalPhone = staticCompositionLocalOf { false }
+
 @Composable
 fun WiDoTheme(content: @Composable () -> Unit) {
+    val phone = (LocalContext.current.applicationContext as? dev.wido.tv.WiDoApp)?.isTv == false
+    CompositionLocalProvider(LocalPhone provides phone) { WiDoMaterial(content) }
+}
+
+@Composable
+private fun WiDoMaterial(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
             primary = Palette.Accent,

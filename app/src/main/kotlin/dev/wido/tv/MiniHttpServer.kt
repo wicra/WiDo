@@ -12,14 +12,14 @@ import java.net.Socket
 import java.net.SocketException
 
 /**
- * Petit serveur HTTP pour le réseau local (saisie et télécommande sur téléphone). Toute requête doit
- * porter le jeton `t` ; sans lui, réponse 403. Les requêtes sont traitées une par une, sur un fil à part.
+ * Petit serveur HTTP pour le réseau local (saisie, télécommande, lien entre écrans). Le gestionnaire
+ * vérifie lui-même le jeton (`t` dans l'adresse). Les requêtes sont traitées une par une, sur un fil à part.
  */
 class MiniHttpServer(
     private val name: String,
-    private val token: String,
-    /** (méthode, chemin, corps) → réponse. Appelé hors du fil principal. */
-    private val handler: (method: String, path: String, body: String) -> Response,
+    private val maxBody: Int = PhoneProtocol.MAX_BODY,
+    /** (requête, corps) → réponse. Appelé hors du fil principal. */
+    private val handler: (request: PhoneProtocol.Request, body: String) -> Response,
 ) {
     data class Response(val status: Int, val type: String = "text/plain", val body: String = "")
 
@@ -64,8 +64,7 @@ class MiniHttpServer(
             if (header.isEmpty()) break
             if (header.startsWith("content-length:", ignoreCase = true)) length = header.substringAfter(':').trim().toIntOrNull() ?: 0
         }
-        if (!PhoneProtocol.tokenMatches(token, request.query["t"])) return respond(client, Response(403, body = "Forbidden"))
-        if (length > PhoneProtocol.MAX_BODY) return respond(client, Response(413, body = "Too large"))
+        if (length > maxBody) return respond(client, Response(413, body = "Too large"))
         val body = ByteArray(length.coerceAtLeast(0))
         var read = 0
         while (read < body.size) {
@@ -73,7 +72,7 @@ class MiniHttpServer(
             if (n < 0) break
             read += n
         }
-        respond(client, handler(request.method, request.path, String(body, 0, read, Charsets.UTF_8)))
+        respond(client, handler(request, String(body, 0, read, Charsets.UTF_8)))
     }
 
     /** Une ligne terminée par CRLF, bornée à 4 Ko. */
@@ -92,6 +91,7 @@ class MiniHttpServer(
         val bytes = response.body.toByteArray(Charsets.UTF_8)
         val reason = when (response.status) {
             200 -> "OK"
+            401 -> "Unauthorized"
             403 -> "Forbidden"
             404 -> "Not Found"
             413 -> "Payload Too Large"
@@ -108,6 +108,11 @@ class MiniHttpServer(
 
     companion object {
         private const val TAG = "WiDoHttp"
+
+        fun json(body: String) = Response(200, "application/json; charset=utf-8", body)
+        val FORBIDDEN = Response(403, body = "Forbidden")
+        val NOT_FOUND = Response(404, body = "Not found")
+        val BAD_REQUEST = Response(400, body = "Bad request")
 
         /** Adresse IPv4 de la TV sur le réseau local (Wi-Fi ou Ethernet). */
         fun localAddress(): String? = runCatching {

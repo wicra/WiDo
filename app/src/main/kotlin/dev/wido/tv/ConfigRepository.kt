@@ -21,6 +21,9 @@ import dev.wido.core.Pins
 import dev.wido.core.UserHides
 import dev.wido.core.SeenDomains
 import dev.wido.core.SiteOverrides
+import dev.wido.core.SyncData
+import dev.wido.core.SyncLedger
+import dev.wido.core.SyncRecord
 import dev.wido.core.Site
 import dev.wido.core.WiDoConfig
 import kotlinx.coroutines.Dispatchers
@@ -104,6 +107,7 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     private fun savePins(next: List<Pin>) {
         writeAtomically(pinsFile, Pins.encode(next))
         _pins.value = next
+        stamp()
     }
 
     private val watchingFile get() = File(context.filesDir, "continue-watching.json")
@@ -127,6 +131,7 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         if (next == _watching.value) return
         writeAtomically(watchingFile, ContinueWatching.encode(next))
         _watching.value = next
+        stamp()
     }
 
     private val hidesFile get() = File(context.filesDir, "user-hides.json")
@@ -145,6 +150,7 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     private fun saveHides(next: Map<String, List<String>>) {
         writeAtomically(hidesFile, UserHides.encode(next))
         _hides.value = next
+        stamp()
     }
 
     private val _local = MutableStateFlow(readLocalSites())
@@ -305,6 +311,68 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     private fun saveLocal(list: List<Site>) {
         writeAtomically(localFile, LocalSites.encode(list))
         _local.value = list
+        stamp()
+    }
+
+    // --- Synchronisation entre mes écrans -----------------------------------------------------
+
+    private val syncFile get() = File(context.filesDir, "sync-ledger.json")
+
+    @Volatile private var ledger: SyncLedger? = null
+    private var applyingSync = false
+
+    private val _syncVersion = MutableStateFlow(0L)
+
+    /** Change à chaque modification de ce qui se synchronise (Reprendre, sites perso, épingles, masquages). */
+    val syncVersion: StateFlow<Long> = _syncVersion.asStateFlow()
+
+    private fun library() = SyncData.Library(_watching.value, _local.value, _pins.value, _hides.value)
+
+    private fun currentLedger(): SyncLedger =
+        ledger ?: runCatching { SyncLedger.decode(syncFile.readText()) }.getOrDefault(SyncLedger()).also { ledger = it }
+
+    /** Date les modifications locales dès qu'elles ont lieu : le plus récent gagne, d'un écran à l'autre. */
+    private fun stamp() {
+        if (applyingSync) return
+        val before = currentLedger()
+        val next = before.stamp(SyncData.toMap(library()), System.currentTimeMillis())
+        if (next === before) return
+        ledger = next
+        writeAtomically(syncFile, next.encode())
+        _syncVersion.value = _syncVersion.value + 1
+    }
+
+    /** Le registre à envoyer à un autre écran. */
+    @Synchronized
+    fun syncRecords(): List<SyncRecord> {
+        stamp()
+        val pruned = currentLedger().prune(System.currentTimeMillis())
+        ledger = pruned
+        return pruned.records.values.toList()
+    }
+
+    /** Fusionne ce qu'envoie un autre écran ; renvoie vrai si la bibliothèque locale a changé. */
+    @Synchronized
+    fun applySync(records: List<SyncRecord>): Boolean {
+        stamp()
+        val before = currentLedger()
+        val merged = before.merge(records.filter { SyncData.isKnownKey(it.k) })
+        if (merged == before) return false
+        val lib = SyncData.fromLedger(merged, library())
+        applyingSync = true
+        try {
+            if (lib.watching != _watching.value) saveWatching(lib.watching)
+            if (lib.pins != _pins.value) savePins(lib.pins)
+            if (lib.hides != _hides.value) saveHides(lib.hides)
+            if (lib.sites != _local.value) saveLocal(lib.sites.take(LocalSites.MAX_LOCAL))
+        } finally {
+            applyingSync = false
+        }
+        // Ce qui a été nettoyé à l'arrivée (liste trop longue, site invalide) est daté maintenant.
+        val settled = merged.stamp(SyncData.toMap(library()), System.currentTimeMillis())
+        ledger = settled
+        writeAtomically(syncFile, settled.encode())
+        return true
     }
 
     private fun readLocalSites(): List<Site> =

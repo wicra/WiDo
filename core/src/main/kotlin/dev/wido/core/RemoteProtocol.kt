@@ -8,7 +8,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /** Touches de la télécommande sur téléphone. */
-enum class RemoteKey { UP, DOWN, LEFT, RIGHT, OK, BACK, HOME, MENU, PLAY_PAUSE, REWIND, FORWARD, VOLUME_UP, VOLUME_DOWN, MUTE, DEL }
+enum class RemoteKey { UP, DOWN, LEFT, RIGHT, OK, BACK, HOME, MENU, PLAY_PAUSE, REWIND, FORWARD, VOLUME_UP, VOLUME_DOWN, MUTE, DEL, PLAY, PAUSE }
 
 /** Une commande envoyée par la télécommande sur téléphone. */
 sealed interface RemoteCommand {

@@ -101,7 +101,7 @@ data class GroupKey(val id: String, val secret: String)
 data class SyncEnvelope(val from: DeviceInfo, val records: List<SyncRecord> = emptyList(), val group: GroupKey? = null)
 
 @Serializable
-data class SyncReply(val accepted: Boolean, val records: List<SyncRecord> = emptyList())
+data class SyncReply(val accepted: Boolean, val records: List<SyncRecord> = emptyList(), val group: GroupKey? = null)
 
 /** Un appareil appairé, vu depuis l'autre. */
 @Serializable
@@ -115,8 +115,6 @@ data class Peer(
     val token: String,
     val level: String = LinkLevel.GUEST,
     val lastSeen: Long = 0,
-    /** Dernière synchro réussie (heure du registre de l'autre), pour n'envoyer que la suite. */
-    val syncedUntil: Long = 0,
 )
 
 /**
@@ -212,6 +210,16 @@ object LinkProtocol {
         runCatching { json.decodeFromString(ListSerializer(Peer.serializer()), text) }.getOrDefault(emptyList())
             .filter { it.id.isNotBlank() && it.token.length >= 16 }
             .distinctBy { it.id }
+
+    /**
+     * Le groupe de « mes écrans » à garder quand deux appareils en ont un différent (deux téléphones
+     * de la maison) : le même choix des deux côtés, pour converger vers un seul groupe.
+     */
+    fun pickGroup(mine: GroupKey?, theirs: GroupKey?): GroupKey? = when {
+        mine == null -> theirs
+        theirs == null -> mine
+        else -> if (theirs.id < mine.id) theirs else mine
+    }
 
     fun upsert(peers: List<Peer>, peer: Peer): List<Peer> = listOf(peer) + peers.filterNot { it.id == peer.id }
 

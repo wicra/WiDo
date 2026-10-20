@@ -21,15 +21,37 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.WiDo">
 
+        <!-- Même appli sur TV et téléphone : l'orientation suit l'appareil (paysage sur TV). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:screenOrientation="landscape">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <!-- QR code d'appairage affiché par la TV (Réglages → Écrans liés). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="wido" android:host="pair" />
+            </intent-filter>
+        </activity>
+
+        <!-- « Partager → WiDo » : regarder un lien ici ou l'envoyer sur la TV. -->
+        <activity
+            android:name=".ShareActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.WiDo.Translucent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
 
@@ -38,15 +60,14 @@
             android:name=".PlayerActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation|smallestScreenSize|screenLayout|uiMode"
-            android:hardwareAccelerated="true"
-            android:screenOrientation="landscape" />
+            android:hardwareAccelerated="true" />
 
         <!-- « Lire dans WiDo » : le flux vidéo d'une page dans le lecteur natif. -->
         <activity
             android:name=".NativePlayerActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation|smallestScreenSize|screenLayout|uiMode"
-            android:screenOrientation="landscape" />
+            android:screenOrientation="sensorLandscape" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
