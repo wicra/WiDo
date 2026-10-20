@@ -69,7 +69,8 @@ android {
         checkReleaseBuilds = false
         htmlReport = true
         // Appli installée hors Play Store : pas d'exigence de version cible du Store ni de traductions complètes imposées.
-        disable += setOf("ExpiredTargetSdkVersion", "OldTargetApi", "GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion", "MissingTranslation")
+        // RestrictedApi : faux positif connu d'androidx sur super.dispatchKeyEvent dans une ComponentActivity.
+        disable += setOf("RestrictedApi", "ExpiredTargetSdkVersion", "OldTargetApi", "GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion", "MissingTranslation")
     }
 }
 
