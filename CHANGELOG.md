@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.9.0
+
+### 📺 TV
+- **Les sites en cercles** : le logo dans un cercle de verre qui prend la couleur du site au passage, avec la même arrivée en vague. Le nom et l'adresse restent dans la scène au-dessus.
+- **Reprendre en un clic** : à l'ouverture, le focus est sur la dernière vidéo en cours ; la scène montre son titre, son site et le temps restant. OK, et le film repart.
+- **Menu rapide en tuiles** : grosses icônes, les commandes de la vidéo d'abord (pause, **épisode suivant** si la page en a un, lecteur natif, reprendre au début, veille), le reste sous « Plus… ».
+- **Barre de lecture riche** : image et titre de la vidéo, site, temps restant et **heure de fin**, saut affiché (« +30 s »).
+- **Messages dans le style WiDo** : plus de bulles grises d'Android dans le lecteur ; une pastille de verre avec icône (réussi, attention, bloqué).
+- **Taille de l'interface** : Normale, Grande, Très grande (projecteur regardé de loin).
+- **Présentation au premier lancement** : choisir ses sites, lier son téléphone, les quatre gestes de la télécommande. À revoir depuis les réglages.
+- **Ouverture animée** : la page s'agrandit depuis le cercle ou la vignette choisie, sur la couleur et le logo du site ; elle se rétracte au retour.
+- **Redirection mixte en arrière-plan** : la pub se charge derrière la page, sans son, 5 secondes, puis se ferme ; l'écran et la télécommande restent sur le site.
+
+### 📱 Téléphone
+- **Mini-lecteur** au-dessus des onglets quand la TV lit une vidéo : image, titre, pause, et un toucher pour la télécommande.
+- **Notification de la TV** : ⏪ ⏯ ⏩ depuis la notification et l'écran verrouillé, et les touches de volume du téléphone règlent la TV même téléphone verrouillé.
+- **Lecture en arrière-plan** : le son continue quand on quitte l'appli ou éteint l'écran, pilotable depuis la notification et les écouteurs.
+- **Gestes** : glisser une vidéo pour la retirer (avec « Annuler »), tirer pour actualiser, appui long sur une vidéo ou une épingle (Sur la TV, ouvrir le site, retirer).
+- **Icônes dessinées partout** et **mise en page tablette** (onglets sur le côté, la TV à droite de l'accueil).
+
+### 🔧 Sous le capot
+- **Synchro incrémentale** : seules les modifications voyagent entre les écrans ; une appli réinstallée reçoit tout à nouveau.
+- **Serveur de la TV en parallèle** : une synchro ne retarde plus jamais une touche de la télécommande.
+- **Tests de bout en bout du lien** (liaison, statut, Sur la TV, Reprendre sur le téléphone, télécommande, synchro, groupe de TV) sur de vrais serveurs locaux ; **tests Android** du stockage ; **captures d'écran** téléphone et TV publiées par la CI ; **analyse Android (lint)** à chaque envoi.
+
+### Corrigé
+- **TV** : les boutons Ouvrir / Options ne perdent plus leur texte quand l'accueil manque de place (il défile au besoin).
+
+## 0.8.1
+
+### 🖼️ Reprendre en images
+- Chaque vidéo en cours montre **l'image de la vidéo là où tu l'as quittée** (capturée pendant la lecture, dans la page comme dans le lecteur natif), sinon l'image de la page ; le **logo du site** est en petit badge.
+- Sans image (vidéo protégée, page sans illustration) : la **couleur et le logo du site**.
+
+### Corrigé
+- **Une seule entrée par vidéo dans Reprendre** : `&t=…`, `?si=…`, `m.youtube.com`, `youtu.be` ou `/shorts/` ne créent plus de doublons (les anciens sont fusionnés).
+- **Lire dans WiDo ↔ page** : le lecteur natif démarre à la seconde où en était la page, et la page reprend là où le lecteur natif s'est arrêté.
+- **Téléphone** : barre de lecture et messages du lecteur à la largeur de l'écran ; icônes (actualiser, lecture, télécommande, menu ⋯) dessinées et centrées.
+
 ## 0.8.0
 
 ### 📱 WiDo sur téléphone
@@ -15,14 +54,7 @@
 - **Liaison** par QR code ou par la liste des TV du réseau, validée sur la TV : **Invité** (télécommande, envoi) ou **Mon téléphone** (synchro).
 - **Synchro de mes écrans** : Reprendre, sites perso, épingles et éléments masqués ; le plus récent gagne, une vidéo finie disparaît partout. Mes TV se synchronisent aussi entre elles.
 
-### 🖼️ Reprendre en images
-- Chaque vidéo en cours montre **l'image de la vidéo là où tu l'as quittée** (capturée pendant la lecture, dans la page comme dans le lecteur natif), sinon l'image de la page ; le **logo du site** est en petit badge.
-- Sans image (vidéo protégée, page sans illustration) : la **couleur et le logo du site**.
-
 ### Corrigé
-- **Une seule entrée par vidéo dans Reprendre** : `&t=…`, `?si=…`, `m.youtube.com`, `youtu.be` ou `/shorts/` ne créent plus de doublons (les anciens sont fusionnés).
-- **Lire dans WiDo ↔ page** : le lecteur natif démarre à la seconde où en était la page, et la page reprend là où le lecteur natif s'est arrêté.
-- **Téléphone** : barre de lecture et messages du lecteur à la largeur de l'écran ; icônes (actualiser, lecture, télécommande, menu ⋯) dessinées et centrées.
 - La position des vidéos n'était plus relevée après la sélection d'un champ de la page, ni après le réglage du minuteur de veille.
 
 ## 0.7.0

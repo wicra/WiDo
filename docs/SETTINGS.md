@@ -17,13 +17,15 @@ Menu principal → onglet **Réglages**, en haut de l'écran. Les réglages form
 | Volume | Indicateur WiDo / du système | WiDo | Voir ci-dessous. |
 | Plein écran : flèches | Pilotent le lecteur / Déplacent le curseur | Pilotent le lecteur | Comportement des flèches en plein écran vidéo. |
 | Touches rouge, verte, jaune, bleue | Voir la liste ci-dessous | Menu, Recharger, Texte +, Texte − | Raccourcis des touches de couleur. |
+| Taille de l'interface | Normale / Grande / Très grande | Normale | Tout l'accueil, les menus et la barre de lecture grandissent (projecteur regardé de loin). Le zoom du texte des pages reste à part. |
+| Présentation | Revoir | — | Rejoue les trois écrans du premier lancement (sites, téléphone, gestes). |
 | Au démarrage | Afficher le menu / Rouvrir le dernier site | Afficher le menu | Au lancement depuis l'accueil de la TV. |
 | Ouvrir un site | Dernière page / Accueil du site | Dernière page | Reprend là où tu en étais (position d'une vidéo YouTube comprise). « Accueil du site » est aussi dans le menu rapide. |
 | Télécommande téléphone | Activé / Désactivé | Désactivé | Serveur local pour piloter WiDo depuis le téléphone ; QR code d'appairage et **Nouveau code** juste en dessous ([REMOTE-CONTROL](REMOTE-CONTROL.md)). |
 | Appli téléphone et autres TV | Activé / Désactivé | Activé | Section **Écrans liés** : l'appli WiDo du téléphone et tes autres TV peuvent trouver cette TV et s'y lier. Nom de la TV, QR code d'appairage, adresse, appareils liés (Mon téléphone / Invité, Oublier) juste en dessous ([PHONE-AND-SCREENS](PHONE-AND-SCREENS.md)). |
 | Nouveaux sites : redirections | Strictes / Souples / Mixtes | Strictes | Valeur proposée dans le formulaire d'un nouveau site perso ([BLOCKING](BLOCKING.md)). |
 
-Sur **téléphone**, la liste ne montre que ce qui y sert (blocage, lecture, reprise, nom du téléphone) : pas de curseur ni de touches de couleur, les choix vont à la ligne sur un écran étroit.
+Sur **téléphone**, la liste ne montre que ce qui y sert (blocage, lecture, reprise, nom du téléphone) : pas de curseur ni de touches de couleur, les choix vont à la ligne sur un écran étroit. Deux réglages propres au téléphone : **Notification de la TV** (piloter la TV depuis la notification et l'écran verrouillé, volume du téléphone → TV) et **Lecture en arrière-plan** (le son continue quand on quitte l'appli), activés par défaut.
 
 ## Actions des touches de couleur
 

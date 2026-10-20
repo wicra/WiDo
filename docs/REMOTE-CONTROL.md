@@ -27,6 +27,9 @@ Le curseur est une flèche de souris (la pointe est le point de clic) ; il devie
 
 ## Barre de lecture et indicateurs
 
+La barre montre l'image et le titre de la vidéo, le site, le temps écoulé, le **temps restant et l'heure de fin** (« −32 min · finit à 22 h 41 »), et le saut quand tu avances ou recules (« +30 s »). Tous les messages du lecteur (page épinglée, redirection bloquée, envoyé sur la TV…) s'affichent dans la même pastille, avec une icône : ✓ réussi, ⚠ attention, ⛔ bloqué.
+
+
 En bas de l'écran : état (lecture ou pause), temps écoulé et durée, volume de la vidéo et barre de progression. Elle s'affiche à chaque touche média et disparaît seule. Le volume et le zoom ont leur propre indicateur.
 
 Le lecteur est piloté **dans toutes les frames de la page**, y compris les iframes d'un autre domaine où se trouve souvent la vidéo. Ce mécanisme dépend de la version de la WebView de l'appareil ; s'il n'est pas disponible, seules les vidéos de la page principale répondent aux touches.
@@ -41,10 +44,12 @@ L'aide des commandes s'affiche à la **première ouverture** d'un site, puis à 
 
 ## Menu rapide
 
-Un plateau en bas de l'écran ; la page reste visible au-dessus. ◀ ▶ pour choisir, **OK** pour valider, **Retour** pour le fermer.
+Un plateau en bas de l'écran ; la page reste visible au-dessus. Des **tuiles à icône**, les plus utiles d'abord ; les flèches pour choisir, **OK** pour valider, **Retour** pour le fermer. **Plus…** affiche le reste (Enregistrer, Curseur, Téléphone, Aide).
+
+Sur une **vidéo**, le menu commence par ses commandes : Lecture/Pause, **Suivant** (si la page a un bouton « épisode suivant », WiDo le clique pour toi), **Lecteur** (lecteur natif), **Début** (reprendre au début), Veille. Sur une **page**, il commence par Épingler, A− / A+, Masquer, Accueil du site, Recharger.
 
 - La barre de lecture, si une vidéo a été pilotée sur la page
-- Reprendre, recharger la page, **Accueil du site**, activer/désactiver le curseur
+- Recharger la page, **Accueil du site**, activer/désactiver le curseur
 - **A− / A+** : texte plus petit / plus grand (mémorisé par site)
 - **Téléphone** : un QR code s'affiche ; scanne-le avec ton téléphone (même réseau), tape ton texte, il arrive dans le champ sélectionné de la page (ou le premier champ de recherche). « Envoyer + Entrée » valide aussi la recherche.
 - **Épingler** la page à l'accueil ([CUSTOM-SITES](CUSTOM-SITES.md))

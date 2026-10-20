@@ -17,6 +17,20 @@ Dans une page, le bouton **⋯** en haut à droite ouvre le menu rapide (**Sur l
 
 **Partager → WiDo** depuis YouTube, le navigateur ou n'importe quelle appli : choisis **Ici** ou **Sur la TV**.
 
+### Gestes et raccourcis
+
+- **Mini-lecteur** : quand la TV lit une vidéo, une barre au-dessus des onglets montre l'image, le titre et un bouton pause ; la toucher ouvre l'onglet TV.
+- **Glisser une vidéo vers la gauche** dans Reprendre la retire (« Annuler » pendant quelques secondes).
+- **Tirer vers le bas** sur l'accueil actualise la configuration, les listes et l'état de la TV.
+- **Appui long** sur une vidéo ou une page épinglée : Sur la TV, Ouvrir le site, Retirer.
+- **Tablette** (ou grand écran en paysage) : les onglets passent sur le côté et la TV (en cours, télécommande) reste à droite de l'accueil.
+
+### Notifications
+
+- **Notification de la TV** : quand tu quittes l'appli alors que la TV lit une vidéo, une notification la pilote (⏪ ⏯ ⏩), aussi sur l'écran verrouillé ; les **touches de volume du téléphone règlent la TV**, même verrouillé. Elle s'arrête d'elle-même quand la TV ne lit plus rien.
+- **Lecture en arrière-plan** : une vidéo regardée sur le téléphone continue (le son surtout) quand tu quittes l'appli ou éteins l'écran ; la notification et les écouteurs la pilotent. Certains sites coupent quand même : avec « Lire dans WiDo », ça marche toujours.
+- Android demande une fois l'autorisation des notifications. Les deux se coupent dans Réglages → Cet appareil.
+
 ## Lier le téléphone à la TV
 
 Une seule fois, sur le même Wi-Fi, avec WiDo ouvert sur la TV :
@@ -65,6 +79,7 @@ Règles :
 - **Le plus récent gagne**, élément par élément. Une vidéo regardée plus loin sur la TV avance aussi sur le téléphone.
 - **Une vidéo finie** (ou retirée de Reprendre) disparaît partout, et ne revient pas depuis un écran resté hors ligne.
 - Hors du même réseau, chaque écran vit sa vie ; tout se remet à jour au retour (à l'ouverture de l'appli, puis toutes les 30 s tant qu'elle est ouverte).
+- **Seules les modifications voyagent** : chaque écran se souvient de ce qu'il a déjà reçu de l'autre. Une appli réinstallée reçoit tout à nouveau.
 - La synchro n'a lieu que si **les deux côtés** sont d'accord : « Mon écran » sur le téléphone, « Mon téléphone » sur la TV.
 
 ### Plusieurs TV
@@ -95,5 +110,5 @@ Voir aussi [SECURITY.md](SECURITY.md) et le protocole dans `core/…/LinkProtoco
 
 ## Vérifié / à confirmer
 
-- **Vérifié automatiquement** : registre de synchro (fusion, suppressions, horloges décalées), appairage (validation, expiration, QR à usage unique), adresses et QR codes, protocole des commandes (tests du module `core`) ; l'app compile en debug et en release (CI).
+- **Vérifié automatiquement** : registre de synchro (fusion, suppressions, horloges décalées, envoi des seules modifications), appairage (validation, refus, expiration, QR à usage unique), et **le lien de bout en bout** sur de vrais serveurs locaux : statut, Sur la TV, Reprendre sur le téléphone, télécommande, synchro, TV en invité refusée, groupe de TV, appli réinstallée, requêtes en parallèle. Côté Android : stockage et synchro (Robolectric), captures d'écran téléphone et TV, analyse lint ; l'app compile en debug et en release.
 - **À confirmer sur appareils réels** : découverte mDNS selon les box et routeurs, rendu tactile sur différentes tailles d'écran, reprise exacte selon les lecteurs des sites.
