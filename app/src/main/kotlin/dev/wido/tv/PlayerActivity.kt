@@ -243,7 +243,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             injector?.includeEarly = false
         }
 
-        if (site.navigation == Navigation.MIXED) adWindow = AdWindow(this, root) { webView?.requestFocus() }
+        if (site.navigation == Navigation.MIXED) {
+            adWindow = AdWindow(this, root, onOpened = { osd.showText(getString(R.string.osd_ad_background)) }) { webView?.requestFocus() }
+        }
         wv.webViewClient = wc
         wv.webChromeClient = object : WebChromeClient() {
             override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean =
@@ -331,12 +333,6 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
 
         val code = event.keyCode
-
-        // Fenêtre publicitaire (mode mixte) : rien ne la pilote, Retour la ferme tout de suite.
-        adWindow?.takeIf { it.isOpen }?.let { ad ->
-            if (code == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) ad.close()
-            return true
-        }
 
         // « Masquer un élément » : les flèches déplacent le curseur librement, OK masque, Retour annule.
         if (picking && panelView == null) {
@@ -1177,7 +1173,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val current = site ?: return
         val wv = webView ?: return
         val state = mediaState.value ?: return
-        if (state.duration <= 0 || panelView != null || helpView != null || adWindow?.isOpen == true) return
+        if (state.duration <= 0 || panelView != null || helpView != null) return
         val now = SystemClock.elapsedRealtime()
         if (!force && (now - lastFrameAt < FRAME_EVERY_MS || osd.isShowing)) return
         val page = ResumeUrl.toRemember(current, wv.url) ?: return

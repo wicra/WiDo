@@ -172,10 +172,10 @@ fun MenuScreen(
                         )
                     }
                     LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(22.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.Bottom,
-                        contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 30.dp),
-                        modifier = Modifier.fillMaxWidth().height(if (watching.isNotEmpty()) 158.dp else 176.dp),
+                        contentPadding = PaddingValues(start = 44.dp, end = 52.dp, top = 12.dp),
+                        modifier = Modifier.fillMaxWidth().height(if (watching.isNotEmpty()) 156.dp else 170.dp),
                     ) {
                         itemsIndexed(sites, key = { _, it -> it.site.id }) { index, entry ->
                             SiteCard(
@@ -451,9 +451,10 @@ private fun rememberEntrance(index: Int): Modifier {
 }
 
 /**
- * Carte d'un site. Au repos : du verre. Avec le focus : elle grandit, passe à la couleur pleine du site
- * avec un reflet, et se soulève depuis son coin bas gauche. OK ouvre le site ; sur un site perso, la
- * touche Menu ou l'appui long ouvrent ses options (aussi accessibles par le bouton Options de la scène).
+ * Un site dans la rangée : un cercle avec son logo (le nom et l'adresse sont déjà dans la scène au-dessus).
+ * Au repos : du verre. Avec le focus : il se soulève, passe à la couleur pleine du site avec un reflet,
+ * le logo sur un disque blanc. Les cercles arrivent en vague à l'ouverture. OK ouvre le site ; la
+ * touche Menu ou l'appui long ouvrent ses options.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -477,17 +478,13 @@ private fun SiteCard(
     val cached = remember(site.id, site.url, site.icon) { (context.applicationContext as WiDoApp).favicons.cachedColor(site) }
     val accent = parseColor(site.color) ?: icon?.color ?: cached ?: Palette.Accent
     var focused by remember { mutableStateOf(false) }
-    val width by animateDpAsState(if (focused) 210.dp else 170.dp, label = "cardWidth")
-    val height by animateDpAsState(if (focused) 126.dp else 102.dp, label = "cardHeight")
-    // Le zoom part du coin bas gauche : cette marge évite de recouvrir la carte suivante.
-    val room by animateDpAsState(if (focused) 18.dp else 0.dp, label = "cardRoom")
 
     val menuKey = Modifier.onKeyEvent { e ->
         val handled = e.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_MENU && e.nativeKeyEvent.action == KeyEvent.ACTION_UP
         if (handled) onOptions()
         handled
     }
-    // Déplacement : ◀ ▶ déplacent la carte (elle garde le focus), OK ou Retour terminent.
+    // Déplacement : ◀ ▶ déplacent le cercle (il garde le focus), OK ou Retour terminent.
     val moveKeys = if (moving) {
         Modifier.onPreviewKeyEvent { e ->
             val native = e.nativeKeyEvent
@@ -504,64 +501,97 @@ private fun SiteCard(
         Modifier
     }
 
-    Box(
-        modifier
-            .then(rememberEntrance(index))
-            .padding(end = room)
-            .size(width, height)
-            .then(menuKey)
-            .then(moveKeys)
-            .onFocusChanged {
-                focused = it.isFocused
-                if (it.isFocused) onFocus(accent)
-            }
-            .liftEffect(focused, CardShape, focusScale = 1.08f, lift = 26.dp, origin = TransformOrigin(0f, 1f))
-            .clip(CardShape)
-            .then(if (focused) Modifier.background(siteGradient(accent)).background(GlassSheen) else Modifier.background(Palette.Glass))
-            .then(if (moving) Modifier.border(2.dp, Color.White, CardShape) else Modifier)
-            .combinedClickable(onClick = onClick, onLongClick = onOptions)
-            .padding(14.dp),
-        contentAlignment = Alignment.BottomStart,
+    Column(
+        modifier.then(rememberEntrance(index)).width(CIRCLE_SLOT),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Le logo du site, discret : verre au repos, pastille blanche quand la carte a le focus.
-        SiteLogo(icon, site.name, if (focused) 30.dp else 26.dp, focused, Modifier.align(Alignment.TopStart))
-        Column {
-            Text(
-                site.name,
-                color = Color.White,
-                fontSize = if (focused) 17.sp else 15.sp,
-                fontWeight = if (focused) FontWeight.Bold else FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (moving) {
-                Text("◀  ▶", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            } else if (entry.local) {
-                Text(stringResource(R.string.tag_local), color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        // Le cercle grandit dans une zone fixe : la rangée ne bouge pas au passage du focus.
+        Box(Modifier.size(CIRCLE_SLOT), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .size(CIRCLE)
+                    .then(menuKey)
+                    .then(moveKeys)
+                    .onFocusChanged {
+                        focused = it.isFocused
+                        if (it.isFocused) onFocus(accent)
+                    }
+                    .liftEffect(focused, CircleShape, focusScale = 1.14f, lift = 24.dp)
+                    .clip(CircleShape)
+                    .then(if (focused) Modifier.background(siteGradient(accent)).background(GlassSheen) else Modifier.background(Palette.Glass))
+                    .border(if (moving) 2.5.dp else 1.dp, if (moving) Color.White else Palette.GlassBorder, CircleShape)
+                    .combinedClickable(onClick = onClick, onLongClick = onOptions),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircleLogo(icon, site.name, focused)
             }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            if (moving) "◀  ▶" else site.name,
+            color = if (focused || moving) Color.White else Color.White.copy(alpha = 0.6f),
+            fontSize = 13.sp,
+            fontWeight = if (focused || moving) FontWeight.Bold else FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** Le logo dans le cercle : discret sur le verre, sur un disque blanc quand le cercle a le focus. */
+@Composable
+private fun CircleLogo(icon: SiteIcon?, name: String, focused: Boolean) {
+    val disc by animateDpAsState(if (focused) 58.dp else 52.dp, label = "logoDisc")
+    Box(
+        Modifier.size(disc).clip(CircleShape).background(if (focused) Color.White.copy(alpha = 0.95f) else Color.Transparent),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (icon != null) {
+            androidx.compose.foundation.Image(
+                icon.image,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier.size(disc * 0.62f).graphicsLayer { alpha = if (focused) 1f else 0.9f },
+            )
+        } else {
+            Text(name.firstOrNull()?.uppercase().orEmpty(), color = if (focused) Palette.Ink else Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
         }
     }
 }
 
+/** « Ajouter » : un cercle en pointillé discret, blanc plein au focus. */
 @Composable
 private fun AddCard(index: Int, onClick: () -> Unit, onFocus: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    FocusSurface(
-        onClick,
-        rememberEntrance(index)
-            .size(102.dp)
-            .border(1.5.dp, if (focused) Color.Transparent else Color.White.copy(alpha = 0.2f), CardShape),
-        shape = CardShape,
-        idle = Color.White.copy(alpha = 0.06f),
-        focusScale = 1.08f,
-        onFocusChange = {
-            focused = it
-            if (it) onFocus()
-        },
-    ) { f ->
-        Text("+", color = onSurface(f), fontSize = 34.sp, fontWeight = FontWeight.Light)
+    Column(rememberEntrance(index).width(CIRCLE_SLOT), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(CIRCLE_SLOT), contentAlignment = Alignment.Center) {
+            FocusSurface(
+                onClick,
+                Modifier.size(CIRCLE).border(1.5.dp, if (focused) Color.Transparent else Color.White.copy(alpha = 0.2f), CircleShape),
+                shape = CircleShape,
+                idle = Color.White.copy(alpha = 0.06f),
+                focusScale = 1.14f,
+                onFocusChange = {
+                    focused = it
+                    if (it) onFocus()
+                },
+            ) { f ->
+                Text("+", color = onSurface(f), fontSize = 34.sp, fontWeight = FontWeight.Light)
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            stringResource(R.string.add_site),
+            color = if (focused) Color.White else Color.White.copy(alpha = 0.5f),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
     }
 }
+
+private val CIRCLE = 92.dp
+private val CIRCLE_SLOT = 112.dp
 
 /** Une seule ligne discrète : la version à gauche, l'état de la mise à jour à droite. */
 @Composable

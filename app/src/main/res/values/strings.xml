@@ -170,8 +170,6 @@
     <string name="v_resume_home">Accueil du site</string>
     <string name="nav_mixed">Redirections mixtes</string>
     <string name="v_mixed">Mixtes</string>
-    <string name="ad_label">Publicité</string>
-    <string name="ad_closing">Publicité · fermeture dans %1$d s</string>
     <string name="editor_leave_hint">Retour encore pour quitter sans enregistrer.</string>
     <string name="phone_hint_name">Scanne ce code avec ton téléphone, puis tape le nom du site.</string>
     <string name="phone_corner">Taper au téléphone</string>
@@ -283,4 +281,5 @@
     <string name="share_here">Ici</string>
     <string name="share_sending">Envoi vers %1$s…</string>
     <string name="share_no_link">Aucun lien dans ce partage.</string>
+    <string name="osd_ad_background">Pub ouverte en arrière-plan, fermée dans 5 s</string>
 </resources>

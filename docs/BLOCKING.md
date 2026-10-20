@@ -71,7 +71,7 @@ C'est le filtre le plus efficace contre les redirections publicitaires, et il ne
 |---|---|---|
 | `strict` (défaut) | Le domaine du site, ses sous-domaines, `allowedDomains`. | Sites de streaming : la plupart des pop-ups et redirections de pub sont ainsi coupés. |
 | `relaxed` (souple) | En plus, tout domaine web non bloqué par les listes. | Sites qui ont besoin de redirections utiles : connexion, consentement, YouTube. |
-| `mixed` (mixte) | Comme `strict`, mais la page refusée s'ouvre dans une **fenêtre publicitaire**, affichée 5 secondes puis fermée. | Sites qui exigent que la pub soit réellement ouverte ou vue avant de donner accès au contenu. |
+| `mixed` (mixte) | Comme `strict`, mais la page refusée s'ouvre dans une **fenêtre publicitaire en arrière-plan** : elle se charge derrière la page (sans son), reste 5 secondes puis se ferme ; l'écran et la télécommande restent sur le site. | Sites qui exigent que la pub soit réellement ouverte ou vue avant de donner accès au contenu. |
 
 En `relaxed`, une redirection vers une régie **présente dans les listes** reste refusée ; une régie inconnue des listes passerait : choisis `relaxed` quand `strict` casse le site, et `mixed` quand le site exige de voir la pub.
 
