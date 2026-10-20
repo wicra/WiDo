@@ -84,7 +84,7 @@ class MainActivity : ComponentActivity(), RemoteTarget {
             }
             RemoteCommand.Tap -> pressKey(KeyEvent.KEYCODE_DPAD_CENTER)
             is RemoteCommand.Open -> startActivity(PlayerActivity.intent(this, ConfigRepository.LINK_SITE_ID, command.url))
-            is RemoteCommand.Type, is RemoteCommand.Scroll -> Unit
+            is RemoteCommand.Type, is RemoteCommand.Scroll, is RemoteCommand.Seek -> Unit
         }
     }
 

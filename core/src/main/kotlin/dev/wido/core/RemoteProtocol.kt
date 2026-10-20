@@ -8,7 +8,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /** Touches de la télécommande sur téléphone. */
-enum class RemoteKey { UP, DOWN, LEFT, RIGHT, OK, BACK, HOME, MENU, PLAY_PAUSE, REWIND, FORWARD, VOLUME_UP, VOLUME_DOWN, MUTE }
+enum class RemoteKey { UP, DOWN, LEFT, RIGHT, OK, BACK, HOME, MENU, PLAY_PAUSE, REWIND, FORWARD, VOLUME_UP, VOLUME_DOWN, MUTE, DEL }
 
 /** Une commande envoyée par la télécommande sur téléphone. */
 sealed interface RemoteCommand {
@@ -19,6 +19,8 @@ sealed interface RemoteCommand {
     data class Scroll(val dy: Float) : RemoteCommand
     data class Type(val text: String, val submit: Boolean) : RemoteCommand
     data class Open(val url: String) : RemoteCommand
+    /** Va à cette position (secondes) dans la vidéo en cours. */
+    data class Seek(val position: Double) : RemoteCommand
 }
 
 /**
@@ -53,6 +55,7 @@ object RemoteProtocol {
             "open" -> str("url")?.let { LocalSites.normalizeUrl(it) }
                 ?.takeIf { val s = Hosts.schemeOf(it); s == "https" || s == "http" }
                 ?.let { RemoteCommand.Open(it) }
+            "seek" -> num("to")?.takeIf { !it.isNaN() && it >= 0 }?.let { RemoteCommand.Seek(it.toDouble()) }
             else -> null
         }
     }

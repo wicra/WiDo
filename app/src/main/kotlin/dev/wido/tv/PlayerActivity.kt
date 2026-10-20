@@ -1238,4 +1238,5 @@ fun keyCodeOf(key: RemoteKey): Int = when (key) {
     RemoteKey.VOLUME_UP -> KeyEvent.KEYCODE_VOLUME_UP
     RemoteKey.VOLUME_DOWN -> KeyEvent.KEYCODE_VOLUME_DOWN
     RemoteKey.MUTE -> KeyEvent.KEYCODE_VOLUME_MUTE
+    RemoteKey.DEL -> KeyEvent.KEYCODE_DEL
 }
