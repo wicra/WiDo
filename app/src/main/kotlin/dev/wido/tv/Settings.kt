@@ -214,6 +214,11 @@ class Settings(private val context: Context) {
             ?.takeIf { it.isNotBlank() } ?: android.os.Build.MODEL.orEmpty().ifBlank { "WiDo" }
 
     /** Appareils liés (JSON), vus depuis celui-ci. */
+    /** Packs de sites enregistrés sur ce téléphone (partage vers une TV). */
+    var sitePacks: List<dev.wido.core.SitePack>
+        get() = dev.wido.core.SiteSharing.decodePacks(state.getString("site_packs", null))
+        set(v) = state.edit().putString("site_packs", dev.wido.core.SiteSharing.encodePacks(v)).apply()
+
     var peersJson: String
         get() = state.getString("peers", null) ?: "[]"
         set(v) = state.edit().putString("peers", v).apply()

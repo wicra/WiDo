@@ -373,4 +373,31 @@
     <string name="err_crash_title">The page stopped</string>
     <string name="err_crash_body">The site\'s player crashed, or the TV ran out of memory. Your position is saved: try again and the video will pick up where you left off.</string>
     <string name="osd_autoplay_skipped">This video stopped abruptly last time: press OK to start it</string>
+    <string name="share_prompt_title">Add these sites?</string>
+    <string name="share_prompt_body">%1$s suggests adding these sites to this TV:</string>
+    <string name="share_prompt_note">Only the address and blocking settings are copied, never accounts or passwords. Tap a site to untick it.</string>
+    <string name="share_nothing_new">These sites are already on the TV</string>
+    <string name="share_send_title">Send sites to %1$s</string>
+    <string name="share_packs">Saved packs</string>
+    <string name="share_or_choose">Or choose sites</string>
+    <string name="share_pack_name">Pack name (e.g. Grandma)</string>
+    <string name="share_pack_save">Save pack</string>
+    <string name="share_send_note">%1$s will ask for confirmation on screen before adding the sites.</string>
+    <string name="share_sent">Sent: confirm on %1$s</string>
+    <plurals name="share_added">
+        <item quantity="one">%d site added</item>
+        <item quantity="other">%d sites added</item>
+    </plurals>
+    <plurals name="share_add_button">
+        <item quantity="one">Add %d site</item>
+        <item quantity="other">Add %d sites</item>
+    </plurals>
+    <plurals name="share_send_button">
+        <item quantity="one">Send %d site</item>
+        <item quantity="other">Send %d sites</item>
+    </plurals>
+    <plurals name="share_pack_label">
+        <item quantity="one">%1$s · %2$d site</item>
+        <item quantity="other">%1$s · %2$d sites</item>
+    </plurals>
 </resources>

@@ -81,6 +81,8 @@ interface LinkHostEvents {
     fun onPlay(play: HandoffPlay) {}
     fun onTake() {}
     fun onCommand(command: RemoteCommand) {}
+    /** Un écran lié propose des sites : la TV demande confirmation à l'écran (rien n'est ajouté sans). */
+    fun onShare(peer: Peer, share: SiteShare) {}
     fun onGroupChanged() {}
     fun nowPlaying(): NowPlaying? = null
 }
@@ -89,7 +91,7 @@ interface LinkHostEvents {
  * La TV dans le lien : les routes de son serveur local, sans rien d'Android (testées de bout en bout).
  *
  * `/hello` (sans jeton), `/pair` (sans jeton, validé à l'écran ou par la clé du QR code), puis avec le
- * jeton d'un appareil lié : `/status`, `/play`, `/take`, `/cmd`, `/sync` (ou jeton du groupe pour une TV).
+ * jeton d'un appareil lié : `/status`, `/play`, `/take`, `/cmd`, `/share`, `/sync` (ou jeton du groupe pour une TV).
  */
 class LinkHost(
     private val device: () -> DeviceInfo,
@@ -151,6 +153,17 @@ class LinkHost(
                 val command = RemoteProtocol.parse(body) ?: return MiniHttpServer.Response(400, body = "Bad command")
                 events.onCommand(command)
                 MiniHttpServer.Response(200, body = "ok")
+            }
+            "/share" -> {
+                val peer = peerForToken(token) ?: return MiniHttpServer.FORBIDDEN
+                if (!post) return MiniHttpServer.BAD_REQUEST
+                val share = LinkProtocol.decode(SiteShare.serializer(), body) ?: return MiniHttpServer.BAD_REQUEST
+                val sites = SiteSharing.sanitize(share.sites)
+                if (sites.isEmpty()) return MiniHttpServer.BAD_REQUEST
+                touch(peer)
+                // Le nom affiché est celui que la TV connaît pour cet appareil, pas celui qu'il annonce.
+                events.onShare(peer, share.copy(from = share.from.copy(id = peer.id, name = peer.name), sites = sites))
+                MiniHttpServer.json("{\"asked\":${sites.size}}")
             }
             "/sync" -> if (post) receiveSync(token, body) else MiniHttpServer.BAD_REQUEST
             else -> null
@@ -266,6 +279,10 @@ class LinkGuest(private val device: () -> DeviceInfo, private val http: LinkHttp
 
     fun take(peer: Peer): LinkStatus? =
         http.call(peer.host, peer.port, "POST", "/take", peer.token)?.let { LinkProtocol.decode(LinkStatus.serializer(), it) }
+
+    /** Propose des sites à la TV ; elle demande confirmation à l'écran. Vrai si la demande est arrivée. */
+    fun share(peer: Peer, sites: List<SharedSite>): Boolean =
+        http.call(peer.host, peer.port, "POST", "/share", peer.token, LinkProtocol.encode(SiteShare.serializer(), SiteShare(device(), sites))) != null
 
     fun command(peer: Peer, json: String): Boolean =
         http.call(peer.host, peer.port, "POST", "/cmd", peer.token, json, timeoutMs = 2_000) != null

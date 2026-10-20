@@ -19,6 +19,9 @@ import dev.wido.core.RemoteKey
 import dev.wido.core.LinkGuest
 import dev.wido.core.LinkHost
 import dev.wido.core.LinkHostEvents
+import dev.wido.core.SharedSite
+import dev.wido.core.SiteShare
+import dev.wido.core.SiteSharing
 import dev.wido.core.LinkStore
 import dev.wido.core.MiniHttpServer
 import dev.wido.core.SyncCursor
@@ -114,6 +117,9 @@ class ScreenLink(private val app: WiDoApp) {
     /** Demandes d'appairage à valider à l'écran (la plus ancienne en tête). */
     val pairRequests = MutableStateFlow<List<PairingDesk.Pending>>(emptyList())
 
+    /** Sites proposés par un écran lié, en attente de confirmation à l'écran de la TV. */
+    val incomingShare = MutableStateFlow<SiteShare?>(null)
+
     /** L'écran actif (accueil, lecteur), qui reçoit les ordres des téléphones. */
     @Volatile private var target: () -> RemoteTarget? = { null }
 
@@ -153,6 +159,9 @@ class ScreenLink(private val app: WiDoApp) {
         }
         override fun onGroupChanged() {
             main.post { app.remote.readvertise() }
+        }
+        override fun onShare(peer: Peer, share: SiteShare) {
+            incomingShare.value = share
         }
         override fun nowPlaying(): NowPlaying? = this@ScreenLink.nowPlaying.value
     })
@@ -292,6 +301,20 @@ class ScreenLink(private val app: WiDoApp) {
             refresh(peer)
         }
         return ok
+    }
+
+    /** Propose des sites à cette TV (elle demande confirmation à l'écran). */
+    suspend fun shareSites(peer: Peer, sites: List<SharedSite>): Boolean = withContext(Dispatchers.IO) { guest.share(peer, sites) }
+
+    /** TV : ajoute les sites acceptés (sauf ceux déjà présents). Renvoie le nombre de sites ajoutés. */
+    suspend fun acceptShare(selected: List<SharedSite>): Int {
+        incomingShare.value = null
+        val fresh = SiteSharing.newOnly(selected, app.repository.allSiteUrls())
+        return fresh.count { app.repository.addLocalSite(it.name, it.url, it.options(), it.color) == null }
+    }
+
+    fun dismissShare() {
+        incomingShare.value = null
     }
 
     /** « Reprendre sur le téléphone » : la TV se met en pause et dit où elle en était. */

@@ -373,4 +373,31 @@
     <string name="err_crash_title">La page s\'est arrêtée</string>
     <string name="err_crash_body">Le lecteur du site a planté, ou la TV manquait de mémoire. Ta position est gardée : réessaie, la vidéo repartira là où tu en étais.</string>
     <string name="osd_autoplay_skipped">Cette vidéo s\'était arrêtée brusquement : appuie sur OK pour la lancer</string>
+    <string name="share_prompt_title">Ajouter ces sites ?</string>
+    <string name="share_prompt_body">%1$s propose d\'ajouter ces sites sur cette TV :</string>
+    <string name="share_prompt_note">Seuls l\'adresse et les réglages de blocage sont copiés, jamais les comptes ni les mots de passe. Touche un site pour le décocher.</string>
+    <string name="share_nothing_new">Ces sites sont déjà sur la TV</string>
+    <string name="share_send_title">Envoyer des sites à %1$s</string>
+    <string name="share_packs">Packs enregistrés</string>
+    <string name="share_or_choose">Ou choisis des sites</string>
+    <string name="share_pack_name">Nom du pack (ex. Mamie)</string>
+    <string name="share_pack_save">Enregistrer le pack</string>
+    <string name="share_send_note">%1$s demandera confirmation à l\'écran avant d\'ajouter les sites.</string>
+    <string name="share_sent">Envoyé : confirme sur %1$s</string>
+    <plurals name="share_added">
+        <item quantity="one">%d site ajouté</item>
+        <item quantity="other">%d sites ajoutés</item>
+    </plurals>
+    <plurals name="share_add_button">
+        <item quantity="one">Ajouter %d site</item>
+        <item quantity="other">Ajouter %d sites</item>
+    </plurals>
+    <plurals name="share_send_button">
+        <item quantity="one">Envoyer %d site</item>
+        <item quantity="other">Envoyer %d sites</item>
+    </plurals>
+    <plurals name="share_pack_label">
+        <item quantity="one">%1$s · %2$d site</item>
+        <item quantity="other">%1$s · %2$d sites</item>
+    </plurals>
 </resources>

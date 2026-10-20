@@ -100,6 +100,9 @@ fun PhoneTvTab(
     var pairing by remember { mutableStateOf<Pairing?>(null) }
     var pairJob by remember { mutableStateOf<Job?>(null) }
     var manual by remember { mutableStateOf(false) }
+    var sharing by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as dev.wido.tv.WiDoApp
 
     val selected = peers.firstOrNull { it.id == selectedId } ?: peers.firstOrNull()
     val unpaired = found.filter { f -> f.advert.role == DeviceRole.TV && peers.none { it.id == f.advert.id } }
@@ -157,6 +160,7 @@ fun PhoneTvTab(
                     })
                 }
                 if (st.online) item(key = "remote") { RemotePanel(link) }
+                if (st.online) item(key = "share") { SmallPill(stringResource(R.string.share_send_title, selected.name)) { sharing = true } }
             }
             item { SectionLabel(stringResource(R.string.screens_linked), Modifier.padding(top = 6.dp)) }
             item {
@@ -173,6 +177,33 @@ fun PhoneTvTab(
     }
 
     pairing?.let { p -> PairingDialog(p, onCancel = { pairJob?.cancel(); pairing = null }) }
+    if (sharing && selected != null) {
+        val menuSites by app.repository.sites.collectAsState(initial = emptyList())
+        var packs by remember { mutableStateOf(app.settings.sitePacks) }
+        val sent = stringResource(R.string.share_sent, selected.name)
+        val failed = stringResource(R.string.toast_tv_unreachable, selected.name)
+        SendSitesDialog(
+            tvName = selected.name,
+            sites = menuSites.map { it.site },
+            packs = packs,
+            onSend = { chosen ->
+                sharing = false
+                scope.launch {
+                    val ok = link.shareSites(selected, chosen)
+                    android.widget.Toast.makeText(context, if (ok) sent else failed, android.widget.Toast.LENGTH_LONG).show()
+                }
+            },
+            onSavePack = { pack ->
+                packs = dev.wido.core.SiteSharing.savePack(packs, pack)
+                app.settings.sitePacks = packs
+            },
+            onDeletePack = { pack ->
+                packs = packs - pack
+                app.settings.sitePacks = packs
+            },
+            onDismiss = { sharing = false },
+        )
+    }
     if (manual) ManualAddressDialog(onDismiss = { manual = false }) { host, port ->
         manual = false
         startPair(host, port, null, host)

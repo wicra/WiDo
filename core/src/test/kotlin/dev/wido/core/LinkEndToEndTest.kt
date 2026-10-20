@@ -60,6 +60,7 @@ private class FakeTv(name: String) : LinkHostEvents {
     val info = DeviceInfo(LinkProtocol.randomToken(4), name, DeviceRole.TV, "test")
     val plays = CopyOnWriteArrayList<HandoffPlay>()
     val commands = CopyOnWriteArrayList<RemoteCommand>()
+    val shares = CopyOnWriteArrayList<SiteShare>()
     @Volatile var takes = 0
     @Volatile var pending: List<PairingDesk.Pending> = emptyList()
     @Volatile var playing: NowPlaying? = null
@@ -81,6 +82,10 @@ private class FakeTv(name: String) : LinkHostEvents {
 
     override fun onCommand(command: RemoteCommand) {
         commands += command
+    }
+
+    override fun onShare(peer: Peer, share: SiteShare) {
+        shares += share
     }
 
     override fun nowPlaying() = playing
@@ -141,6 +146,33 @@ class LinkEndToEndTest {
     @Test fun unreachableTv() {
         val dead = FakeTv("Éteinte").also { it.stop() }
         assertEquals(LinkGuest.PairResult.Unreachable, phone.pair("127.0.0.1", dead.port, null, pollMs = 50))
+    }
+
+    @Test fun sharingSitesAsksTheTvEvenForAGuest() {
+        var result: LinkGuest.PairResult? = null
+        val t = thread { result = phone.pair("127.0.0.1", tv.port, null, pollMs = 50) }
+        val deadline = System.currentTimeMillis() + 5_000
+        while (tv.pending.isEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(20)
+        tv.host.decide(tv.pending.single(), approved = true, level = LinkLevel.GUEST)
+        t.join(5_000)
+        val peer = assertIs<LinkGuest.PairResult.Approved>(result).peer
+        val sites = listOf(
+            SharedSite("Arte", "https://www.arte.tv/fr/", navigation = Navigation.RELAXED),
+            SharedSite("Pas une adresse", "javascript:alert(1)"),
+            SharedSite("", "https://vide.example/"),
+        )
+        assertTrue(phone.share(peer, sites))
+        val share = tv.shares.single()
+        assertEquals(listOf("Arte"), share.sites.map { it.name })
+        assertEquals(Navigation.RELAXED, share.sites.single().navigation)
+        // Le nom vient de la liaison connue de la TV.
+        assertEquals("Pixel", share.from.name)
+    }
+
+    @Test fun sharingWithoutTokenIsRefused() {
+        val stranger = Peer(tv.info.id, "Salon", DeviceRole.TV, "127.0.0.1", tv.port, "faux", LinkLevel.GUEST, 0)
+        assertFalse(phone.share(stranger, listOf(SharedSite("Arte", "https://www.arte.tv/"))))
+        assertTrue(tv.shares.isEmpty())
     }
 
     @Test fun statusPlayTakeAndCommands() {

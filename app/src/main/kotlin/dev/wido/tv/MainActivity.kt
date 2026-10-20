@@ -60,6 +60,8 @@ class MainActivity : ComponentActivity(), RemoteTarget {
                     MenuScreen(vm, onOpen, onOpenPin, onOpenWatch, editSiteId = edit, onEditHandled = { editRequest.value = null }, sitesSignal = sitesSignal)
                     // Un téléphone du réseau demande à se lier : la TV demande confirmation.
                     PairPromptHost(app.link)
+                    // Des sites proposés par un téléphone lié : toujours confirmés ici, à l'écran.
+                    dev.wido.tv.ui.SharePromptHost(app.link)
                 } else {
                     val target by pairTarget.collectAsState()
                     val showTv by showTvTab.collectAsState()

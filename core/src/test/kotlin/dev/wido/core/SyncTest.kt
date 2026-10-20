@@ -302,3 +302,43 @@ class CanonicalWatchTest {
         assertEquals(200.0, back.single().position)
     }
 }
+
+class SiteSharingTest {
+    @Test fun fromSiteKeepsBlockingSettings() {
+        val site = Site("perso-arte", "Arte", "https://www.arte.tv/", rules = listOf("||ads.example^"), scripts = listOf("block-popups"), navigation = Navigation.MIXED)
+        val shared = SiteSharing.fromSite(site)
+        assertEquals(listOf("ads.example"), shared.blockedDomains)
+        assertEquals(Navigation.MIXED, shared.navigation)
+        assertTrue(shared.blockPopups)
+        val built = LocalSites.build(shared.name, shared.url, emptySet(), options = shared.options())
+        assertTrue(built is LocalSites.Built.Ok)
+    }
+
+    @Test fun sanitizeDropsBadAndDuplicateSites() {
+        val out = SiteSharing.sanitize(
+            listOf(
+                SharedSite("A", "https://a.example/"),
+                SharedSite("A bis", "https://a.example"),
+                SharedSite("B", "ftp://b.example/"),
+                SharedSite("C", "https://c.example/", navigation = "n'importe quoi", color = "rouge"),
+            ),
+        )
+        assertEquals(listOf("A", "C"), out.map { it.name })
+        assertEquals(Navigation.STRICT, out[1].navigation)
+        assertEquals(null, out[1].color)
+    }
+
+    @Test fun newOnlySkipsSitesAlreadyThere() {
+        val sites = listOf(SharedSite("A", "https://www.a.example/"), SharedSite("B", "https://b.example/"))
+        assertEquals(listOf("B"), SiteSharing.newOnly(sites, listOf("https://a.example")).map { it.name })
+    }
+
+    @Test fun packsReplaceSameNameAndRoundTrip() {
+        val one = SitePack("Mamie", listOf(SharedSite("A", "https://a.example/")))
+        val two = SitePack("mamie", listOf(SharedSite("B", "https://b.example/")))
+        val packs = SiteSharing.savePack(SiteSharing.savePack(emptyList(), one), two)
+        assertEquals(listOf("mamie"), packs.map { it.name })
+        assertEquals(packs, SiteSharing.decodePacks(SiteSharing.encodePacks(packs)))
+        assertEquals(emptyList(), SiteSharing.decodePacks(null))
+    }
+}

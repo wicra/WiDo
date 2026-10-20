@@ -224,6 +224,9 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         )
     }
 
+    /** Adresses de tous les sites (configuration et sites perso), pour ne pas ajouter deux fois le même. */
+    suspend fun allSiteUrls(): List<String> = LocalSites.merge(ensureLoaded().sites, _local.value).map { it.url }
+
     suspend fun findSite(id: String): Site? {
         val config = ensureLoaded()
         return LocalSites.merge(config.sites, _local.value)
