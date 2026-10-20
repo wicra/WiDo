@@ -145,12 +145,20 @@ class PlayerActivity : ComponentActivity() {
                             Toast.makeText(this@PlayerActivity, getString(R.string.toast_navigation_blocked, url.take(60)), Toast.LENGTH_SHORT).show()
                         }
                     },
-                    onPageVisible = { runOnUiThread { hideOverlay() } },
+                    onPageVisible = {
+                        runOnUiThread {
+                            hideOverlay()
+                            captureMeta()
+                            startResumeSeek()
+                        }
+                    },
                     onPageStart = {
                         bridge?.reset()
                         mediaState.value = null
+                        streamHinted = false
                     },
                     onAdWindow = { url -> runOnUiThread { adWindow?.open(url) } },
+                    onMediaStream = { runOnUiThread { onStreamFound() } },
                 ),
             )
             // Rafraîchit la configuration pour la prochaine ouverture, sans bloquer la lecture.
@@ -259,6 +267,7 @@ class PlayerActivity : ComponentActivity() {
         overlay.bringToFront()
 
         wv.requestFocus()
+        pendingSeek = intent.getDoubleExtra(EXTRA_POSITION, 0.0)
         // Une page épinglée, sinon la dernière page visitée du site (réglage « Reprendre »), sinon son accueil.
         val pinned = intent.getStringExtra(EXTRA_URL)?.let { ResumeUrl.toRemember(site, it) }
         wv.loadUrl(pinned ?: if (settings.resumeLastPage) ResumeUrl.startUrl(site, settings.lastUrlFor(site.id)) else site.url)
@@ -428,6 +437,7 @@ class PlayerActivity : ComponentActivity() {
             KeyAction.QUICK_MENU -> showPanel()
             KeyAction.SAVE_PAGE -> saveCurrentPage()
             KeyAction.SCROLL_TOP -> webView?.scrollTo(0, 0)
+            KeyAction.NATIVE_PLAYER -> openNative()
         }
     }
 
@@ -570,6 +580,7 @@ class PlayerActivity : ComponentActivity() {
         val passive = passivePoll
         passivePoll = false
         mediaState.value = state
+        applyPendingSeek(state)
         osd.showMedia(state, passive)
         root.removeCallbacks(poll)
         if (osd.isShowing) root.postDelayed(poll, POLL_MS) // la barre avance pendant qu'elle est visible
@@ -608,7 +619,8 @@ class PlayerActivity : ComponentActivity() {
             run()
         }
 
-        val actions = listOf(
+        val native = c?.stream?.let { listOf(action(getString(R.string.panel_native)) { openNative() }) }.orEmpty()
+        val actions = native + listOf(
             action("▶  " + getString(R.string.panel_resume)) {},
             action(getString(R.string.panel_reload)) { webView?.reload() },
             action(getString(R.string.panel_home)) { current?.let { webView?.loadUrl(it.url) } },
@@ -700,6 +712,8 @@ class PlayerActivity : ComponentActivity() {
     /** Un champ de la page est sélectionné : le QR code s'affiche en coin, tant que le champ garde le focus. */
     private fun onPageField(focused: Boolean) {
         root.removeCallbacks(hideFieldCard)
+        root.removeCallbacks(progressPoll)
+        root.removeCallbacks(resumeSeek)
         if (!focused) {
             // Le focus passe souvent d'un champ à l'autre : on attend un peu avant de retirer la carte.
             root.postDelayed(hideFieldCard, FIELD_CARD_GRACE_MS)
@@ -786,6 +800,8 @@ class PlayerActivity : ComponentActivity() {
         root.removeCallbacks(sleepWarning)
         root.removeCallbacks(sleepNow)
         root.removeCallbacks(hideFieldCard)
+        root.removeCallbacks(progressPoll)
+        root.removeCallbacks(resumeSeek)
         adWindow?.close()
         sleepMinutes = next
         if (next == 0) {
@@ -936,19 +952,106 @@ class PlayerActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         webView?.onResume()
+        root.postDelayed(progressPoll, PROGRESS_POLL_MS)
     }
 
     override fun onPause() {
+        root.removeCallbacks(progressPoll)
         webView?.onPause()
         saveSeen()
         rememberPage()
         super.onPause()
     }
 
-    /** Retient la page affichée (et la position d'une vidéo YouTube) pour la prochaine ouverture du site. */
+    /**
+     * Retient la page affichée (et la position d'une vidéo YouTube) pour la prochaine ouverture du site,
+     * et la vidéo en cours pour la rangée « Reprendre » de l'accueil.
+     */
     private fun rememberPage() {
         val current = site ?: return
-        ResumeUrl.toRemember(current, webView?.url, mediaState.value?.time)?.let { settings.setLastUrlFor(current.id, it) }
+        val url = webView?.url
+        ResumeUrl.toRemember(current, url, mediaState.value?.time)?.let { settings.setLastUrlFor(current.id, it) }
+        val state = mediaState.value ?: return
+        val page = ResumeUrl.toRemember(current, url) ?: return
+        if (state.duration > 0) {
+            (application as WiDoApp).repository.recordProgress(current.id, page, webView?.title, pageImage, state.time, state.duration)
+        }
+    }
+
+    // --- Vidéo de la page : métadonnées, reprise, lecteur natif ------------------------------
+
+    /** Image de la page (`og:image`), pour la vignette de « Reprendre ». */
+    private var pageImage: String? = null
+
+    private fun captureMeta() {
+        webView?.evaluateJavascript(META_SCRIPT) { raw -> pageImage = unquote(raw)?.takeIf { it.startsWith("https://") } }
+    }
+
+    /** L'état du lecteur de la page est relevé de temps en temps, sans rien afficher : la progression reste à jour. */
+    private val progressPoll = object : Runnable {
+        override fun run() {
+            if (!osd.isShowing && panelView == null) {
+                passivePoll = true
+                media("state")
+            }
+            root.postDelayed(this, PROGRESS_POLL_MS)
+        }
+    }
+
+    /** Position (s) où reprendre la vidéo, demandée par « Reprendre » ; 0 = rien à faire. */
+    private var pendingSeek = 0.0
+    private var resumeAttempts = 0
+
+    /** Interroge le lecteur jusqu'à ce que la vidéo soit prête, puis y saute (voir [applyPendingSeek]). */
+    private val resumeSeek = object : Runnable {
+        override fun run() {
+            if (pendingSeek <= 0 || resumeAttempts++ > RESUME_ATTEMPTS) return
+            passivePoll = true
+            media("state")
+            root.postDelayed(this, RESUME_POLL_MS)
+        }
+    }
+
+    private fun startResumeSeek() {
+        if (pendingSeek <= 0) return
+        resumeAttempts = 0
+        root.removeCallbacks(resumeSeek)
+        root.postDelayed(resumeSeek, RESUME_POLL_MS)
+    }
+
+    private fun applyPendingSeek(state: MediaState) {
+        if (pendingSeek <= 0 || state.duration <= 0) return
+        val target = pendingSeek
+        pendingSeek = 0.0
+        if (kotlin.math.abs(state.time - target) > 5) media("seek", target - state.time)
+    }
+
+    private var streamHinted = false
+
+    /** Un flux lisible par le lecteur natif est apparu : on le signale une fois par page. */
+    private fun onStreamFound() {
+        if (streamHinted) return
+        streamHinted = true
+        osd.showText(getString(R.string.osd_native_found))
+    }
+
+    /** « Lire dans WiDo » : le flux repéré s'ouvre dans le lecteur natif, la page se met en pause. */
+    private fun openNative() {
+        val current = site ?: return
+        val wv = webView ?: return
+        val stream = client?.stream
+        if (stream == null) {
+            osd.showText(getString(R.string.osd_native_none))
+            return
+        }
+        media("pause")
+        val cookies = runCatching { android.webkit.CookieManager.getInstance().getCookie(stream.url) }.getOrNull()
+        startActivity(
+            NativePlayerActivity.intent(
+                this, stream, current.id, ResumeUrl.toRemember(current, wv.url), wv.title, pageImage, wv.url, cookies,
+                wv.settings.userAgentString,
+            ),
+        )
     }
 
     /** Garde ce que le site a tenté (redirections refusées, domaines tiers) pour proposer des choix dans les réglages du site. */
@@ -964,6 +1067,8 @@ class PlayerActivity : ComponentActivity() {
         root.removeCallbacks(sleepWarning)
         root.removeCallbacks(sleepNow)
         root.removeCallbacks(hideFieldCard)
+        root.removeCallbacks(progressPoll)
+        root.removeCallbacks(resumeSeek)
         adWindow?.close()
         customCallback?.onCustomViewHidden()
         webView?.let {
@@ -1002,6 +1107,12 @@ class PlayerActivity : ComponentActivity() {
     companion object {
         const val EXTRA_SITE = "site"
         const val EXTRA_URL = "url"
+        const val EXTRA_POSITION = "position"
+        private const val PROGRESS_POLL_MS = 10_000L
+        private const val RESUME_POLL_MS = 1_500L
+        private const val RESUME_ATTEMPTS = 20
+        private const val META_SCRIPT =
+            "(function(){var m=document.querySelector('meta[property=\"og:image\"],meta[name=\"twitter:image\"]');return m?m.content:null;})()"
         /** Valeur spéciale de l'extra `site` : rouvre le dernier site ouvert. */
         const val LAST_SITE = "last"
         private const val FIELD_CARD_GRACE_MS = 1_500L
@@ -1048,8 +1159,14 @@ class PlayerActivity : ComponentActivity() {
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
-        /** `url` : une page précise du site (page épinglée), vérifiée avant d'être ouverte. */
-        fun intent(context: Context, siteId: String, url: String? = null): Intent =
-            Intent(context, PlayerActivity::class.java).putExtra(EXTRA_SITE, siteId).apply { if (url != null) putExtra(EXTRA_URL, url) }
+        /**
+         * `url` : une page précise du site (page épinglée, « Reprendre »), vérifiée avant d'être ouverte ;
+         * `positionSeconds` : où reprendre sa vidéo.
+         */
+        fun intent(context: Context, siteId: String, url: String? = null, positionSeconds: Double = 0.0): Intent =
+            Intent(context, PlayerActivity::class.java).putExtra(EXTRA_SITE, siteId).apply {
+                if (url != null) putExtra(EXTRA_URL, url)
+                if (positionSeconds > 0) putExtra(EXTRA_POSITION, positionSeconds)
+            }
     }
 }

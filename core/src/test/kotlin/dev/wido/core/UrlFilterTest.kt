@@ -124,3 +124,44 @@ class ListIncludesTest {
         assertEquals(setOf("m.com"), FilterParser.parse(out).blocked)
     }
 }
+
+class MediaDetectorTest {
+    @Test fun detectsStreamsButNotSegmentsOrYoutube() {
+        assertEquals(MediaStream.Kind.HLS, MediaDetector.detect("https://cdn.site.com/v/master.m3u8?token=x")?.kind)
+        assertEquals(MediaStream.Kind.DASH, MediaDetector.detect("https://cdn.site.com/v/manifest.mpd")?.kind)
+        assertEquals(MediaStream.Kind.PROGRESSIVE, MediaDetector.detect("https://cdn.site.com/film.mp4")?.kind)
+        assertNull(MediaDetector.detect("https://cdn.site.com/v/seg-001.ts"))
+        assertNull(MediaDetector.detect("https://rr1.googlevideo.com/videoplayback?x.m3u8"))
+        assertNull(MediaDetector.detect("https://ads.site.com/preroll/spot.mp4"))
+    }
+
+    @Test fun prefersFirstManifest() {
+        val mp4 = MediaStream("https://a/f.mp4", MediaStream.Kind.PROGRESSIVE)
+        val master = MediaStream("https://a/master.m3u8", MediaStream.Kind.HLS)
+        val variant = MediaStream("https://a/720p.m3u8", MediaStream.Kind.HLS)
+        assertEquals(master, MediaDetector.better(MediaDetector.better(mp4, master), variant))
+    }
+}
+
+class ContinueWatchingTest {
+    private fun e(url: String, pos: Double, dur: Double = 600.0) = WatchEntry("s", url, "Titre", null, pos, dur, 1)
+
+    @Test fun recordsMostRecentFirstAndDropsFinished() {
+        var list = emptyList<WatchEntry>()
+        list = ContinueWatching.record(list, e("https://s.com/a", 100.0))
+        list = ContinueWatching.record(list, e("https://s.com/b", 50.0))
+        list = ContinueWatching.record(list, e("https://s.com/a", 200.0))
+        assertEquals(listOf("https://s.com/a", "https://s.com/b"), list.map { it.url })
+        assertEquals(200.0, list.first().position)
+        list = ContinueWatching.record(list, e("https://s.com/a", 590.0))
+        assertEquals(listOf("https://s.com/b"), list.map { it.url })
+        assertEquals(list, ContinueWatching.record(list, e("https://s.com/c", 3.0)))
+        assertEquals(list, ContinueWatching.decode(ContinueWatching.encode(list)))
+    }
+
+    @Test fun youtubeThumbnails() {
+        assertEquals("https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", ContinueWatching.youtubeThumbnail("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10s"))
+        assertEquals("https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", ContinueWatching.record(emptyList(), e("https://m.youtube.com/watch?v=dQw4w9WgXcQ", 30.0)).first().image)
+        assertNull(ContinueWatching.youtubeThumbnail("https://vimeo.com/123"))
+    }
+}

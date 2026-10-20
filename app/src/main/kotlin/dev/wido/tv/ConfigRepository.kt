@@ -14,7 +14,9 @@ import dev.wido.core.ListIncludes
 import dev.wido.core.UrlFilter
 import dev.wido.core.UrlMatcher
 import dev.wido.core.NavigationPolicy
+import dev.wido.core.ContinueWatching
 import dev.wido.core.Pin
+import dev.wido.core.WatchEntry
 import dev.wido.core.Pins
 import dev.wido.core.UserHides
 import dev.wido.core.SeenDomains
@@ -102,6 +104,29 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     private fun savePins(next: List<Pin>) {
         writeAtomically(pinsFile, Pins.encode(next))
         _pins.value = next
+    }
+
+    private val watchingFile get() = File(context.filesDir, "continue-watching.json")
+
+    private val _watching = MutableStateFlow(runCatching { ContinueWatching.decode(watchingFile.readText()) }.getOrDefault(emptyList()))
+
+    /** Vidéos en cours, pour la rangée « Reprendre » (la plus récente en tête). */
+    val watching: StateFlow<List<WatchEntry>> = _watching.asStateFlow()
+
+    /** Retient où en est une vidéo (lecteur de la page ou lecteur natif). */
+    @Synchronized
+    fun recordProgress(siteId: String, url: String, title: String?, image: String?, positionSeconds: Double, durationSeconds: Double) {
+        val entry = WatchEntry(siteId, url, title.orEmpty(), image, positionSeconds, durationSeconds, System.currentTimeMillis())
+        saveWatching(ContinueWatching.record(_watching.value, entry))
+    }
+
+    @Synchronized
+    fun removeWatch(url: String) = saveWatching(ContinueWatching.remove(_watching.value, url))
+
+    private fun saveWatching(next: List<WatchEntry>) {
+        if (next == _watching.value) return
+        writeAtomically(watchingFile, ContinueWatching.encode(next))
+        _watching.value = next
     }
 
     private val hidesFile get() = File(context.filesDir, "user-hides.json")
@@ -228,6 +253,7 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         if (_pins.value.any { it.siteId == id }) savePins(_pins.value.filterNot { it.siteId == id })
         settings.setLastUrlFor(id, null)
         if (id in _hides.value) saveHides(UserHides.clear(_hides.value, id))
+        saveWatching(ContinueWatching.removeSite(_watching.value, id))
     }
 
     /** Mémorise les redirections refusées et les domaines tiers vus pendant une session. */

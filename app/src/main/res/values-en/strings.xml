@@ -183,4 +183,13 @@
     <string name="osd_pick_cancel">Hiding cancelled</string>
     <string name="action_unhide">Show hidden elements again (%1$d)</string>
     <string name="p_overlays">Close overlays</string>
+    <string name="panel_native">▶  Play in WiDo</string>
+    <string name="osd_native_found">Video found · quick menu → Play in WiDo</string>
+    <string name="osd_native_none">No video the WiDo player can play on this page</string>
+    <string name="native_failed">Cannot play this stream in WiDo (protected or expired): back to the page.</string>
+    <string name="resize_fit">Picture: fit</string>
+    <string name="resize_zoom">Picture: zoomed (fills the screen)</string>
+    <string name="resize_fill">Picture: stretched</string>
+    <string name="a_native">Play in WiDo</string>
+    <string name="continue_title">Continue watching</string>
 </resources>

@@ -70,6 +70,11 @@ dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
     // Installe les profils de démarrage (Compose, app) même hors Play Store : moins de saccades au lancement.
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
+    // Lecteur natif « Lire dans WiDo » : HLS, DASH et fichiers vidéo, décodage matériel.
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
+    implementation("androidx.media3:media3-exoplayer-dash:1.4.1")
+    implementation("androidx.media3:media3-ui:1.4.1")
     // QR code de la saisie depuis un téléphone (génération seulement).
     implementation("com.google.zxing:core:3.5.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")

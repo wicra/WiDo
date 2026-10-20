@@ -25,6 +25,7 @@ class MainActivity : ComponentActivity() {
                     vm,
                     onOpen = { site -> startActivity(PlayerActivity.intent(this, site.id)) },
                     onOpenPin = { pin -> startActivity(PlayerActivity.intent(this, pin.siteId, pin.url)) },
+                    onOpenWatch = { entry -> startActivity(PlayerActivity.intent(this, entry.siteId, entry.url, entry.position)) },
                 )
             }
         }

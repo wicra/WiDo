@@ -255,6 +255,7 @@ private fun actionLabel(action: KeyAction): Int = when (action) {
     KeyAction.QUICK_MENU -> R.string.a_quick_menu
     KeyAction.SAVE_PAGE -> R.string.a_save_page
     KeyAction.SCROLL_TOP -> R.string.a_top
+    KeyAction.NATIVE_PLAYER -> R.string.a_native
 }
 
 /** Une ligne : le libellé dans une colonne fixe, puis les choix à la suite. */

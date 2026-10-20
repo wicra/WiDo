@@ -134,3 +134,70 @@ object UserHides {
 
     private fun valid(s: String) = s.isNotEmpty() && s.length <= MAX_SELECTOR && s.none { it in "{}<>\n" }
 }
+
+/** Une vidéo en cours, pour la rangée « Reprendre » de l'accueil. */
+@Serializable
+data class WatchEntry(
+    val siteId: String,
+    val url: String,
+    val title: String,
+    val image: String? = null,
+    val position: Double = 0.0,
+    val duration: Double = 0.0,
+    val updatedAt: Long = 0,
+) {
+    /** Avancement entre 0 et 1 (0 si la durée est inconnue). */
+    val progress: Float get() = if (duration > 0) (position / duration).toFloat().coerceIn(0f, 1f) else 0f
+}
+
+/**
+ * « Reprendre » : les dernières vidéos regardées, tous sites confondus. Une vidéo à peine commencée
+ * (moins de 10 s) n'y entre pas ; une vidéo finie (moins de 30 s restantes) en sort.
+ */
+object ContinueWatching {
+    const val MAX = 12
+    const val MIN_POSITION = 10.0
+    const val END_MARGIN = 30.0
+    const val MAX_TITLE = 80
+
+    @Serializable
+    private data class FileModel(val entries: List<WatchEntry> = emptyList())
+
+    private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
+
+    fun encode(entries: List<WatchEntry>): String = json.encodeToString(FileModel(entries))
+
+    fun decode(text: String): List<WatchEntry> =
+        runCatching { json.decodeFromString<FileModel>(text).entries }.getOrDefault(emptyList()).filter { valid(it.url) }.take(MAX)
+
+    /** Met à jour la liste avec la position d'une vidéo (la plus récente en tête). */
+    fun record(entries: List<WatchEntry>, entry: WatchEntry): List<WatchEntry> {
+        if (!valid(entry.url)) return entries
+        val others = entries.filterNot { it.url == entry.url }
+        val finished = entry.duration > 0 && entry.position > entry.duration - END_MARGIN
+        if (finished) return others
+        if (entry.position < MIN_POSITION) return entries
+        val title = entry.title.trim().replace(Regex("\\s+"), " ").take(MAX_TITLE).ifEmpty { Hosts.of(entry.url).orEmpty() }
+        val image = entry.image?.takeIf { Hosts.schemeOf(it) == "https" } ?: youtubeThumbnail(entry.url)
+        return (listOf(entry.copy(title = title, image = image)) + others).take(MAX)
+    }
+
+    fun remove(entries: List<WatchEntry>, url: String): List<WatchEntry> = entries.filterNot { it.url == url }
+
+    fun removeSite(entries: List<WatchEntry>, siteId: String): List<WatchEntry> = entries.filterNot { it.siteId == siteId }
+
+    /** Miniature d'une vidéo YouTube, déduite de son identifiant (les pages YouTube n'en donnent pas toujours). */
+    fun youtubeThumbnail(url: String): String? {
+        val host = Hosts.of(url) ?: return null
+        if (!Hosts.matches(host, "youtube.com") && host != "youtu.be") return null
+        val id = Regex("[?&]v=([\\w-]{11})").find(url)?.groupValues?.get(1)
+            ?: Regex("/(?:shorts|live|embed)/([\\w-]{11})").find(url)?.groupValues?.get(1)
+            ?: if (host == "youtu.be") Regex("^https?://youtu\\.be/([\\w-]{11})").find(url)?.groupValues?.get(1) else null
+        return id?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
+    }
+
+    private fun valid(url: String): Boolean {
+        val scheme = Hosts.schemeOf(url)
+        return url.length <= 2000 && (scheme == "https" || scheme == "http") && Hosts.of(url) != null
+    }
+}

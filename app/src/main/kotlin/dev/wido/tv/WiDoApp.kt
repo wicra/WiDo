@@ -7,6 +7,7 @@ class WiDoApp : Application() {
     val settings by lazy { Settings(this) }
     val repository by lazy { ConfigRepository(this, settings) }
     val favicons by lazy { FaviconRepository(this) }
+    val thumbnails by lazy { Thumbnails(this) }
     val updates by lazy { UpdateManager(this, BuildConfig.GITHUB_REPO) }
 
     override fun onTrimMemory(level: Int) {

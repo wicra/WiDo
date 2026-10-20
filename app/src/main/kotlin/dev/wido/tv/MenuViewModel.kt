@@ -57,6 +57,11 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearHides(siteId: String) = app.repository.clearHides(siteId)
 
+    /** Vidéos en cours, pour la rangée « Reprendre ». */
+    val watching: StateFlow<List<dev.wido.core.WatchEntry>> = app.repository.watching
+
+    fun removeWatch(url: String) = app.repository.removeWatch(url)
+
     /** Chaque fonction renvoie un message d'erreur à afficher, ou null si c'est fait. */
     fun addSite(name: String, url: String, options: LocalSites.SiteOptions): String? =
         app.repository.addLocalSite(name, url, options)

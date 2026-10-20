@@ -7,7 +7,7 @@ import dev.wido.core.Zoom
 
 /** Ce que fait une touche de couleur de la télécommande. */
 enum class KeyAction {
-    NONE, MENU, RELOAD, TOGGLE_CURSOR, ZOOM_IN, ZOOM_OUT, QUICK_MENU, SAVE_PAGE, SCROLL_TOP;
+    NONE, MENU, RELOAD, TOGGLE_CURSOR, ZOOM_IN, ZOOM_OUT, QUICK_MENU, SAVE_PAGE, SCROLL_TOP, NATIVE_PLAYER;
 
     companion object {
         fun parse(name: String?, default: KeyAction): KeyAction = entries.firstOrNull { it.name == name } ?: default
@@ -138,6 +138,12 @@ class Settings(context: Context) {
     fun setLastUrlFor(siteId: String, url: String?) = state.edit().apply {
         if (url == null) remove("last_url_$siteId") else putString("last_url_$siteId", url)
     }.apply()
+
+    /** Position (ms) d'une vidéo dans le lecteur natif, par page : pour reprendre à la seconde près. */
+    fun nativePositionFor(key: String): Long = state.getLong("native_" + key.hashCode().toUInt().toString(16), 0)
+
+    fun setNativePositionFor(key: String, positionMs: Long) =
+        state.edit().putLong("native_" + key.hashCode().toUInt().toString(16), positionMs).apply()
 
     /** Ordre des cartes choisi par l'utilisateur (identifiants de sites). */
     var siteOrder: List<String>

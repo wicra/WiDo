@@ -41,6 +41,13 @@
             android:hardwareAccelerated="true"
             android:screenOrientation="landscape" />
 
+        <!-- « Lire dans WiDo » : le flux vidéo d'une page dans le lecteur natif. -->
+        <activity
+            android:name=".NativePlayerActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation|smallestScreenSize|screenLayout|uiMode"
+            android:screenOrientation="landscape" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

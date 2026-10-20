@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import dev.wido.core.Catalog
 import dev.wido.core.Hosts
 import dev.wido.core.Pin
+import dev.wido.core.WatchEntry
 import dev.wido.core.ReleaseInfo
 import dev.wido.core.Site
 import dev.wido.tv.BuildConfig
@@ -86,13 +87,19 @@ private val MenuVeil = Brush.verticalGradient(0.3f to Color.Transparent, 1f to C
  * la lumière de la carte sélectionnée. L'onglet Réglages remplace la scène par la liste des réglages.
  */
 @Composable
-fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit, onOpenPin: (Pin) -> Unit) {
+fun MenuScreen(
+    vm: MenuViewModel,
+    onOpen: (Site) -> Unit,
+    onOpenPin: (Pin) -> Unit,
+    onOpenWatch: (WatchEntry) -> Unit,
+) {
     val state by vm.config.collectAsState()
     val update by vm.update.collectAsState()
     val sites by vm.sites.collectAsState()
     val lists by vm.lists.collectAsState()
     val pins by vm.pins.collectAsState()
     val hides by vm.hides.collectAsState()
+    val watching by vm.watching.collectAsState()
     // Carte en cours de déplacement (◀ ▶ la déplacent, OK ou Retour terminent).
     var movingId by remember { mutableStateOf<String?>(null) }
 
@@ -136,13 +143,27 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit, onOpenPin: (Pin) -> Un
                         onAdd = { showCatalog = true },
                         pins = current?.let { c -> pins.filter { it.siteId == c.site.id } }.orEmpty(),
                         onPin = onOpenPin,
+                        // Avec la rangée « Reprendre », la scène se fait plus compacte pour tout faire tenir.
+                        compact = watching.isNotEmpty(),
                         modifier = Modifier.weight(1f),
                     )
+                    if (watching.isNotEmpty()) {
+                        ContinueRow(
+                            entries = watching,
+                            siteNames = sites.associate { it.site.id to it.site.name },
+                            onOpen = onOpenWatch,
+                            onRemove = { vm.removeWatch(it.url) },
+                            onFocus = { entry ->
+                                currentId = entry.siteId
+                                addFocused = false
+                            },
+                        )
+                    }
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(22.dp),
                         verticalAlignment = Alignment.Bottom,
                         contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 30.dp),
-                        modifier = Modifier.fillMaxWidth().height(176.dp),
+                        modifier = Modifier.fillMaxWidth().height(if (watching.isNotEmpty()) 158.dp else 176.dp),
                     ) {
                         itemsIndexed(sites, key = { _, it -> it.site.id }) { index, entry ->
                             SiteCard(
@@ -172,7 +193,7 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit, onOpenPin: (Pin) -> Un
                             )
                         }
                     }
-                    Footer(update)
+                    if (watching.isEmpty()) Footer(update) else Spacer(Modifier.height(14.dp))
                 }
                 Tab.Settings -> SettingsPane(settings, lists, vm::updateLists, Modifier.weight(1f))
             }
@@ -341,17 +362,18 @@ private fun Hero(
     onAdd: () -> Unit,
     pins: List<Pin>,
     onPin: (Pin) -> Unit,
+    compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier.fillMaxWidth().padding(start = 52.dp, end = 52.dp, top = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier.fillMaxWidth().padding(start = 52.dp, end = 52.dp, top = if (compact) 8.dp else 28.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
     ) {
         val title = current?.site?.name ?: stringResource(R.string.editor_title_add)
         Text(
             title,
-            fontSize = 56.sp,
-            lineHeight = 60.sp,
+            fontSize = if (compact) 42.sp else 56.sp,
+            lineHeight = if (compact) 46.sp else 60.sp,
             fontWeight = FontWeight.ExtraBold,
             letterSpacing = (-2).sp,
             maxLines = 1,
@@ -533,4 +555,63 @@ private fun Footer(update: UpdateUi) {
 
 private fun parseColor(hex: String?): Color? = hex?.let {
     runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull()
+}
+
+/** « Reprendre » : les vidéos en cours, la plus récente d'abord. OK reprend, appui long retire la carte. */
+@Composable
+private fun ContinueRow(
+    entries: List<WatchEntry>,
+    siteNames: Map<String, String>,
+    onOpen: (WatchEntry) -> Unit,
+    onRemove: (WatchEntry) -> Unit,
+    onFocus: (WatchEntry) -> Unit,
+) {
+    Column {
+        SectionLabel(stringResource(R.string.continue_title), Modifier.padding(start = 52.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 10.dp, bottom = 6.dp),
+            modifier = Modifier.fillMaxWidth().height(136.dp),
+        ) {
+            itemsIndexed(entries, key = { _, it -> it.url }) { _, entry ->
+                WatchCard(entry, siteNames[entry.siteId].orEmpty(), { onOpen(entry) }, { onRemove(entry) }, { onFocus(entry) })
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun WatchCard(entry: WatchEntry, siteName: String, onClick: () -> Unit, onRemove: () -> Unit, onFocus: () -> Unit) {
+    val context = LocalContext.current
+    val image by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, entry.image) {
+        value = entry.image?.let { (context.applicationContext as WiDoApp).thumbnails.load(it) }
+    }
+    var focused by remember { mutableStateOf(false) }
+    Box(
+        Modifier
+            .size(192.dp, 108.dp)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocus()
+            }
+            .liftEffect(focused, CardShape, focusScale = 1.08f, lift = 22.dp)
+            .clip(CardShape)
+            .background(Palette.Glass)
+            .then(if (focused) Modifier.border(2.dp, Color.White, CardShape) else Modifier)
+            .combinedClickable(onClick = onClick, onLongClick = onRemove),
+    ) {
+        image?.let {
+            androidx.compose.foundation.Image(it, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.matchParentSize())
+        }
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color(0xE6000000))))
+        Column(Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) {
+            Text(entry.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (siteName.isNotEmpty()) Text(siteName, color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp, maxLines = 1)
+        }
+        // Avancement de la vidéo.
+        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.25f))) {
+            Box(Modifier.fillMaxWidth(entry.progress).height(3.dp).background(Color.White))
+        }
+    }
 }

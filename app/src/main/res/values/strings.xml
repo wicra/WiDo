@@ -183,4 +183,13 @@
     <string name="osd_pick_cancel">Masquage annulé</string>
     <string name="action_unhide">Réafficher les éléments masqués (%1$d)</string>
     <string name="p_overlays">Fermer les calques</string>
+    <string name="panel_native">▶  Lire dans WiDo</string>
+    <string name="osd_native_found">Vidéo détectée · menu rapide → Lire dans WiDo</string>
+    <string name="osd_native_none">Aucune vidéo lisible par le lecteur WiDo sur cette page</string>
+    <string name="native_failed">Impossible de lire ce flux dans WiDo (protégé ou expiré) : retour à la page.</string>
+    <string name="resize_fit">Image : adaptée</string>
+    <string name="resize_zoom">Image : zoomée (remplit l\'écran)</string>
+    <string name="resize_fill">Image : étirée</string>
+    <string name="a_native">Lire dans WiDo</string>
+    <string name="continue_title">Reprendre</string>
 </resources>

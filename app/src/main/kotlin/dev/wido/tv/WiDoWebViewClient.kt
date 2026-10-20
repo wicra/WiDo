@@ -11,6 +11,8 @@ import dev.wido.core.NavigationPolicy
 import dev.wido.core.Site
 import java.io.ByteArrayInputStream
 import dev.wido.core.Hosts
+import dev.wido.core.MediaDetector
+import dev.wido.core.MediaStream
 import dev.wido.core.RequestType
 import dev.wido.core.UrlMatcher
 import java.util.concurrent.ConcurrentHashMap
@@ -28,7 +30,13 @@ class WiDoWebViewClient(
     private val onPageStart: () -> Unit = {},
     /** Mode mixte : la page refusée s'ouvre dans la fenêtre publicitaire. */
     private val onAdWindow: (String) -> Unit = {},
+    /** Un flux vidéo lisible par le lecteur natif a été repéré (appelé hors du fil principal). */
+    private val onMediaStream: (MediaStream) -> Unit = {},
 ) : WebViewClient() {
+    /** Meilleur flux vidéo repéré sur la page affichée. */
+    @Volatile var stream: MediaStream? = null
+        private set
+
     @Volatile private var site = site
     @Volatile private var blocker = blocker
     @Volatile private var urls = urls
@@ -73,6 +81,13 @@ class WiDoWebViewClient(
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
         val host = request.url.host ?: return null
         if (!blocker.isBlocked(host) && !blockedByAddress(request, host)) {
+            MediaDetector.detect(request.url.toString())?.let { found ->
+                val next = MediaDetector.better(stream, found)
+                if (next != stream) {
+                    stream = next
+                    onMediaStream(next)
+                }
+            }
             // Domaine tiers non bloqué : retenu pour proposer de le bloquer.
             if (NavigationPolicy.allowedDomains(site).none { Hosts.matches(host, it) }) {
                 requestCounts.getOrPut(host.lowercase()) { AtomicInteger() }.incrementAndGet()
@@ -117,11 +132,17 @@ class WiDoWebViewClient(
 
     override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
         url?.let { Hosts.of(it) }?.let { pageHost = it }
+        stream = null
         onPageStart()
         injector.inject(view)
     }
 
     override fun onPageCommitVisible(view: WebView, url: String?) = onPageVisible()
+
+    // Navigation interne d'une application web (YouTube, Twitch…) : nouvelle vidéo, nouveau flux.
+    override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+        if (!isReload) stream = null
+    }
 
     override fun onPageFinished(view: WebView, url: String?) {
         injector.inject(view)
