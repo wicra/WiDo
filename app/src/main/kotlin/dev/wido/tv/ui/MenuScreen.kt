@@ -11,6 +11,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -132,7 +135,15 @@ fun MenuScreen(
         Column(Modifier.fillMaxSize()) {
             TopBar(state, tab, onTab = { tab = it }, onRefresh = vm::refresh)
             when (tab) {
-                Tab.Sites -> {
+                // La scène en haut, les rangées en bas. Si l'écran est trop petit (bandeau de mise à jour,
+                // Reprendre, épingles…), la page défile au focus au lieu d'écraser les boutons.
+                Tab.Sites -> BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                  val viewport = maxHeight
+                  Column(
+                    Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = viewport),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                  ) {
+                  Column {
                     UpdateBanner(update, onInstall = vm::install)
                     val current = if (addFocused) null else sites.firstOrNull { it.site.id == currentId } ?: sites.firstOrNull()
                     Hero(
@@ -145,8 +156,9 @@ fun MenuScreen(
                         onPin = onOpenPin,
                         // Avec la rangée « Reprendre », la scène se fait plus compacte pour tout faire tenir.
                         compact = watching.isNotEmpty(),
-                        modifier = Modifier.weight(1f),
                     )
+                  }
+                  Column {
                     if (watching.isNotEmpty()) {
                         ContinueRow(
                             entries = watching,
@@ -194,6 +206,8 @@ fun MenuScreen(
                         }
                     }
                     if (watching.isEmpty()) Footer(update) else Spacer(Modifier.height(14.dp))
+                  }
+                  }
                 }
                 Tab.Settings -> SettingsPane(settings, lists, vm::updateLists, Modifier.weight(1f))
             }
