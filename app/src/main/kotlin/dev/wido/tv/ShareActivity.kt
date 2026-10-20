@@ -77,6 +77,8 @@ class ShareActivity : ComponentActivity() {
                             scope.launch {
                                 if (link.play(peer, HandoffPlay(url))) {
                                     Toast.makeText(this@ShareActivity, sent, Toast.LENGTH_SHORT).show()
+                                    // L'onglet TV de WiDo, pour piloter la vidéo.
+                                    startActivity(MainActivity.showTv(this@ShareActivity).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                                     finish()
                                 } else {
                                     sending = false

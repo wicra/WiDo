@@ -114,6 +114,9 @@ fun PhoneHome(
     onPlayHere: (NowPlaying) -> Unit,
     pairTarget: LinkProtocol.PairTarget?,
     onPairTargetHandled: () -> Unit,
+    /** Une vidéo vient de partir sur la TV (depuis le lecteur) : afficher l'onglet TV. */
+    showTv: Boolean = false,
+    onShowTvHandled: () -> Unit = {},
 ) {
     val state by vm.config.collectAsState()
     val update by vm.update.collectAsState()
@@ -137,17 +140,25 @@ fun PhoneHome(
 
     // Un QR code d'appairage scanné : direction l'onglet TV, qui s'en occupe.
     androidx.compose.runtime.LaunchedEffect(pairTarget) { if (pairTarget != null) tab = PhoneTab.Tv }
+    androidx.compose.runtime.LaunchedEffect(showTv) {
+        if (showTv) {
+            tab = PhoneTab.Tv
+            onShowTvHandled()
+        }
+    }
 
     val screen = peers.firstOrNull { it.id == selectedId } ?: peers.firstOrNull()
     val screenState = screen?.let { states[it.id] }
     val tvOnline = screenState?.online == true
-    val sentTo = stringResource(R.string.toast_sent_to_tv, screen?.name.orEmpty())
     val unreachable = stringResource(R.string.toast_tv_unreachable, screen?.name.orEmpty())
 
     /** « Sur la TV » depuis l'accueil ou Reprendre. */
     fun sendToTv(play: HandoffPlay) {
         val peer = screen ?: return
-        scope.launch { message = PhoneMessage(if (link.play(peer, play)) sentTo else unreachable) }
+        scope.launch {
+            // Envoyée : l'onglet TV s'affiche pour la piloter. Sinon, le message dit pourquoi.
+            if (link.play(peer, play)) tab = PhoneTab.Tv else message = PhoneMessage(unreachable)
+        }
     }
 
     val removedText = stringResource(R.string.msg_removed)

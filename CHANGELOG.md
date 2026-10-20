@@ -9,6 +9,7 @@
 - **Accueil TV** : le titre n'est plus coupé sous l'en-tête en descendant vers les sites (la scène et les rangées tiennent dans l'écran).
 
 ### Amélioré
+- **Téléphone : après « Sur la TV », l'onglet TV s'ouvre** (depuis le lecteur, Reprendre, un appui long ou le partage) : la vidéo se pilote tout de suite.
 - **Sur la TV et Reprendre : lecture et plein écran automatiques.** La vidéo démarre seule ; le plein écran du site est ouvert pour de vrai, sinon la vidéo remplit l'écran (Retour pour revoir la page). Réglage « Plein écran automatique ».
 - **Menu rapide** : retour à une rangée de pastilles, plus petites, avec une icône et un libellé clair, toutes visibles (plus de « Plus… »).
 - **Ouverture** : le cercle du site s'agrandit en douceur jusqu'à remplir l'écran, puis l'écran d'attente garde le fond de l'appli avec le logo du site.

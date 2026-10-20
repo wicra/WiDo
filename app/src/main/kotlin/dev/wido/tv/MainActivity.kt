@@ -27,6 +27,9 @@ class MainActivity : ComponentActivity(), RemoteTarget {
     /** QR code d'appairage scanné (`wido://pair…`) : le téléphone s'occupe de se lier à la TV. */
     private val pairTarget = MutableStateFlow<LinkProtocol.PairTarget?>(null)
 
+    /** Une vidéo vient de partir sur la TV : l'onglet TV s'affiche, pour la piloter. */
+    private val showTvTab = MutableStateFlow(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val launched = handleIntent(intent)
@@ -50,6 +53,7 @@ class MainActivity : ComponentActivity(), RemoteTarget {
                     PairPromptHost(app.link)
                 } else {
                     val target by pairTarget.collectAsState()
+                    val showTv by showTvTab.collectAsState()
                     PhoneHome(
                         vm,
                         app.link,
@@ -60,6 +64,8 @@ class MainActivity : ComponentActivity(), RemoteTarget {
                         onPlayHere = { now -> startActivity(PlayerActivity.intent(this, ConfigRepository.LINK_SITE_ID, now.url, now.position, autoplay = true)) },
                         pairTarget = target,
                         onPairTargetHandled = { pairTarget.value = null },
+                        showTv = showTv,
+                        onShowTvHandled = { showTvTab.value = false },
                     )
                 }
             }
@@ -184,6 +190,11 @@ class MainActivity : ComponentActivity(), RemoteTarget {
      * - `site` : ouvre directement ce site (`last` : le dernier site ouvert).
      */
     private fun handleIntent(intent: Intent): Boolean {
+        if (intent.getBooleanExtra(EXTRA_SHOW_TV, false)) {
+            intent.removeExtra(EXTRA_SHOW_TV)
+            showTvTab.value = true
+            return true
+        }
         intent.dataString?.let { LinkProtocol.parsePairUri(it) }?.let { target ->
             if (!app.isTv) pairTarget.value = target
             return true
@@ -195,9 +206,16 @@ class MainActivity : ComponentActivity(), RemoteTarget {
         return true
     }
 
-    private companion object {
-        const val EXTRA_CONFIG_URL = "config_url"
-        const val PREPARE_DELAY_MS = 1_500L
-        const val MOVE_STEP = 60f
+
+    companion object {
+        private const val EXTRA_SHOW_TV = "show_tv"
+
+        /** L'accueil du téléphone, sur l'onglet TV (après « Sur la TV »). */
+        fun showTv(context: android.content.Context): Intent =
+            Intent(context, MainActivity::class.java).putExtra(EXTRA_SHOW_TV, true).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+
+        private const val EXTRA_CONFIG_URL = "config_url"
+        private const val PREPARE_DELAY_MS = 1_500L
+        private const val MOVE_STEP = 60f
     }
 }

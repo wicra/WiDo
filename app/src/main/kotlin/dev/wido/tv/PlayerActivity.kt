@@ -1532,7 +1532,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         lifecycleScope.launch {
             if (app.link.play(peer, play)) {
                 media("pause")
-                osd.showText(getString(R.string.toast_sent_to_tv, peer.name), OsdView.Kind.Success)
+                // La vidéo est sur la TV : le téléphone passe à son onglet TV, pour la piloter.
+                startActivity(MainActivity.showTv(this@PlayerActivity))
+                finish()
             } else {
                 osd.showText(getString(R.string.toast_tv_unreachable, peer.name), OsdView.Kind.Warning)
             }
