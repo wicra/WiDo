@@ -1788,7 +1788,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private fun onStreamFound() {
         if (streamHinted) return
         streamHinted = true
-        osd.showText(getString(R.string.osd_native_found))
+        // Peu de mémoire : le lecteur natif consomme bien moins que la page, il évite les fermetures.
+        val app = application as WiDoApp
+        osd.showText(getString(if (app.lowMemory) R.string.osd_native_found_low else R.string.osd_native_found))
     }
 
     /** « Lire dans WiDo » : le flux repéré s'ouvre dans le lecteur natif, la page se met en pause. */

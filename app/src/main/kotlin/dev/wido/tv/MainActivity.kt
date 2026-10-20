@@ -159,7 +159,8 @@ class MainActivity : ComponentActivity(), RemoteTarget {
         if (!app.isTv) TvRemoteService.stop(this)
         (application as WiDoApp).remote.attach(this)
         // Une fois l'accueil affiché, une WebView se prépare au calme : le prochain site s'ouvrira vite.
-        window.decorView.postDelayed({ if (!isFinishing) WebViewPool.prepare(this) }, PREPARE_DELAY_MS)
+        // Pas sur un appareil à peu de mémoire : une WebView de plus, c'est la vidéo qui serait fermée.
+        if (!app.lowMemory) window.decorView.postDelayed({ if (!isFinishing) WebViewPool.prepare(this) }, PREPARE_DELAY_MS)
     }
 
     override fun onNewIntent(intent: Intent) {

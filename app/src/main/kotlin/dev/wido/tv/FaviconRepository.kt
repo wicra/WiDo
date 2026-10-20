@@ -42,6 +42,9 @@ class FaviconRepository(private val context: Context) {
         }
     }
     private val memory = ConcurrentHashMap<String, SiteIcon>()
+
+    /** Mémoire faible : les icônes seront relues du disque au besoin. */
+    fun trimMemory() = memory.clear()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val refreshing = ConcurrentHashMap.newKeySet<String>()
 

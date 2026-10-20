@@ -425,4 +425,5 @@
     <string name="a11y_play_pause">Lecture ou pause</string>
     <string name="a11y_refresh">Actualiser</string>
     <string name="a11y_close">Fermer</string>
+    <string name="osd_native_found_low">Vidéo détectée · menu rapide → Lire dans WiDo : bien plus léger pour cette TV</string>
 </resources>

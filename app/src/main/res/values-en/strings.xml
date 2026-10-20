@@ -425,4 +425,5 @@
     <string name="a11y_play_pause">Play or pause</string>
     <string name="a11y_refresh">Refresh</string>
     <string name="a11y_close">Close</string>
+    <string name="osd_native_found_low">Video found · quick menu → Play in WiDo: much lighter for this TV</string>
 </resources>

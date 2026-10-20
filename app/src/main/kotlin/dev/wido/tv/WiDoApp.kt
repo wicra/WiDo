@@ -11,6 +11,16 @@ class WiDoApp : Application() {
     /** Lien avec les autres écrans (téléphone, autres TV) : appairage, pilotage, synchro. */
     val link by lazy { ScreenLink(this) }
 
+    /**
+     * Appareil à peu de mémoire (clé TV de 1 Go…) : Android y ferme vite l'appli pendant une vidéo. On
+     * y renonce aux préparations qui coûtent de la mémoire, et on libère les caches dès qu'il en manque.
+     */
+    val lowMemory: Boolean by lazy {
+        val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+        val info = android.app.ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+        am.isLowRamDevice || info.totalMem < 1_700L * 1_048_576
+    }
+
     /** TV ou téléphone : l'interface s'adapte (télécommande et curseur, ou écran tactile). */
     val isTv: Boolean get() = link.isTv
 
@@ -46,6 +56,12 @@ class WiDoApp : Application() {
         if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
             CrashLog.event("Mémoire faible signalée par Android (niveau $level)")
         }
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) WebViewPool.clear()
+        // Dès que la mémoire se fait rare (ou l'accueil n'est plus affiché, sur un appareil à peu de
+        // mémoire) : la WebView préparée et les images gardées en mémoire partent, la vidéo garde la place.
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_MODERATE || (lowMemory && level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN)) {
+            WebViewPool.clear()
+            thumbnails.trimMemory()
+            favicons.trimMemory()
+        }
     }
 }

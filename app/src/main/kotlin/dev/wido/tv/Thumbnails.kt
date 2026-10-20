@@ -21,6 +21,9 @@ class Thumbnails(private val context: Context) {
     private val dir by lazy { File(context.cacheDir, "thumbs").apply { mkdirs() } }
     private val memory = ConcurrentHashMap<String, ImageBitmap>()
 
+    /** Mémoire faible : les images seront relues du disque au besoin. */
+    fun trimMemory() = memory.clear()
+
     suspend fun load(url: String): ImageBitmap? = withContext(Dispatchers.IO) {
         if (!url.startsWith("https://")) return@withContext null
         memory[url]?.let { return@withContext it }
