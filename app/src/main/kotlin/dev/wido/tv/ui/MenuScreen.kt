@@ -405,9 +405,7 @@ internal fun Hero(
     ) {
         val title = watch?.title ?: current?.site?.name ?: stringResource(R.string.editor_title_add)
         val context = LocalContext.current
-        val icon by produceState<SiteIcon?>(null, current?.site?.id, current?.site?.url) {
-            value = current?.site?.let { (context.applicationContext as WiDoApp).favicons.load(it) }
-        }
+        val icon = rememberLoaded(current?.site?.id, current?.site?.url) { current?.site?.let { (context.applicationContext as WiDoApp).favicons.load(it) } }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (current != null) {
                 SiteLogo(icon, current.site.name, if (compact) 44.dp else 54.dp, focused = true)
@@ -498,9 +496,7 @@ internal fun SiteCard(
 ) {
     val site = entry.site
     val context = LocalContext.current
-    val icon by produceState<SiteIcon?>(null, site.id, site.url, site.icon) {
-        value = (context.applicationContext as WiDoApp).favicons.load(site)
-    }
+    val icon = rememberLoaded(site.id, site.url, site.icon) { (context.applicationContext as WiDoApp).favicons.load(site) }
     // Couleur : celle de la config si elle en impose une, sinon celle de l'icône du site.
     val cached = remember(site.id, site.url, site.icon) { (context.applicationContext as WiDoApp).favicons.cachedColor(site) }
     val accent = parseColor(site.color) ?: icon?.color ?: cached ?: Palette.Accent

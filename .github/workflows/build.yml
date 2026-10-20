@@ -50,10 +50,15 @@ jobs:
       - name: Analyse Android (lint)
         run: |
           if ! ./gradlew :app:lintDebug --console=plain > lint.log 2>&1; then
-            # Une ligne par type d'erreur (nombre, puis le premier exemple) : tout tient dans l'annotation.
-            R=lint-errors.txt
-            grep -iE 'error' lint.log | grep -v 'What went wrong\|aborting\|abortOnError\|Fix the issues' | sort -u > $R || true
-            MSG=$({ grep -oE '\[[A-Za-z]+\]$' $R | sort | uniq -c; for id in $(grep -oE '\[[A-Za-z]+\]$' $R | sort -u | tr -d '[]'); do grep -m1 -E "\[$id\]$" $R; done; head -20 $R; } | head -80 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            # Toutes les erreurs (identifiant, fichier:ligne, message), lues dans le rapport XML.
+            MSG=$(python3 -c "
+          import glob, xml.etree.ElementTree as ET
+          for p in glob.glob('app/build/reports/lint-results-debug.xml'):
+              for i in ET.parse(p).getroot().iter('issue'):
+                  if i.get('severity') in ('Error', 'Fatal'):
+                      l = i.find('location')
+                      print(i.get('id'), (l.get('file').split('/src/')[-1] + ':' + str(l.get('line'))) if l is not None else '', i.get('message'))
+          " | head -60 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
             echo "::error title=Lint failed::$MSG"
             exit 1
           fi

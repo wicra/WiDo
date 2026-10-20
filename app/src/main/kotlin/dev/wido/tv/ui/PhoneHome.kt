@@ -360,7 +360,7 @@ private fun PhoneSiteCard(entry: MenuSite, onClick: () -> Unit, onOptions: () ->
     val site = entry.site
     val context = LocalContext.current
     val app = context.applicationContext as WiDoApp
-    val icon by produceState<SiteIcon?>(null, site.id, site.url, site.icon) { value = app.favicons.load(site) }
+    val icon = rememberLoaded(site.id, site.url, site.icon) { app.favicons.load(site) }
     val cached = remember(site.id, site.url, site.icon) { app.favicons.cachedColor(site) }
     val accent = parseColor(site.color) ?: icon?.color ?: cached ?: Palette.Accent
     val haptic = LocalHapticFeedback.current
@@ -622,10 +622,7 @@ internal fun PhoneTitle(text: String, modifier: Modifier = Modifier) {
 @Composable
 internal fun rememberThumbnail(url: String?): ImageBitmap? {
     val context = LocalContext.current
-    val image by produceState<ImageBitmap?>(null, url) {
-        value = url?.let { (context.applicationContext as WiDoApp).thumbnails.load(it) }
-    }
-    return image
+    return rememberLoaded(url) { url?.let { (context.applicationContext as WiDoApp).thumbnails.load(it) } }
 }
 
 /**
@@ -652,7 +649,7 @@ internal fun VideoArt(image: ImageBitmap?, site: Site?, url: String, modifier: M
     val shown = site ?: remember(url) {
         Hosts.of(url)?.let { host -> Site(id = dev.wido.tv.ConfigRepository.LINK_SITE_ID, name = host.removePrefix("www."), url = "https://$host/") }
     }
-    val icon by produceState<SiteIcon?>(null, shown?.id, shown?.url) { value = shown?.let { app.favicons.load(it) } }
+    val icon = rememberLoaded(shown?.id, shown?.url) { shown?.let { app.favicons.load(it) } }
     val accent = parseColor(shown?.color) ?: icon?.color ?: shown?.let { app.favicons.cachedColor(it) } ?: Palette.Accent
     Box(modifier.then(if (image == null) Modifier.background(siteGradient(accent)) else Modifier.background(Palette.Glass))) {
         if (image != null) {

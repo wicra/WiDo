@@ -240,3 +240,11 @@ fun FocusSurface(
 
 /** Couleur du texte sur une [FocusSurface]. */
 fun onSurface(focused: Boolean, idle: Color = Palette.TextPrimary): Color = if (focused) Palette.Ink else idle
+
+/** Une valeur chargée en tâche de fond (icône, image), rechargée quand une des clés change ; null en attendant. */
+@Composable
+fun <T> rememberLoaded(vararg keys: Any?, load: suspend () -> T?): T? {
+    var value by remember(*keys) { mutableStateOf<T?>(null) }
+    androidx.compose.runtime.LaunchedEffect(*keys) { value = load() }
+    return value
+}
