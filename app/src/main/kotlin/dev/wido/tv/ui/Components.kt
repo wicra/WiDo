@@ -176,7 +176,7 @@ fun DialogFrame(
                 .glassPanel(Palette.PanelSolid, elevation = 30.dp)
                 .padding(horizontal = 30.dp, vertical = 26.dp),
         ) {
-            DialogBody(title, buttons, content)
+            DialogBody(title, buttons, content = content)
         }
     }
 }

@@ -567,7 +567,7 @@ class PlayerActivity : ComponentActivity() {
                     webView?.loadUrl(blockedUrl)
                 },
                 allow = action(getString(R.string.panel_allow_always)) { allowDomain(current, blockedHost, blockedUrl) },
-                ignore = action(getString(R.string.panel_ignore)) { c.lastBlockedUrl = null },
+                ignore = action(getString(R.string.panel_ignore)) { c.dismissBlocked() },
             )
         } else {
             null

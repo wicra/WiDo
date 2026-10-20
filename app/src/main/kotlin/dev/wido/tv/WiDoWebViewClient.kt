@@ -32,6 +32,11 @@ class WiDoWebViewClient(
     @Volatile var lastBlockedUrl: String? = null
         private set
 
+    /** Retire la navigation refusée du menu rapide (« Ignorer »). */
+    fun dismissBlocked() {
+        lastBlockedUrl = null
+    }
+
     private val requestCounts = ConcurrentHashMap<String, AtomicInteger>()
     private val blockedNavigationHosts = CopyOnWriteArrayList<String>()
 
