@@ -1,5 +1,6 @@
 package dev.wido.tv.ui
 
+import dev.wido.tv.R
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.contentDescription
