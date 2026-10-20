@@ -75,6 +75,7 @@ fun SiteEditorDialog(
     val allowed = remember { mutableStateListOf<String>().apply { addAll(start.allowedDomains) } }
     val blocked = remember { mutableStateListOf<String>().apply { addAll(start.blockedDomains) } }
     val urlFocus = remember { FocusRequester() }
+    var showPhone by remember { mutableStateOf(false) }
 
     fun setUrl(next: String) {
         url = next
@@ -131,6 +132,7 @@ fun SiteEditorDialog(
                         Chip(SCHEME, { setUrl(SCHEME + url.removePrefix("https://").removePrefix("http://")) })
                         URL_HELPERS.forEach { helper -> Chip(helper, { setUrl(url + helper) }) }
                         Chip("⌫", { setUrl(url.dropLast(1)) })
+                        Chip(stringResource(R.string.editor_phone), { showPhone = true })
                     }
 
                     // 2. Le nom, déduit de l'adresse, modifiable.
@@ -168,6 +170,16 @@ fun SiteEditorDialog(
                 }
             }
         }
+    }
+    if (showPhone) {
+        PhoneDialog(
+            stringResource(R.string.phone_hint_url),
+            onMessage = {
+                setUrl(it.text.trim())
+                showPhone = false
+            },
+            onDismiss = { showPhone = false },
+        )
     }
 }
 

@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import dev.wido.core.Pin
+import dev.wido.core.SiteOrder
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -31,8 +34,23 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
     /** État des listes de blocage (réglages). */
     val lists: StateFlow<ListStatus> = app.repository.lists
 
+    private val order = MutableStateFlow(app.settings.siteOrder)
+
+    /** Sites dans l'ordre choisi par l'utilisateur. */
     val sites: StateFlow<List<MenuSite>> =
-        app.repository.sites.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        combine(app.repository.sites, order) { list, ids -> SiteOrder.sort(list, ids) { it.site.id } }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val pins: StateFlow<List<Pin>> = app.repository.pins
+
+    /** Déplace une carte d'une place vers la gauche (-1) ou la droite (+1). */
+    fun move(siteId: String, delta: Int) {
+        val next = SiteOrder.move(sites.value.map { it.site.id }, siteId, delta)
+        app.settings.siteOrder = next
+        order.value = next
+    }
+
+    fun removePin(pin: Pin) = app.repository.removePin(pin)
 
     /** Chaque fonction renvoie un message d'erreur à afficher, ou null si c'est fait. */
     fun addSite(name: String, url: String, options: LocalSites.SiteOptions): String? =

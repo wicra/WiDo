@@ -11,6 +11,8 @@ import dev.wido.core.HostRules
 import dev.wido.core.LocalSites
 import dev.wido.core.Hosts
 import dev.wido.core.NavigationPolicy
+import dev.wido.core.Pin
+import dev.wido.core.Pins
 import dev.wido.core.SeenDomains
 import dev.wido.core.SiteOverrides
 import dev.wido.core.Site
@@ -77,6 +79,24 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     /** Ce que chaque site a tenté de faire : sert à proposer des choix en un bouton. */
     @Volatile private var seen: Map<String, SeenDomains.Entry> =
         runCatching { SeenDomains.decode(seenFile.readText()) }.getOrDefault(emptyMap())
+
+    private val pinsFile get() = File(context.filesDir, "pins.json")
+
+    private val _pins = MutableStateFlow(runCatching { Pins.decode(pinsFile.readText()) }.getOrDefault(emptyList()))
+
+    /** Pages épinglées, tous sites confondus. */
+    val pins: StateFlow<List<Pin>> = _pins.asStateFlow()
+
+    @Synchronized
+    fun addPin(siteId: String, title: String?, url: String) = savePins(Pins.add(_pins.value, siteId, title, url))
+
+    @Synchronized
+    fun removePin(pin: Pin) = savePins(Pins.remove(_pins.value, pin))
+
+    private fun savePins(next: List<Pin>) {
+        writeAtomically(pinsFile, Pins.encode(next))
+        _pins.value = next
+    }
 
     private val _local = MutableStateFlow(readLocalSites())
     val localSites: StateFlow<List<Site>> = _local.asStateFlow()
@@ -178,6 +198,8 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     fun removeLocalSite(id: String) {
         saveLocal(_local.value.filterNot { it.id == id })
         if (id in seen) writeSeen(seen - id)
+        if (_pins.value.any { it.siteId == id }) savePins(_pins.value.filterNot { it.siteId == id })
+        settings.setLastUrlFor(id, null)
     }
 
     /** Mémorise les redirections refusées et les domaines tiers vus pendant une session. */

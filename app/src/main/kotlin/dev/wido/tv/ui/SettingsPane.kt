@@ -173,6 +173,12 @@ fun SettingsPane(
                     if (settings.startupLastSite) 1 else 0,
                 ) { changed { settings.startupLastSite = it == 1 } }
             }
+            SettingRow(stringResource(R.string.s_resume)) {
+                Segmented(
+                    listOf(stringResource(R.string.v_resume_last), stringResource(R.string.v_resume_home)),
+                    if (settings.resumeLastPage) 0 else 1,
+                ) { changed { settings.resumeLastPage = it == 0 } }
+            }
             SettingRow(stringResource(R.string.s_new_relaxed)) {
                 Segmented(
                     listOf(stringResource(R.string.v_strict), stringResource(R.string.v_relaxed)),

@@ -21,7 +21,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -44,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -52,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wido.core.Catalog
 import dev.wido.core.Hosts
+import dev.wido.core.Pin
 import dev.wido.core.ReleaseInfo
 import dev.wido.core.Site
 import dev.wido.tv.BuildConfig
@@ -82,11 +86,14 @@ private val MenuVeil = Brush.verticalGradient(0.3f to Color.Transparent, 1f to C
  * la lumière de la carte sélectionnée. L'onglet Réglages remplace la scène par la liste des réglages.
  */
 @Composable
-fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
+fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit, onOpenPin: (Pin) -> Unit) {
     val state by vm.config.collectAsState()
     val update by vm.update.collectAsState()
     val sites by vm.sites.collectAsState()
     val lists by vm.lists.collectAsState()
+    val pins by vm.pins.collectAsState()
+    // Carte en cours de déplacement (◀ ▶ la déplacent, OK ou Retour terminent).
+    var movingId by remember { mutableStateOf<String?>(null) }
 
     var tab by remember { mutableStateOf(Tab.Sites) }
     var editor by remember { mutableStateOf<Editor?>(null) }
@@ -126,6 +133,8 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
                         onOpen = { current?.let { onOpen(it.site) } },
                         onOptions = { current?.let { actionsFor = it.site } },
                         onAdd = { showCatalog = true },
+                        pins = current?.let { c -> pins.filter { it.siteId == c.site.id } }.orEmpty(),
+                        onPin = onOpenPin,
                         modifier = Modifier.weight(1f),
                     )
                     LazyRow(
@@ -140,6 +149,9 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
                                 index = index,
                                 onClick = { onOpen(entry.site) },
                                 onOptions = { actionsFor = entry.site },
+                                moving = movingId == entry.site.id,
+                                onMove = { delta -> vm.move(entry.site.id, delta) },
+                                onMoveDone = { movingId = null },
                                 onFocus = { color ->
                                     currentId = entry.site.id
                                     addFocused = false
@@ -181,9 +193,13 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
     actionsFor?.let { site ->
         SiteActionsDialog(
             site = site,
+            local = sites.firstOrNull { it.site.id == site.id }?.local == true,
+            pins = pins.filter { it.siteId == site.id },
             onOpen = { actionsFor = null; onOpen(site) },
+            onMove = { actionsFor = null; movingId = site.id },
             onEdit = { actionsFor = null; editor = Editor.Edit(site) },
             onDelete = { vm.removeSite(site.id); actionsFor = null },
+            onRemovePin = vm::removePin,
             onDismiss = { actionsFor = null },
         )
     }
@@ -320,6 +336,8 @@ private fun Hero(
     onOpen: () -> Unit,
     onOptions: () -> Unit,
     onAdd: () -> Unit,
+    pins: List<Pin>,
+    onPin: (Pin) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -350,9 +368,20 @@ private fun Hero(
         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (current != null) {
                 ActionButton("▶  " + stringResource(R.string.action_open), onOpen)
-                if (current.local) ActionButton(stringResource(R.string.action_options), onOptions, primary = false, idleText = Color.White.copy(alpha = 0.8f))
+                ActionButton(stringResource(R.string.action_options), onOptions, primary = false, idleText = Color.White.copy(alpha = 0.8f))
             } else {
                 ActionButton("+  " + stringResource(R.string.add_site), onAdd)
+            }
+        }
+        // Pages épinglées de ce site : ouvertes directement.
+        if (pins.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("★", color = Color.White.copy(alpha = 0.55f), fontSize = 14.sp)
+                pins.forEach { pin -> Chip(pin.title, { onPin(pin) }) }
             }
         }
     }
@@ -384,6 +413,9 @@ private fun SiteCard(
     index: Int,
     onClick: () -> Unit,
     onOptions: () -> Unit,
+    moving: Boolean,
+    onMove: (Int) -> Unit,
+    onMoveDone: () -> Unit,
     onFocus: (Color) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -401,11 +433,23 @@ private fun SiteCard(
     // Le zoom part du coin bas gauche : cette marge évite de recouvrir la carte suivante.
     val room by animateDpAsState(if (focused) 18.dp else 0.dp, label = "cardRoom")
 
-    val menuKey = if (entry.local) {
-        Modifier.onKeyEvent { e ->
-            val handled = e.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_MENU && e.nativeKeyEvent.action == KeyEvent.ACTION_UP
-            if (handled) onOptions()
-            handled
+    val menuKey = Modifier.onKeyEvent { e ->
+        val handled = e.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_MENU && e.nativeKeyEvent.action == KeyEvent.ACTION_UP
+        if (handled) onOptions()
+        handled
+    }
+    // Déplacement : ◀ ▶ déplacent la carte (elle garde le focus), OK ou Retour terminent.
+    val moveKeys = if (moving) {
+        Modifier.onPreviewKeyEvent { e ->
+            val native = e.nativeKeyEvent
+            val down = native.action == KeyEvent.ACTION_DOWN
+            when (native.keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> { if (down) onMove(-1); true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> { if (down) onMove(1); true }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BACK -> { if (!down) onMoveDone(); true }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> true
+                else -> false
+            }
         }
     } else {
         Modifier
@@ -417,6 +461,7 @@ private fun SiteCard(
             .padding(end = room)
             .size(width, height)
             .then(menuKey)
+            .then(moveKeys)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus(accent)
@@ -424,7 +469,8 @@ private fun SiteCard(
             .liftEffect(focused, CardShape, focusScale = 1.08f, lift = 26.dp, origin = TransformOrigin(0f, 1f))
             .clip(CardShape)
             .then(if (focused) Modifier.background(siteGradient(accent)).background(GlassSheen) else Modifier.background(Palette.Glass))
-            .combinedClickable(onClick = onClick, onLongClick = if (entry.local) onOptions else null)
+            .then(if (moving) Modifier.border(2.dp, Color.White, CardShape) else Modifier)
+            .combinedClickable(onClick = onClick, onLongClick = onOptions)
             .padding(14.dp),
         contentAlignment = Alignment.BottomStart,
     ) {
@@ -437,7 +483,9 @@ private fun SiteCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (entry.local) {
+            if (moving) {
+                Text("◀  ▶", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            } else if (entry.local) {
                 Text(stringResource(R.string.tag_local), color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
             }
         }

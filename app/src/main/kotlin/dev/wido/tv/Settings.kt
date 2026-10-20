@@ -17,6 +17,9 @@ enum class KeyAction {
 class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("wido", Context.MODE_PRIVATE)
 
+    /** Ce que l'app retient en usage (dernière page de chaque site, ordre des cartes) : jamais touché par « Réinitialiser ». */
+    private val state = context.getSharedPreferences("wido_state", Context.MODE_PRIVATE)
+
     // --- Configuration distante -------------------------------------------------------------
     var configUrl: String
         get() = prefs.getString(KEY_CONFIG_URL, null) ?: BuildConfig.CONFIG_URL
@@ -121,6 +124,23 @@ class Settings(context: Context) {
     var sponsorBlock: Boolean
         get() = prefs.getBoolean("sponsorblock", true)
         set(v) = prefs.edit().putBoolean("sponsorblock", v).apply()
+
+    // --- Reprise et ordre --------------------------------------------------------------------
+    /** Ouvrir un site là où on l'avait laissé, plutôt que sur son accueil. */
+    var resumeLastPage: Boolean
+        get() = prefs.getBoolean("resume", true)
+        set(v) = prefs.edit().putBoolean("resume", v).apply()
+
+    fun lastUrlFor(siteId: String): String? = state.getString("last_url_$siteId", null)
+
+    fun setLastUrlFor(siteId: String, url: String?) = state.edit().apply {
+        if (url == null) remove("last_url_$siteId") else putString("last_url_$siteId", url)
+    }.apply()
+
+    /** Ordre des cartes choisi par l'utilisateur (identifiants de sites). */
+    var siteOrder: List<String>
+        get() = state.getString("site_order", null)?.split('\n')?.filter { it.isNotEmpty() }.orEmpty()
+        set(v) = state.edit().putString("site_order", v.joinToString("\n")).apply()
 
     var helpSeen: Boolean
         get() = prefs.getBoolean("help_seen", false)

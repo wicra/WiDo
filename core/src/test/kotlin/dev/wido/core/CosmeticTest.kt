@@ -66,3 +66,78 @@ class CatalogTest {
         assertTrue(left.any { it.name == "Twitch" })
     }
 }
+
+class PhoneProtocolTest {
+    @Test fun parsesRequestLineAndQuery() {
+        val r = PhoneProtocol.parseRequestLine("POST /send?t=abc%20d&x=1 HTTP/1.1")!!
+        assertEquals("POST", r.method)
+        assertEquals("/send", r.path)
+        assertEquals("abc d", r.query["t"])
+        assertEquals(null, PhoneProtocol.parseRequestLine("garbage"))
+        assertEquals(null, PhoneProtocol.parseRequestLine("GET http://x/ HTTP/1.1"))
+    }
+
+    @Test fun messagesAreBounded() {
+        assertEquals(PhoneProtocol.Message("bonjour", true), PhoneProtocol.parseMessage("""{"text":"bonjour\n","submit":true}"""))
+        assertEquals(null, PhoneProtocol.parseMessage("""{"text":""}"""))
+        assertEquals(null, PhoneProtocol.parseMessage("pas du json"))
+        assertEquals(null, PhoneProtocol.parseMessage("""{"text":"${"a".repeat(PhoneProtocol.MAX_TEXT + 1)}"}"""))
+    }
+
+    @Test fun tokenComparison() {
+        assertTrue(PhoneProtocol.tokenMatches("abcd", "abcd"))
+        assertTrue(!PhoneProtocol.tokenMatches("abcd", "abce"))
+        assertTrue(!PhoneProtocol.tokenMatches("abcd", null))
+    }
+
+    @Test fun pageEscapesLabels() {
+        val html = PhoneProtocol.page("tok", PhoneProtocol.Labels("<a>", "Envoyer", "Envoyer + Entrée", "Envoyé \"ok\"", "Échec"))
+        assertTrue("&lt;a&gt;" in html)
+        assertTrue("/send?t=tok" in html)
+        assertTrue("\"Envoyé \\\"ok\\\"\"" in html)
+    }
+}
+
+class LibraryTest {
+    private val yt = Site(id = "youtube", name = "YouTube", url = "https://www.youtube.com/")
+
+    @Test fun remembersOnlyPagesOfTheSite() {
+        assertEquals("https://www.youtube.com/@chaine", ResumeUrl.toRemember(yt, "https://www.youtube.com/@chaine"))
+        assertEquals(null, ResumeUrl.toRemember(yt, "https://pub.example.com/x"))
+        assertEquals(null, ResumeUrl.toRemember(yt, "about:blank"))
+        assertEquals(null, ResumeUrl.toRemember(yt, "http://www.youtube.com/"))
+    }
+
+    @Test fun addsYoutubePosition() {
+        assertEquals(
+            "https://www.youtube.com/watch?v=abc&t=125s",
+            ResumeUrl.toRemember(yt, "https://www.youtube.com/watch?v=abc&t=30s", 125.4),
+        )
+        assertEquals("https://www.youtube.com/watch?v=abc", ResumeUrl.toRemember(yt, "https://www.youtube.com/watch?v=abc", 3.0))
+    }
+
+    @Test fun startUrlFallsBackToHome() {
+        assertEquals(yt.url, ResumeUrl.startUrl(yt, null))
+        assertEquals(yt.url, ResumeUrl.startUrl(yt, "https://ailleurs.com/"))
+        assertEquals("https://m.youtube.com/feed", ResumeUrl.startUrl(yt, "https://m.youtube.com/feed"))
+    }
+
+    @Test fun ordersByUserChoiceThenOriginalOrder() {
+        assertEquals(listOf("c", "a", "b", "d"), SiteOrder.sort(listOf("a", "b", "c", "d"), listOf("c", "a")) { it })
+        assertEquals(listOf("b", "a", "c"), SiteOrder.move(listOf("a", "b", "c"), "b", -1))
+        assertEquals(listOf("a", "b", "c"), SiteOrder.move(listOf("a", "b", "c"), "c", 1))
+    }
+
+    @Test fun pinsAreDedupedAndBounded() {
+        var pins = emptyList<Pin>()
+        pins = Pins.add(pins, "yt", "  Ma   chaîne ", "https://www.youtube.com/@chaine")
+        pins = Pins.add(pins, "yt", "Ma chaîne", "https://www.youtube.com/@chaine")
+        assertEquals(listOf(Pin("yt", "Ma chaîne", "https://www.youtube.com/@chaine")), pins)
+        repeat(20) { pins = Pins.add(pins, "yt", null, "https://www.youtube.com/p$it") }
+        assertEquals(Pins.MAX_PER_SITE, Pins.forSite(pins, "yt").size)
+        assertEquals("p19", pins.first().title)
+        assertEquals(pins, Pins.decode(Pins.encode(pins)))
+        assertEquals(pins.size - 1, Pins.remove(pins, pins.first()).size)
+        assertEquals(emptyList(), Pins.add(emptyList(), "yt", "x", "javascript:alert(1)"))
+    }
+}

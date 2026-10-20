@@ -21,7 +21,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             WiDoTheme {
                 val vm: MenuViewModel = viewModel()
-                MenuScreen(vm) { site -> startActivity(PlayerActivity.intent(this, site.id)) }
+                MenuScreen(
+                    vm,
+                    onOpen = { site -> startActivity(PlayerActivity.intent(this, site.id)) },
+                    onOpenPin = { pin -> startActivity(PlayerActivity.intent(this, pin.siteId, pin.url)) },
+                )
             }
         }
     }

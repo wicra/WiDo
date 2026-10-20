@@ -30,6 +30,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
@@ -39,9 +40,11 @@ import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import dev.wido.core.Hosts
+import dev.wido.core.ResumeUrl
 import dev.wido.core.Site
 import dev.wido.core.Zoom
 import dev.wido.tv.ui.BlockedRedirect
+import dev.wido.tv.ui.PhoneOverlay
 import dev.wido.tv.ui.QuickAction
 import dev.wido.tv.ui.QuickMenu
 import dev.wido.tv.ui.WiDoTheme
@@ -137,7 +140,10 @@ class PlayerActivity : ComponentActivity() {
                         }
                     },
                     onPageVisible = { runOnUiThread { hideOverlay() } },
-                    onPageStart = { bridge?.reset() },
+                    onPageStart = {
+                        bridge?.reset()
+                        mediaState.value = null
+                    },
                 ),
             )
             // Rafraîchit la configuration pour la prochaine ouverture, sans bloquer la lecture.
@@ -238,7 +244,9 @@ class PlayerActivity : ComponentActivity() {
         overlay.bringToFront()
 
         wv.requestFocus()
-        wv.loadUrl(site.url)
+        // Une page épinglée, sinon la dernière page visitée du site (réglage « Reprendre »), sinon son accueil.
+        val pinned = intent.getStringExtra(EXTRA_URL)?.let { ResumeUrl.toRemember(site, it) }
+        wv.loadUrl(pinned ?: if (settings.resumeLastPage) ResumeUrl.startUrl(site, settings.lastUrlFor(site.id)) else site.url)
     }
 
     private fun exitCustomView() {
@@ -557,10 +565,14 @@ class PlayerActivity : ComponentActivity() {
         val actions = listOf(
             action("▶  " + getString(R.string.panel_resume)) {},
             action(getString(R.string.panel_reload)) { webView?.reload() },
+            action(getString(R.string.panel_home)) { current?.let { webView?.loadUrl(it.url) } },
             action(getString(if (cursorMode) R.string.panel_cursor_on else R.string.panel_cursor_off)) { toggleCursor() },
             action(getString(R.string.panel_zoom_out_short)) { changeZoom(-1) },
             action(getString(R.string.panel_zoom_in_short)) { changeZoom(1) },
+            action(getString(R.string.panel_phone)) { showPhone() },
+            action(getString(R.string.panel_pin)) { pinCurrentPage() },
             action(getString(R.string.panel_save_short)) { saveCurrentPage() },
+            action(sleepLabel()) { cycleSleep() },
             action(getString(R.string.panel_help)) { showHelp() },
             action(getString(R.string.panel_sites)) { finish() },
         )
@@ -584,9 +596,13 @@ class PlayerActivity : ComponentActivity() {
         }
         val counts = getString(R.string.panel_blocked, c?.blockedRequests?.get() ?: 0, c?.blockedNavigations?.get() ?: 0)
 
-        val panel = ComposeView(this).apply {
-            setContent { WiDoTheme { QuickMenu(mediaState.value, redirect, actions, counts) } }
-        }
+        showOverlay { QuickMenu(mediaState.value, redirect, actions, counts) }
+    }
+
+    /** Affiche un calque Compose par-dessus la page (menu rapide, téléphone) ; Retour le ferme. */
+    private fun showOverlay(content: @Composable () -> Unit) {
+        if (panelView != null) return
+        val panel = ComposeView(this).apply { setContent { WiDoTheme { content() } } }
         panelView = panel
         root.addView(panel, FrameLayout.LayoutParams(MATCH, MATCH))
         panel.bringToFront()
@@ -597,6 +613,83 @@ class PlayerActivity : ComponentActivity() {
         panelView = null
         root.removeView(panel)
         webView?.requestFocus()
+    }
+
+    // --- Saisie depuis le téléphone ----------------------------------------------------------
+
+    private fun showPhone() {
+        showOverlay {
+            PhoneOverlay(
+                hint = getString(R.string.phone_hint_type),
+                onMessage = { message ->
+                    typeText(message.text, message.submit)
+                    hidePanel()
+                    osd.showText(getString(R.string.osd_text_sent))
+                },
+                onClose = { hidePanel() },
+            )
+        }
+    }
+
+    /**
+     * Écrit `text` dans le champ sélectionné de la page (ou, à défaut, le premier champ de recherche
+     * ou de texte visible), comme si on l'avait tapé ; `submit` valide ensuite (Entrée, formulaire).
+     */
+    private fun typeText(text: String, submit: Boolean) {
+        webView?.evaluateJavascript("(${TYPE_SCRIPT})(${JSONObject.quote(text)},$submit)", null)
+    }
+
+    // --- Pages épinglées ---------------------------------------------------------------------
+
+    private fun pinCurrentPage() {
+        val current = site ?: return
+        val url = ResumeUrl.toRemember(current, webView?.url)
+        if (url == null) {
+            Toast.makeText(this, R.string.toast_pin_failed, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val title = webView?.title
+        (application as WiDoApp).repository.addPin(current.id, title, url)
+        Toast.makeText(this, getString(R.string.toast_pinned, title?.take(40) ?: url), Toast.LENGTH_SHORT).show()
+    }
+
+    // --- Minuteur de veille ------------------------------------------------------------------
+
+    private var sleepAt = 0L
+    private var sleepMinutes = 0
+    private val sleepWarning = Runnable { osd.showText(getString(R.string.osd_sleep_soon)) }
+    private val sleepNow = Runnable { goToSleep() }
+
+    private fun sleepLabel(): String {
+        if (sleepAt == 0L) return getString(R.string.panel_sleep)
+        val left = ((sleepAt - SystemClock.elapsedRealtime()) / 60_000L + 1).coerceAtLeast(1)
+        return getString(R.string.panel_sleep_left, left.toInt())
+    }
+
+    /** Désactivé → 30 → 60 → 90 → 120 min → désactivé. */
+    private fun cycleSleep() {
+        val next = SLEEP_STEPS[(SLEEP_STEPS.indexOf(sleepMinutes) + 1) % SLEEP_STEPS.size]
+        root.removeCallbacks(sleepWarning)
+        root.removeCallbacks(sleepNow)
+        sleepMinutes = next
+        if (next == 0) {
+            sleepAt = 0L
+            osd.showText(getString(R.string.osd_sleep_off))
+            return
+        }
+        val delay = next * 60_000L
+        sleepAt = SystemClock.elapsedRealtime() + delay
+        root.postDelayed(sleepNow, delay)
+        root.postDelayed(sleepWarning, delay - 60_000L)
+        osd.showText(getString(R.string.osd_sleep_set, next))
+    }
+
+    /** Fin du minuteur : la vidéo se met en pause, l'écran peut s'éteindre, retour à l'accueil. */
+    private fun goToSleep() {
+        media("pause")
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        Toast.makeText(this, R.string.toast_sleep, Toast.LENGTH_LONG).show()
+        finish()
     }
 
     /** Autorise `host` pour ce site (gardé localement), recharge les règles puis ouvre la page refusée. */
@@ -732,7 +825,14 @@ class PlayerActivity : ComponentActivity() {
     override fun onPause() {
         webView?.onPause()
         saveSeen()
+        rememberPage()
         super.onPause()
+    }
+
+    /** Retient la page affichée (et la position d'une vidéo YouTube) pour la prochaine ouverture du site. */
+    private fun rememberPage() {
+        val current = site ?: return
+        ResumeUrl.toRemember(current, webView?.url, mediaState.value?.time)?.let { settings.setLastUrlFor(current.id, it) }
     }
 
     /** Garde ce que le site a tenté (redirections refusées, domaines tiers) pour proposer des choix dans les réglages du site. */
@@ -745,6 +845,8 @@ class PlayerActivity : ComponentActivity() {
     override fun onDestroy() {
         overlayAnimator?.cancel()
         root.removeCallbacks(poll)
+        root.removeCallbacks(sleepWarning)
+        root.removeCallbacks(sleepNow)
         customCallback?.onCustomViewHidden()
         webView?.let {
             root.removeView(it)
@@ -781,6 +883,8 @@ class PlayerActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_SITE = "site"
+        const val EXTRA_URL = "url"
+        private val SLEEP_STEPS = listOf(0, 30, 60, 90, 120)
         private const val BRIDGE_NAME = "WiDoBridge"
         private const val ACCENT = 0xFFFFFFFF.toInt()
         private const val OVERLAY_TIMEOUT_MS = 20_000L
@@ -788,10 +892,38 @@ class PlayerActivity : ComponentActivity() {
         private const val POLL_MS = 700L
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val LONG_PRESS_MS = 600L
+        /** Saisie depuis le téléphone : remplit le champ comme une frappe (événements input/change), puis valide. */
+        private const val TYPE_SCRIPT = """function (t, submit) {
+  var el = document.activeElement;
+  function editable(e) { return e && (e.isContentEditable || /^(INPUT|TEXTAREA)$/.test(e.tagName)); }
+  if (!editable(el)) {
+    el = Array.prototype.find.call(document.querySelectorAll('input[type=search],input[type=text],input:not([type]),textarea'),
+      function (e) { var r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && !e.disabled; });
+  }
+  if (!el) return false;
+  el.focus();
+  if (el.isContentEditable) {
+    document.execCommand('selectAll', false, null);
+    document.execCommand('insertText', false, t);
+  } else {
+    var setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set;
+    setter.call(el, t);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  if (submit) {
+    ['keydown', 'keypress', 'keyup'].forEach(function (type) {
+      el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+    });
+    if (el.form) { if (el.form.requestSubmit) el.form.requestSubmit(); else el.form.submit(); }
+  }
+  return true;
+}"""
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
-        fun intent(context: Context, siteId: String): Intent =
-            Intent(context, PlayerActivity::class.java).putExtra(EXTRA_SITE, siteId)
+        /** `url` : une page précise du site (page épinglée), vérifiée avant d'être ouverte. */
+        fun intent(context: Context, siteId: String, url: String? = null): Intent =
+            Intent(context, PlayerActivity::class.java).putExtra(EXTRA_SITE, siteId).apply { if (url != null) putExtra(EXTRA_URL, url) }
     }
 }
