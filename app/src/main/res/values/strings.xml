@@ -206,4 +206,10 @@
     <string name="remote_off_hint">Active-la pour piloter WiDo depuis ton téléphone.</string>
     <string name="osd_link_opened">Lien reçu du téléphone</string>
     <string name="sec_phone">Téléphone</string>
+    <string name="allowed_hint">Le site peut toujours y aller : redirections vers lui-même ou ses domaines frères, lecteurs, connexions.</string>
+    <string name="allowed_same_site">Même site, autres extensions (%1$s)</string>
+    <string name="domain_add">Ajouter un domaine</string>
+    <string name="domain_field">Domaine (exemple.org, ou site.*)</string>
+    <string name="domain_add_confirm">Ajouter</string>
+    <string name="phone_hint_domain">Scanne ce code avec ton téléphone, puis tape le domaine (exemple.org).</string>
 </resources>

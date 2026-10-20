@@ -3,7 +3,8 @@ package dev.wido.core
 /**
  * Quelles pages le site peut-il ouvrir dans la fenêtre ?
  *
- * - **strict** (défaut) : seulement le domaine du site, ses sous-domaines et `allowedDomains`.
+ * - **strict** (défaut) : seulement le domaine du site, ses sous-domaines et `allowedDomains` (qui
+ *   peut contenir `site.*` : toutes les extensions du site, pour ceux qui changent souvent d'adresse).
  *   Tout le reste (régies, redirections, `intent:`, `market:`) est refusé : c'est ce qui neutralise
  *   la plupart des pop-ups et redirections publicitaires.
  * - **relaxed** : en plus, toute page web dont le domaine n'est **pas** bloqué par les listes. Pour
@@ -34,7 +35,7 @@ object NavigationPolicy {
         val web = scheme == "https" || scheme == "http"
         if (!web) return Decision.BLOCK
         val schemeOk = scheme == "https" || site.allowInsecure
-        if (schemeOk && allowedDomains(site).any { Hosts.matches(host, it) }) return Decision.ALLOW
+        if (schemeOk && allowedDomains(site).any { Hosts.matchesPattern(host, it) }) return Decision.ALLOW
         return when (site.navigation) {
             Navigation.RELAXED ->
                 if (schemeOk && blocker != null && !blocker.isBlocked(host)) Decision.ALLOW else Decision.BLOCK
@@ -49,7 +50,7 @@ object NavigationPolicy {
         val secureOk = scheme == "https"
         val insecureOk = scheme == "http" && site.allowInsecure
         if (!secureOk && !insecureOk) return false
-        if (allowedDomains(site).any { Hosts.matches(host, it) }) return true
+        if (allowedDomains(site).any { Hosts.matchesPattern(host, it) }) return true
         return site.navigation == Navigation.RELAXED && blocker != null && !blocker.isBlocked(host)
     }
 

@@ -89,7 +89,7 @@ class WiDoWebViewClient(
                 }
             }
             // Domaine tiers non bloqué : retenu pour proposer de le bloquer.
-            if (NavigationPolicy.allowedDomains(site).none { Hosts.matches(host, it) }) {
+            if (NavigationPolicy.allowedDomains(site).none { Hosts.matchesPattern(host, it) }) {
                 requestCounts.getOrPut(host.lowercase()) { AtomicInteger() }.incrementAndGet()
             }
             return null

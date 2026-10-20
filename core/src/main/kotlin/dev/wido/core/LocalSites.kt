@@ -88,8 +88,13 @@ object LocalSites {
     fun parseDomains(text: String): Pair<List<String>, String?> {
         val out = linkedSetOf<String>()
         for (part in text.split(',', ';', ' ', '\n')) {
-            val t = part.trim()
+            val t = part.trim().lowercase()
             if (t.isEmpty()) continue
+            // `site.*` : toutes les extensions de site (site.fr, site.com, site.co.uk…).
+            if (Hosts.isEntity(t.removePrefix("www."))) {
+                out += t.removePrefix("www.")
+                continue
+            }
             val host = Hosts.of(if (t.contains("://")) t else "https://$t")?.removePrefix("www.")
             if (host == null || !Hosts.isValidHostname(host)) return emptyList<String>() to "Domaine invalide : $t"
             out += host
@@ -99,6 +104,17 @@ object LocalSites {
     }
 
     fun domainsToText(domains: List<String>): String = domains.joinToString(", ")
+
+    /**
+     * Le domaine « entité » d'un site : `https://www.wiflix.bio/x` donne `wiflix.*`, qui couvre toutes
+     * ses extensions. Pour les sites qui changent souvent d'adresse ou redirigent vers un domaine frère.
+     */
+    fun siteEntity(url: String): String? {
+        val host = normalizeUrl(url)?.let { Hosts.of(it) } ?: return null
+        if (host.all { it.isDigit() || it == '.' }) return null
+        val name = Hosts.site(host).substringBefore('.')
+        return "$name.*".takeIf { Hosts.isEntity(it) }
+    }
 
     /** Les réglages d'un site perso existant, pour remplir le formulaire de modification. */
     fun optionsOf(site: Site): SiteOptions = SiteOptions(

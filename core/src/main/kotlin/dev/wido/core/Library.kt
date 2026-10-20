@@ -18,7 +18,7 @@ object ResumeUrl {
         val scheme = Hosts.schemeOf(url)
         if (scheme != "https" && !(scheme == "http" && site.allowInsecure)) return null
         val host = Hosts.of(url) ?: return null
-        if (NavigationPolicy.allowedDomains(site).none { Hosts.matches(host, it) }) return null
+        if (NavigationPolicy.allowedDomains(site).none { Hosts.matchesPattern(host, it) }) return null
         if (positionSeconds != null && positionSeconds >= 10 && YOUTUBE_WATCH.containsMatchIn(url)) {
             val withoutTime = url.replace(Regex("[&?]t=\\d+s?"), "")
             return "$withoutTime&t=${positionSeconds.toLong()}s"

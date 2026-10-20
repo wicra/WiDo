@@ -2,6 +2,7 @@ package dev.wido.tv.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -18,6 +19,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -38,7 +40,9 @@ import dev.wido.tv.R
 
 private const val SCHEME = "https://"
 
-private enum class PhoneTarget { Url, Name }
+private enum class PhoneTarget { Url, Name, Domain }
+
+private enum class DomainList { Allowed, Blocked }
 
 /** Suffixes proposés en un bouton : taper une adresse à la télécommande est pénible. */
 private val URL_HELPERS = listOf("www.", ".com", ".fr", ".org", ".net", ".tv", "/")
@@ -83,6 +87,8 @@ fun SiteEditorDialog(
     val urlFocus = remember { FocusRequester() }
     // Champ rempli depuis le téléphone (null : pas de QR code affiché).
     var phoneTarget by remember { mutableStateOf<PhoneTarget?>(null) }
+    // Liste de domaines où l'on saisit un domaine à la main (null : aucune).
+    var addingTo by remember { mutableStateOf<DomainList?>(null) }
     // Premier Retour sur un formulaire invalide : on prévient ; le second ferme sans enregistrer.
     var leaveWarned by remember { mutableStateOf(false) }
 
@@ -191,31 +197,62 @@ fun SiteEditorDialog(
                         }
                     }
 
-                    // 4. Les domaines : on choisit, on ne saisit pas.
-                    val allowSuggestions = suggestAllow.filterNot { it in allowed }
-                    if (allowed.isNotEmpty() || allowSuggestions.isNotEmpty()) {
-                        SectionLabel(stringResource(R.string.section_allowed))
-                        DomainChips(chosen = allowed, suggestions = allowSuggestions, tint = Palette.Ok, tintText = Color(0xFF9CF2C3))
+                    // 4. Les domaines : choisis parmi ce que le site a tenté, ou ajoutés à la main.
+                    SectionLabel(stringResource(R.string.section_allowed))
+                    Text(stringResource(R.string.allowed_hint), color = Palette.TextSecondary, fontSize = 13.sp)
+                    val entity = LocalSites.siteEntity(url)
+                    DomainChips(
+                        chosen = allowed,
+                        suggestions = suggestAllow.filterNot { it in allowed },
+                        tint = Palette.Ok,
+                        tintText = Color(0xFF9CF2C3),
+                        onAdd = { addingTo = DomainList.Allowed },
+                        hidden = setOfNotNull(entity),
+                    ) {
+                        // Même site sous d'autres extensions (site.fr → site.com) : jamais bloqué.
+                        if (entity != null) {
+                            ToggleChip(stringResource(R.string.allowed_same_site, entity), entity in allowed) {
+                                if (entity in allowed) allowed.remove(entity) else allowed.add(entity)
+                            }
+                        }
                     }
-                    val blockSuggestions = suggestBlock.filterNot { it in blocked }
-                    if (blocked.isNotEmpty() || blockSuggestions.isNotEmpty()) {
-                        SectionLabel(stringResource(R.string.section_blocked))
-                        DomainChips(chosen = blocked, suggestions = blockSuggestions, tint = Palette.Warning, tintText = Color(0xFFFFD2A1))
-                    }
+                    if (addingTo == DomainList.Allowed) AddDomainRow(allowed, onPhone = { phoneTarget = PhoneTarget.Domain }) { addingTo = null }
+
+                    SectionLabel(stringResource(R.string.section_blocked))
+                    DomainChips(
+                        chosen = blocked,
+                        suggestions = suggestBlock.filterNot { it in blocked },
+                        tint = Palette.Warning,
+                        tintText = Color(0xFFFFD2A1),
+                        onAdd = { addingTo = DomainList.Blocked },
+                    )
+                    if (addingTo == DomainList.Blocked) AddDomainRow(blocked, onPhone = { phoneTarget = PhoneTarget.Domain }) { addingTo = null }
                 }
             }
         }
     }
     phoneTarget?.let { target ->
         PhoneDialog(
-            stringResource(if (target == PhoneTarget.Url) R.string.phone_hint_url else R.string.phone_hint_name),
+            stringResource(
+                when (target) {
+                    PhoneTarget.Url -> R.string.phone_hint_url
+                    PhoneTarget.Name -> R.string.phone_hint_name
+                    PhoneTarget.Domain -> R.string.phone_hint_domain
+                },
+            ),
             onMessage = {
                 val text = it.text.trim()
-                if (target == PhoneTarget.Url) {
-                    setUrl(text)
-                } else {
-                    name = text
-                    nameEdited = true
+                when (target) {
+                    PhoneTarget.Url -> setUrl(text)
+                    PhoneTarget.Name -> {
+                        name = text
+                        nameEdited = true
+                    }
+                    PhoneTarget.Domain -> {
+                        val list = if (addingTo == DomainList.Blocked) blocked else allowed
+                        LocalSites.parseDomains(text).first.forEach { d -> if (d !in list) list.add(d) }
+                        addingTo = null
+                    }
                 }
                 phoneTarget = null
             },
@@ -241,14 +278,56 @@ private fun ToggleChip(label: String, on: Boolean, onToggle: () -> Unit) {
     )
 }
 
-/** Les domaines retenus (toucher pour retirer) puis ceux que le site a essayé de joindre (toucher pour ajouter). */
+/**
+ * Les domaines retenus (toucher pour retirer), ceux que le site a essayé de joindre (toucher pour
+ * ajouter), puis « + Ajouter un domaine » pour le saisir. `hidden` : domaines gérés par un autre bouton.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DomainChips(chosen: MutableList<String>, suggestions: List<String>, tint: Color, tintText: Color) {
+private fun DomainChips(
+    chosen: MutableList<String>,
+    suggestions: List<String>,
+    tint: Color,
+    tintText: Color,
+    onAdd: () -> Unit,
+    hidden: Set<String> = emptySet(),
+    leading: @Composable () -> Unit = {},
+) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        chosen.toList().forEach { domain ->
+        leading()
+        chosen.toList().filterNot { it in hidden }.forEach { domain ->
             Chip("✓ $domain", { chosen.remove(domain) }, selected = true, idleText = tintText, idle = tint.copy(alpha = 0.22f))
         }
-        suggestions.forEach { domain -> Chip("+ $domain", { chosen.add(domain) }) }
+        suggestions.filterNot { it in hidden }.forEach { domain -> Chip("+ $domain", { chosen.add(domain) }) }
+        Chip("+ " + stringResource(R.string.domain_add), onAdd, idleText = Color.White.copy(alpha = 0.7f), idle = Palette.GlassFaint)
     }
+}
+
+/** Saisie d'un domaine (`exemple.org`, une adresse complète, ou `site.*`), au clavier ou au téléphone. */
+@Composable
+private fun AddDomainRow(target: MutableList<String>, onPhone: () -> Unit, onDone: () -> Unit) {
+    var draft by remember { mutableStateOf("") }
+    var problem by remember { mutableStateOf<String?>(null) }
+    fun add() {
+        val (domains, error) = LocalSites.parseDomains(draft)
+        if (error != null || domains.isEmpty()) {
+            problem = error ?: return
+            return
+        }
+        domains.forEach { if (it !in target) target.add(it) }
+        onDone()
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        GlassTextField(
+            value = draft,
+            onValueChange = { draft = it; problem = null },
+            label = stringResource(R.string.domain_field),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+            modifier = Modifier.weight(1f),
+            onPhone = onPhone,
+        )
+        ActionButton(stringResource(R.string.domain_add_confirm), { add() })
+        ActionButton(stringResource(R.string.action_cancel), onDone, primary = false)
+    }
+    problem?.let { Text(it, color = Palette.Warning, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
 }

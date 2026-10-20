@@ -206,4 +206,10 @@
     <string name="remote_off_hint">Turn it on to control WiDo from your phone.</string>
     <string name="osd_link_opened">Link received from phone</string>
     <string name="sec_phone">Phone</string>
+    <string name="allowed_hint">The site can always go there: redirects to itself or its sister domains, players, logins.</string>
+    <string name="allowed_same_site">Same site, other extensions (%1$s)</string>
+    <string name="domain_add">Add a domain</string>
+    <string name="domain_field">Domain (example.org, or site.*)</string>
+    <string name="domain_add_confirm">Add</string>
+    <string name="phone_hint_domain">Scan this code with your phone, then type the domain (example.org).</string>
 </resources>

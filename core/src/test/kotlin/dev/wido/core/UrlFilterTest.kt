@@ -178,3 +178,15 @@ class RemoteProtocolTest {
         assertNull(RemoteProtocol.parse("nope"))
     }
 }
+
+class SiteEntityTest {
+    @Test fun entityDomainsAllowSisterAddresses() {
+        assertEquals("wiflix.*", LocalSites.siteEntity("https://www.wiflix.bio/film"))
+        assertEquals("exemple.*", LocalSites.siteEntity("a.exemple.co.uk"))
+        assertNull(LocalSites.siteEntity("http://192.168.1.20:8096"))
+        val site = Site(id = "w", name = "W", url = "https://wiflix.bio/", allowedDomains = listOf("wiflix.*"))
+        assertEquals(NavigationPolicy.Decision.ALLOW, NavigationPolicy.decide("https://wiflix.cloud/film", site, null))
+        assertEquals(NavigationPolicy.Decision.BLOCK, NavigationPolicy.decide("https://pub-wiflix.net/", site, null))
+        assertEquals(listOf("wiflix.*", "cdn.exemple.org") to null, LocalSites.parseDomains("wiflix.*, https://cdn.exemple.org/x"))
+    }
+}

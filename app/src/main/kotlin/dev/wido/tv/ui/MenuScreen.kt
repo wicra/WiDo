@@ -370,15 +370,25 @@ private fun Hero(
         verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
     ) {
         val title = current?.site?.name ?: stringResource(R.string.editor_title_add)
-        Text(
-            title,
-            fontSize = if (compact) 42.sp else 56.sp,
-            lineHeight = if (compact) 46.sp else 60.sp,
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = (-2).sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        val context = LocalContext.current
+        val icon by produceState<SiteIcon?>(null, current?.site?.id, current?.site?.url) {
+            value = current?.site?.let { (context.applicationContext as WiDoApp).favicons.load(it) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (current != null) {
+                SiteLogo(icon, current.site.name, if (compact) 44.dp else 54.dp, focused = true)
+                Spacer(Modifier.width(if (compact) 14.dp else 18.dp))
+            }
+            Text(
+                title,
+                fontSize = if (compact) 42.sp else 56.sp,
+                lineHeight = if (compact) 46.sp else 60.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = (-2).sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         val subtitle = when {
             current != null -> {
                 val host = Hosts.of(current.site.url).orEmpty()
@@ -499,6 +509,8 @@ private fun SiteCard(
             .padding(14.dp),
         contentAlignment = Alignment.BottomStart,
     ) {
+        // Le logo du site, discret : verre au repos, pastille blanche quand la carte a le focus.
+        SiteLogo(icon, site.name, if (focused) 30.dp else 26.dp, focused, Modifier.align(Alignment.TopStart))
         Column {
             Text(
                 site.name,
@@ -612,6 +624,35 @@ private fun WatchCard(entry: WatchEntry, siteName: String, onClick: () -> Unit, 
         // Avancement de la vidéo.
         Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.25f))) {
             Box(Modifier.fillMaxWidth(entry.progress).height(3.dp).background(Color.White))
+        }
+    }
+}
+
+/**
+ * Logo d'un site dans une tuile arrondie : le favicon (ou l'initiale si le site n'en a pas).
+ * `focused` : tuile blanche, pour que le logo ressorte sur la couleur du site ; sinon du verre.
+ */
+@Composable
+private fun SiteLogo(icon: SiteIcon?, name: String, size: androidx.compose.ui.unit.Dp, focused: Boolean, modifier: Modifier = Modifier) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(size * 0.3f)
+    Box(
+        modifier.size(size).clip(shape).background(if (focused) Color.White.copy(alpha = 0.94f) else Color.White.copy(alpha = 0.14f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (icon != null) {
+            androidx.compose.foundation.Image(
+                icon.image,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier.size(size * 0.64f).graphicsLayer { alpha = if (focused) 1f else 0.85f },
+            )
+        } else {
+            Text(
+                name.firstOrNull()?.uppercase().orEmpty(),
+                color = if (focused) Palette.Ink else Color.White,
+                fontSize = (size.value * 0.45f).sp,
+                fontWeight = FontWeight.ExtraBold,
+            )
         }
     }
 }
