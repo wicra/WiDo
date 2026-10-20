@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.1
+
+### Corrigé
+- **L'appli téléphone pouvait se fermer** en revenant dessus (notification de la TV ou lecture en arrière-plan arrêtée trop tôt, par exemple après la demande d'autorisation des notifications).
+- **Reprendre retombait sur l'accueil du site** quand le site ne couvrait plus l'adresse de la vidéo : la vidéo s'ouvre maintenant avec le site qui la connaît.
+- **Retour ne quitte plus WiDo** après une vidéo envoyée depuis le téléphone : il ramène à l'accueil.
+- **Accueil TV** : le titre n'est plus coupé sous l'en-tête en descendant vers les sites (la scène et les rangées tiennent dans l'écran).
+
+### Amélioré
+- **Sur la TV et Reprendre : lecture et plein écran automatiques.** La vidéo démarre seule ; le plein écran du site est ouvert pour de vrai, sinon la vidéo remplit l'écran (Retour pour revoir la page). Réglage « Plein écran automatique ».
+- **Menu rapide** : retour à une rangée de pastilles, plus petites, avec une icône et un libellé clair, toutes visibles (plus de « Plus… »).
+- **Ouverture** : le cercle du site s'agrandit en douceur jusqu'à remplir l'écran, puis l'écran d'attente garde le fond de l'appli avec le logo du site.
+
 ## 0.9.0
 
 ### 📺 TV
