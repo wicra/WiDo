@@ -123,6 +123,7 @@ class PlayerActivity : ComponentActivity() {
             loadingLabel.text = getString(R.string.loading_site, site.name)
             val blocker = app.repository.blockerFor(site)
             val scripts = ScriptInjector(this@PlayerActivity, site)
+            scripts.early = scripts.earlyScript(app.repository.cosmeticFor(site), settings.youtubeAdblock, settings.sponsorBlock)
             injector = scripts
             start(
                 site,
@@ -169,15 +170,24 @@ class PlayerActivity : ComponentActivity() {
         }
 
         // Passerelle vers toutes les frames (lecteurs dans des iframes) si la WebView l'accepte.
-        val bridged = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) &&
-            WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+        val documentStart = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+        val bridged = documentStart && WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
         if (bridged) {
-            val frameBridge = FrameBridge { state -> runOnUiThread { onMediaState(state) } }
+            val frameBridge = FrameBridge(
+                onMedia = { state -> runOnUiThread { onMediaState(state) } },
+                onSkip = { runOnUiThread { osd.showText(getString(R.string.osd_sponsor_skipped)) } },
+            )
             bridge = frameBridge
             WebViewCompat.addWebMessageListener(wv, BRIDGE_NAME, setOf("*"), frameBridge)
             WebViewCompat.addDocumentStartJavaScript(wv, injector?.internalScript().orEmpty(), setOf("*"))
         }
         injector?.includeInternal = !bridged
+        // Protections (masquage, YouTube) avant le moindre script de la page, quand la WebView le permet.
+        val early = injector?.early.orEmpty()
+        if (documentStart && early.isNotBlank()) {
+            WebViewCompat.addDocumentStartJavaScript(wv, early, setOf("*"))
+            injector?.includeEarly = false
+        }
 
         wv.webViewClient = wc
         wv.webChromeClient = object : WebChromeClient() {

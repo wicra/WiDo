@@ -85,6 +85,7 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
     val state by vm.config.collectAsState()
     val update by vm.update.collectAsState()
     val sites by vm.sites.collectAsState()
+    val lists by vm.lists.collectAsState()
 
     var tab by remember { mutableStateOf(Tab.Sites) }
     var editor by remember { mutableStateOf<Editor?>(null) }
@@ -158,7 +159,7 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
                     }
                     Footer(update)
                 }
-                Tab.Settings -> SettingsPane(settings, Modifier.weight(1f))
+                Tab.Settings -> SettingsPane(settings, lists, vm::updateLists, Modifier.weight(1f))
             }
         }
     }

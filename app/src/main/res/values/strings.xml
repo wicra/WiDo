@@ -126,4 +126,14 @@
     <string name="panel_open_once_short">Ouvrir une fois</string>
     <string name="panel_allow_always">Toujours autoriser</string>
     <string name="panel_ignore">Ignorer</string>
+    <string name="osd_sponsor_skipped">Passage sponsorisé sauté</string>
+    <string name="sec_blocking">Blocage</string>
+    <string name="s_recommended">Listes recommandées</string>
+    <string name="s_youtube">YouTube sans pub</string>
+    <string name="s_sponsor">Sauter les sponsors</string>
+    <string name="lists_status">%1$d listes · %2$s domaines · %3$s masquages</string>
+    <string name="lists_updated">Mises à jour %1$s</string>
+    <string name="lists_never">Listes pas encore téléchargées</string>
+    <string name="lists_update">Mettre à jour</string>
+    <string name="lists_updating">Mise à jour…</string>
 </resources>

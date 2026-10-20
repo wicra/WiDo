@@ -2,7 +2,9 @@ package dev.wido.tv
 
 import android.content.Context
 import android.util.Log
+import dev.wido.core.CompiledRules
 import dev.wido.core.ConfigParser
+import dev.wido.core.CosmeticPlan
 import dev.wido.core.FilterParser
 import dev.wido.core.HostBlocker
 import dev.wido.core.HostRules
@@ -34,6 +36,16 @@ enum class ConfigSource { Remote, Cache, Bundled }
 
 /** Un site du menu : `local` = ajouté sur cet appareil (modifiable, jamais écrasé par la config distante). */
 data class MenuSite(val site: Site, val local: Boolean)
+
+/** État des listes de blocage, affiché dans les réglages. */
+data class ListStatus(
+    val lists: Int = 0,
+    val hosts: Int = 0,
+    val selectors: Int = 0,
+    /** Date de la plus ancienne liste en cache, ou null si aucune n'est encore téléchargée. */
+    val updatedAt: Long? = null,
+    val updating: Boolean = false,
+)
 
 data class ConfigState(
     val config: WiDoConfig? = null,
@@ -78,6 +90,10 @@ class ConfigRepository(private val context: Context, private val settings: Setti
 
     private val mutex = Mutex()
     private val parsedLists = ConcurrentHashMap<String, HostRules>()
+    private val listsMutex = Mutex()
+
+    private val _lists = MutableStateFlow(ListStatus())
+    val lists: StateFlow<ListStatus> = _lists.asStateFlow()
 
     private val cacheFile get() = File(context.filesDir, "config.json")
     private val listsDir get() = File(context.filesDir, "lists").apply { mkdirs() }
@@ -191,21 +207,60 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     private fun readLocalSites(): List<Site> =
         runCatching { LocalSites.decode(localFile.readText()) }.getOrDefault(emptyList())
 
-    /** Construit le filtre d'un site : listes distantes + règles globales + règles du site. */
-    suspend fun blockerFor(site: Site): HostBlocker {
+    /** Listes de la configuration, plus les listes recommandées si le réglage est activé. */
+    private fun effectiveLists(config: WiDoConfig): List<String> =
+        (config.blocklists + if (settings.recommendedLists) RECOMMENDED_LISTS else emptyList()).distinct()
+
+    /** Couches de règles d'un site : listes + règles globales + règles du site. */
+    private suspend fun layersFor(site: Site): List<HostRules> {
         val config = ensureLoaded()
         return withContext(Dispatchers.Default) {
             // « Bloquer les pubs » désactivé : ni listes ni règles globales, seulement les règles du site.
             val lists = if (site.blockAds) {
-                coroutineScope { config.blocklists.map { url -> async { loadList(url) } }.awaitAll() }
+                coroutineScope { effectiveLists(config).map { url -> async { loadList(url) } }.awaitAll() }
             } else {
                 emptyList()
             }
             val inline = FilterParser.parse(((if (site.blockAds) config.globalRules else emptyList()) + site.rules).asSequence())
-            // Le domaine du site et ceux qu'il peut ouvrir ne sont jamais bloqués : c'est ton choix explicite.
-            val allowed = (config.whitelist.map(Hosts::normalize) + NavigationPolicy.allowedDomains(site)).toSet()
-            // Couches conservées telles quelles : pas de recopie des listes à chaque ouverture.
-            HostBlocker(lists + inline + HostRules(allowed = allowed))
+            lists + inline
+        }
+    }
+
+    /** Construit le filtre réseau d'un site. */
+    suspend fun blockerFor(site: Site): HostBlocker {
+        val config = ensureLoaded()
+        val layers = layersFor(site)
+        // Le domaine du site et ceux qu'il peut ouvrir ne sont jamais bloqués : c'est ton choix explicite.
+        val allowed = (config.whitelist.map(Hosts::normalize) + NavigationPolicy.allowedDomains(site)).toSet()
+        // Couches conservées telles quelles : pas de recopie des listes à chaque ouverture.
+        return HostBlocker(layers + HostRules(allowed = allowed))
+    }
+
+    /** Ce qu'il faut masquer dans les pages du site (règles `##` des listes et du site). */
+    suspend fun cosmeticFor(site: Site): CosmeticPlan {
+        val layers = layersFor(site)
+        return withContext(Dispatchers.Default) { CosmeticPlan.build(layers, NavigationPolicy.allowedDomains(site)) }
+    }
+
+    /**
+     * Charge toutes les listes en mémoire, en arrière-plan, pour que l'ouverture d'un site soit
+     * immédiate. `force` : retélécharge les listes même si le cache est récent.
+     */
+    suspend fun warmLists(force: Boolean = false) {
+        if (!listsMutex.tryLock()) return
+        try {
+            val urls = effectiveLists(ensureLoaded())
+            _lists.update { it.copy(updating = true) }
+            val rules = coroutineScope { urls.map { url -> async { loadList(url, force) } }.awaitAll() }
+            val dates = urls.mapNotNull { compiledFile(it).takeIf(File::exists)?.lastModified() }
+            _lists.value = ListStatus(
+                lists = urls.size,
+                hosts = rules.sumOf { it.blocked.size },
+                selectors = rules.sumOf { it.selectorCount },
+                updatedAt = dates.minOrNull(),
+            )
+        } finally {
+            listsMutex.unlock()
         }
     }
 
@@ -221,21 +276,30 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         return parsed.config
     }
 
-    private suspend fun loadList(url: String): HostRules = withContext(Dispatchers.IO) {
-        val file = File(listsDir, sha1(url) + ".txt")
+    private fun compiledFile(url: String) = File(listsDir, sha1(url) + ".rules")
+
+    /**
+     * Une liste : téléchargée au plus toutes les 6 heures, analysée une fois puis gardée sur disque au
+     * format compilé (bien plus rapide à relire), et en mémoire tant que l'app tourne.
+     */
+    private suspend fun loadList(url: String, force: Boolean = false): HostRules = withContext(Dispatchers.IO) {
+        val file = compiledFile(url)
         val fresh = file.exists() && System.currentTimeMillis() - file.lastModified() < LIST_TTL_MS
-        if (!fresh) {
+        if (!fresh || force) {
             try {
-                val bytes = Http.get(url, MAX_LIST_BYTES, timeoutMs = 8_000)
-                writeAtomically(file, String(bytes, Charsets.UTF_8))
-                parsedLists.remove(url)
+                val bytes = Http.get(url, MAX_LIST_BYTES, timeoutMs = 10_000)
+                val parsed = withContext(Dispatchers.Default) { FilterParser.parse(String(bytes, Charsets.UTF_8)) }
+                writeAtomically(file, CompiledRules.encode(parsed))
+                parsedLists[url] = parsed
+                File(listsDir, sha1(url) + ".txt").delete() // ancien cache, non compilé
+                return@withContext parsed
             } catch (e: Exception) {
                 Log.w(TAG, "Liste $url indisponible, utilisation du cache s'il existe", e)
             }
         }
-        parsedLists.getOrPut(url) {
-            if (file.exists()) FilterParser.parse(file.readText()) else HostRules()
-        }
+        parsedLists[url]?.let { return@withContext it }
+        val cached = if (file.exists()) runCatching { CompiledRules.decode(file.readText()) }.getOrNull() else null
+        (cached ?: HostRules()).also { parsedLists[url] = it }
     }
 
     private fun writeAtomically(file: File, text: String) {
@@ -254,6 +318,16 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         const val TAG = "WiDoConfig"
         const val MAX_CONFIG_BYTES = 1_000_000
         const val MAX_LIST_BYTES = 8_000_000
+
+        /**
+         * Listes recommandées, ajoutées à celles de la configuration (réglage « Listes recommandées ») :
+         * EasyList (pubs, réseau et cosmétique), sa variante française, et le filtre DNS d'AdGuard.
+         */
+        val RECOMMENDED_LISTS = listOf(
+            "https://easylist.to/easylist/easylist.txt",
+            "https://easylist-downloads.adblockplus.org/liste_fr.txt",
+            "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt",
+        )
         const val LIST_TTL_MS = 6 * 60 * 60 * 1000L
     }
 }

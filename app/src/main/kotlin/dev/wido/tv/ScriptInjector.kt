@@ -3,6 +3,7 @@ package dev.wido.tv
 import android.content.Context
 import android.util.Log
 import android.webkit.WebView
+import dev.wido.core.CosmeticPlan
 import dev.wido.core.Site
 import org.json.JSONObject
 import java.io.IOException
@@ -20,9 +21,36 @@ class ScriptInjector(private val context: Context, private val site: Site) {
 
     private val internal: String by lazy { internalScript() }
 
+    /**
+     * Scripts de protection ajoutés par l'app (masquage cosmétique, YouTube sans pub) : à injecter au
+     * tout début de chaque document. Voir [earlyScript].
+     */
+    @Volatile var early: String = ""
+
+    /** Faux quand [early] est déjà injecté en début de document par la WebView. */
+    @Volatile var includeEarly = true
+
     fun inject(view: WebView) {
-        val js = (if (includeInternal) internal + "\n" else "") + source
+        val js = (if (includeInternal) internal + "\n" else "") + (if (includeEarly) early + "\n" else "") + source
         if (js.isNotBlank()) view.evaluateJavascript(js, null)
+    }
+
+    /**
+     * Assemble les scripts de protection. Chacun se protège lui-même : il ne s'exécute qu'une fois
+     * par page, et le script YouTube ne fait rien ailleurs que sur YouTube.
+     */
+    fun earlyScript(cosmetic: CosmeticPlan, youtube: Boolean, sponsorBlock: Boolean): String {
+        val parts = mutableListOf<String>()
+        if (!cosmetic.isEmpty) parts += call("cosmetic.js", cosmetic.toJson())
+        if (youtube) parts += call("youtube.js", JSONObject().put("sponsor", sponsorBlock).toString())
+        return parts.joinToString("\n")
+    }
+
+    /** `internal/<name>` définit une fonction `run` : on l'appelle avec ses options, sans rien laisser dans la page. */
+    private fun call(name: String, options: String): String {
+        val body = runCatching { context.assets.open("internal/$name").bufferedReader().use { it.readText() } }.getOrDefault("")
+        if (body.isBlank()) return ""
+        return "(function(){\n$body\nrun($options);\n})();"
     }
 
     /** Scripts internes de WiDo (curseur aimanté, lecteur vidéo) : jamais choisis par la configuration. */

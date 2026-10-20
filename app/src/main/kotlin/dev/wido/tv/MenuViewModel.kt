@@ -28,6 +28,9 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
 
     val config: StateFlow<ConfigState> = app.repository.state
 
+    /** État des listes de blocage (réglages). */
+    val lists: StateFlow<ListStatus> = app.repository.lists
+
     val sites: StateFlow<List<MenuSite>> =
         app.repository.sites.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -52,9 +55,17 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
     fun refresh() {
         viewModelScope.launch {
             app.repository.ensureLoaded()
+            // Les listes en cache sont chargées tout de suite : ouvrir un site sera immédiat.
+            launch { app.repository.warmLists() }
             app.repository.refresh()
+            app.repository.warmLists()
         }
         checkUpdate()
+    }
+
+    /** Retélécharge les listes de blocage (bouton des réglages, ou changement de listes). */
+    fun updateLists(force: Boolean = true) {
+        viewModelScope.launch { app.repository.warmLists(force) }
     }
 
     /** Retour au premier plan : on revérifie si la dernière vérification date de plus de 5 minutes. */

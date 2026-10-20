@@ -106,6 +106,22 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("new_relaxed", false)
         set(v) = prefs.edit().putBoolean("new_relaxed", v).apply()
 
+    // --- Blocage ----------------------------------------------------------------------------
+    /** Ajoute EasyList, la liste française et le filtre DNS d'AdGuard aux listes de la configuration. */
+    var recommendedLists: Boolean
+        get() = prefs.getBoolean("recommended_lists", true)
+        set(v) = prefs.edit().putBoolean("recommended_lists", v).apply()
+
+    /** YouTube sans publicité : pubs retirées des réponses du lecteur, sautées si elles passent quand même. */
+    var youtubeAdblock: Boolean
+        get() = prefs.getBoolean("youtube_adblock", true)
+        set(v) = prefs.edit().putBoolean("youtube_adblock", v).apply()
+
+    /** Saute les passages sponsorisés des vidéos YouTube (base collaborative SponsorBlock). */
+    var sponsorBlock: Boolean
+        get() = prefs.getBoolean("sponsorblock", true)
+        set(v) = prefs.edit().putBoolean("sponsorblock", v).apply()
+
     var helpSeen: Boolean
         get() = prefs.getBoolean("help_seen", false)
         set(v) = prefs.edit().putBoolean("help_seen", v).apply()

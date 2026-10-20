@@ -32,10 +32,37 @@ class FilterRulesTest {
 
     @Test fun commentsAndUnsupportedRulesAreSkippedAndCounted() {
         val r = FilterParser.parse(
-            sequenceOf("! titre", "# note", "[Adblock Plus 2.0]", "", "||ok.com^", "||a.com/path^", "||b.com^\$third-party", "site.com##.banner"),
+            sequenceOf(
+                "! titre", "# note", "[Adblock Plus 2.0]", "", "||ok.com^", "||a.com/path^",
+                "||c.com^\$domain=x.com", "/banner/*", "site.com#?#div:has-text(Pub)", "site.com##+js(nowebrtc)",
+            ),
         )
         assertEquals(setOf("ok.com"), r.blocked)
-        assertEquals(3, r.skipped)
+        assertEquals(5, r.skipped)
+    }
+
+    @Test fun harmlessOptionsStillBlockTheHost() {
+        val r = FilterParser.parse(sequenceOf("||b.com^\$third-party", "||c.com^\$script,image,important", "||d.com^\$csp=none"))
+        assertEquals(setOf("b.com", "c.com"), r.blocked)
+        assertEquals(1, r.skipped)
+    }
+
+    @Test fun cosmeticRulesAreKeptByDomain() {
+        val r = FilterParser.parse(
+            sequenceOf("##.ad-banner", "site.com,autre.fr##.promo", "site.com#@#.ad-banner", "~exclu.com##.x", "*##.y"),
+        )
+        assertEquals(setOf(".ad-banner"), r.hide[""])
+        assertEquals(setOf(".promo"), r.hide["site.com"])
+        assertEquals(setOf(".promo"), r.hide["autre.fr"])
+        assertEquals(setOf(".ad-banner"), r.unhide["site.com"])
+        assertEquals(2, r.skipped)
+    }
+
+    @Test fun hideExceptionsByOption() {
+        val r = FilterParser.parse(sequenceOf("@@||site.com^\$generichide", "@@||other.com^\$elemhide"))
+        assertEquals(setOf("site.com"), r.noGenericHide)
+        assertEquals(setOf("other.com"), r.noHide)
+        assertTrue(r.allowed.isEmpty())
     }
 
     @Test fun neverBlocksBareTld() {

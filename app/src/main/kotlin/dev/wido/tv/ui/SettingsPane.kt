@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wido.tv.KeyAction
+import dev.wido.tv.ListStatus
 import dev.wido.tv.R
 import dev.wido.tv.Settings
 
@@ -64,7 +65,12 @@ private fun <T> clampedStep(options: List<T>, current: T, step: Int): T =
  * clair, la pastille focalisée en blanc. Les changements s'appliquent à l'ouverture du site suivant.
  */
 @Composable
-fun SettingsPane(settings: Settings, modifier: Modifier = Modifier) {
+fun SettingsPane(
+    settings: Settings,
+    lists: ListStatus,
+    onUpdateLists: (force: Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     // Les réglages ne sont pas un état Compose : ce compteur force le redessin après chaque changement.
     var version by remember { mutableIntStateOf(0) }
     val refresh = version
@@ -87,7 +93,22 @@ fun SettingsPane(settings: Settings, modifier: Modifier = Modifier) {
             // `refresh` est lu ici pour que tout soit recalculé à chaque changement.
             if (refresh < 0) return@Column
 
-            SectionLabel(stringResource(R.string.sec_cursor))
+            SectionLabel(stringResource(R.string.sec_blocking))
+            SettingRow(stringResource(R.string.s_recommended)) {
+                Segmented(listOf(on, off), if (settings.recommendedLists) 0 else 1) {
+                    changed { settings.recommendedLists = it == 0 }
+                    onUpdateLists(false)
+                }
+            }
+            SettingRow(stringResource(R.string.s_youtube)) {
+                Segmented(listOf(on, off), if (settings.youtubeAdblock) 0 else 1) { changed { settings.youtubeAdblock = it == 0 } }
+            }
+            SettingRow(stringResource(R.string.s_sponsor)) {
+                Segmented(listOf(on, off), if (settings.sponsorBlock) 0 else 1) { changed { settings.sponsorBlock = it == 0 } }
+            }
+            ListsRow(lists, onUpdate = { onUpdateLists(true) })
+
+            SectionLabel(stringResource(R.string.sec_cursor), Modifier.padding(top = 10.dp))
             SettingRow(stringResource(R.string.s_cursor_speed)) {
                 Segmented(
                     listOf(R.string.v_speed_slow, R.string.v_speed_normal, R.string.v_speed_fast, R.string.v_speed_very_fast).map { stringResource(it) },
@@ -172,6 +193,32 @@ fun SettingsPane(settings: Settings, modifier: Modifier = Modifier) {
                 .fillMaxWidth()
                 .height(56.dp)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Palette.Background.copy(alpha = 0.9f)))),
+        )
+    }
+}
+
+/** État des listes de blocage et bouton pour les retélécharger. */
+@Composable
+private fun ListsRow(lists: ListStatus, onUpdate: () -> Unit) {
+    val numbers = java.text.NumberFormat.getIntegerInstance()
+    val summary = if (lists.lists == 0 && !lists.updating) {
+        ""
+    } else {
+        stringResource(R.string.lists_status, lists.lists, numbers.format(lists.hosts), numbers.format(lists.selectors))
+    }
+    val date = lists.updatedAt?.let {
+        stringResource(R.string.lists_updated, android.text.format.DateUtils.getRelativeTimeSpanString(it).toString())
+    } ?: stringResource(R.string.lists_never)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            if (summary.isNotEmpty()) Text(summary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(date, color = Palette.TextSecondary, fontSize = 13.sp, maxLines = 1)
+        }
+        ActionButton(
+            stringResource(if (lists.updating) R.string.lists_updating else R.string.lists_update),
+            { if (!lists.updating) onUpdate() },
+            primary = false,
+            compact = true,
         )
     }
 }
