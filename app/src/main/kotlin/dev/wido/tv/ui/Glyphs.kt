@@ -52,7 +52,7 @@ private fun DrawScope.drawGlyph(glyph: Glyph, color: Color) {
             val dir = Offset(-sin(end).toFloat(), cos(end).toFloat())
             val normal = Offset(-dir.y, dir.x)
             val head = s * 0.13f
-            drawPath(poly(tip + dir * head, tip - normal * head, tip + normal * head), color)
+            drawPath(poly(listOf(tip + dir * head, tip - normal * head, tip + normal * head)), color)
         }
         Glyph.Play -> drawPath(poly(listOf(p(0.34f, 0.24f), p(0.78f, 0.5f), p(0.34f, 0.76f))), color)
         Glyph.Pause -> {
