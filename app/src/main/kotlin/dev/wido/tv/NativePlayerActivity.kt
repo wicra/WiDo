@@ -40,6 +40,7 @@ import dev.wido.core.RemoteKey
 class NativePlayerActivity : ComponentActivity(), RemoteTarget {
     private lateinit var player: ExoPlayer
     private lateinit var view: PlayerView
+    private lateinit var osd: OsdView
     private lateinit var settings: Settings
     private var resizeIndex = 0
     private var positionKey = ""
@@ -93,7 +94,14 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
                 setBottomPaddingFraction(0.06f)
             }
         }
-        setContentView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        // Les messages (cadrage…) dans la pastille de verre de WiDo, par-dessus l'image.
+        val app = application as WiDoApp
+        osd = OsdView(this, compact = !app.isTv, scale = if (app.isTv) settings.uiScale else 1f).apply { hideSeconds = settings.osdSeconds }
+        val frame = FrameLayout(this).apply {
+            addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            addView(osd, osd.layoutParamsForRoot())
+        }
+        setContentView(frame)
         WindowInsetsControllerCompat(window, view).apply {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -126,7 +134,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             if (event.action == KeyEvent.ACTION_UP) {
                 resizeIndex = (resizeIndex + 1) % RESIZE_MODES.size
                 view.resizeMode = RESIZE_MODES[resizeIndex]
-                Toast.makeText(this, RESIZE_LABELS[resizeIndex], Toast.LENGTH_SHORT).show()
+                osd.showText(getString(RESIZE_LABELS[resizeIndex]))
             }
             return true
         }

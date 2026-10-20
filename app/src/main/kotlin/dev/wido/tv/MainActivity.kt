@@ -15,6 +15,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import dev.wido.core.LinkProtocol
 import dev.wido.tv.ui.MenuScreen
+import dev.wido.tv.ui.Onboarding
 import dev.wido.tv.ui.PairPromptHost
 import dev.wido.tv.ui.PhoneHome
 import dev.wido.tv.ui.WiDoTheme
@@ -37,10 +38,13 @@ class MainActivity : ComponentActivity(), RemoteTarget {
         setContent {
             WiDoTheme {
                 val vm: MenuViewModel = viewModel()
-                val onOpen = { site: dev.wido.core.Site -> startActivity(PlayerActivity.intent(this, site.id)) }
-                val onOpenPin = { pin: dev.wido.core.Pin -> startActivity(PlayerActivity.intent(this, pin.siteId, pin.url)) }
-                val onOpenWatch = { entry: dev.wido.core.WatchEntry -> startActivity(PlayerActivity.intent(this, entry.siteId, entry.url, entry.position)) }
-                if (app.isTv) {
+                val onOpen = { site: dev.wido.core.Site -> openPlayer(PlayerActivity.intent(this, site.id)) }
+                val onOpenPin = { pin: dev.wido.core.Pin -> openPlayer(PlayerActivity.intent(this, pin.siteId, pin.url)) }
+                val onOpenWatch = { entry: dev.wido.core.WatchEntry -> openPlayer(PlayerActivity.intent(this, entry.siteId, entry.url, entry.position)) }
+                if (app.isTv && !app.settings.onboardingDone) {
+                    // Premier lancement : présentation en trois écrans.
+                    Onboarding(vm) { app.settings.onboardingDone = true }
+                } else if (app.isTv) {
                     MenuScreen(vm, onOpen, onOpenPin, onOpenWatch)
                     // Un téléphone du réseau demande à se lier : la TV demande confirmation.
                     PairPromptHost(app.link)
@@ -60,6 +64,13 @@ class MainActivity : ComponentActivity(), RemoteTarget {
                 }
             }
         }
+    }
+
+    /** TV : la page s'agrandit depuis le cercle ou la vignette sélectionnée. */
+    private fun openPlayer(intent: Intent) {
+        val from = if (app.isTv) dev.wido.tv.ui.LaunchOrigin.bounds else null
+        val options = from?.let { android.app.ActivityOptions.makeScaleUpAnimation(window.decorView, it.left, it.top, it.width(), it.height()).toBundle() }
+        startActivity(intent, options)
     }
 
     override fun onStart() {

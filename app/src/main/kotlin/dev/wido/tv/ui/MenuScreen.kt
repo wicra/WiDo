@@ -49,6 +49,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -120,9 +122,16 @@ fun MenuScreen(
     val light by animateColorAsState(if (tab == Tab.Settings) Palette.Accent else siteLight, tween(700), label = "light")
     val second by animateColorAsState(if (tab == Tab.Settings) Palette.Purple else Palette.Violet, tween(700), label = "light2")
     val firstCard = remember { FocusRequester() }
+    val firstWatch = remember { FocusRequester() }
+    // La vidéo de « Reprendre » sélectionnée : la scène la montre à la place du site.
+    var focusedWatch by remember { mutableStateOf<WatchEntry?>(null) }
+    var initialFocus by remember { mutableStateOf(false) }
 
+    // Au lancement : sur la dernière vidéo en cours (OK et le film repart), sinon sur le premier site.
     LaunchedEffect(sites.isNotEmpty()) {
-        if (sites.isNotEmpty()) runCatching { firstCard.requestFocus() }
+        if (sites.isEmpty() || initialFocus) return@LaunchedEffect
+        initialFocus = true
+        runCatching { if (watching.isNotEmpty()) firstWatch.requestFocus() else firstCard.requestFocus() }
     }
 
     val glows = if (tab == Tab.Settings) {
@@ -148,6 +157,9 @@ fun MenuScreen(
                     val current = if (addFocused) null else sites.firstOrNull { it.site.id == currentId } ?: sites.firstOrNull()
                     Hero(
                         current,
+                        watch = focusedWatch?.takeIf { w -> watching.any { it.url == w.url } },
+                        onResume = { focusedWatch?.let(onOpenWatch) },
+                        onRemoveWatch = { focusedWatch?.let { vm.removeWatch(it.url) }; focusedWatch = null },
                         empty = sites.isEmpty() && !state.loading,
                         onOpen = { current?.let { onOpen(it.site) } },
                         onOptions = { current?.let { actionsFor = it.site } },
@@ -168,7 +180,9 @@ fun MenuScreen(
                             onFocus = { entry ->
                                 currentId = entry.siteId
                                 addFocused = false
+                                focusedWatch = entry
                             },
+                            firstModifier = Modifier.focusRequester(firstWatch),
                         )
                     }
                     LazyRow(
@@ -189,6 +203,7 @@ fun MenuScreen(
                                 onFocus = { color ->
                                     currentId = entry.site.id
                                     addFocused = false
+                                    focusedWatch = null
                                     siteLight = color
                                 },
                                 modifier = if (index == 0) Modifier.focusRequester(firstCard) else Modifier,
@@ -200,6 +215,7 @@ fun MenuScreen(
                                 onClick = { showCatalog = true },
                                 onFocus = {
                                     addFocused = true
+                                    focusedWatch = null
                                     siteLight = Palette.Accent
                                 },
                             )
@@ -370,6 +386,10 @@ internal fun UpdateBanner(update: UpdateUi, onInstall: (ReleaseInfo) -> Unit, ho
 @Composable
 private fun Hero(
     current: MenuSite?,
+    /** Vidéo de Reprendre sélectionnée : son titre, son site et « Reprendre ». */
+    watch: WatchEntry?,
+    onResume: () -> Unit,
+    onRemoveWatch: () -> Unit,
     empty: Boolean,
     onOpen: () -> Unit,
     onOptions: () -> Unit,
@@ -383,7 +403,7 @@ private fun Hero(
         modifier.fillMaxWidth().padding(start = 52.dp, end = 52.dp, top = if (compact) 8.dp else 28.dp),
         verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
     ) {
-        val title = current?.site?.name ?: stringResource(R.string.editor_title_add)
+        val title = watch?.title ?: current?.site?.name ?: stringResource(R.string.editor_title_add)
         val context = LocalContext.current
         val icon by produceState<SiteIcon?>(null, current?.site?.id, current?.site?.url) {
             value = current?.site?.let { (context.applicationContext as WiDoApp).favicons.load(it) }
@@ -395,8 +415,8 @@ private fun Hero(
             }
             Text(
                 title,
-                fontSize = if (compact) 42.sp else 56.sp,
-                lineHeight = if (compact) 46.sp else 60.sp,
+                fontSize = if (watch != null) 34.sp else if (compact) 42.sp else 56.sp,
+                lineHeight = if (watch != null) 40.sp else if (compact) 46.sp else 60.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-2).sp,
                 maxLines = 1,
@@ -404,6 +424,10 @@ private fun Hero(
             )
         }
         val subtitle = when {
+            watch != null -> listOfNotNull(
+                current?.site?.name,
+                if (watch.duration > 0) stringResource(R.string.watch_left, ((watch.duration - watch.position) / 60).toInt().coerceAtLeast(1)) else null,
+            ).joinToString(" · ")
             current != null -> {
                 val host = Hosts.of(current.site.url).orEmpty()
                 if (current.local) "$host · ${stringResource(R.string.tag_local)}" else host
@@ -415,21 +439,24 @@ private fun Hero(
             Text(subtitle, color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (current != null) {
-                ActionButton("▶  " + stringResource(R.string.action_open), onOpen)
-                ActionButton(stringResource(R.string.action_options), onOptions, primary = false, idleText = Color.White.copy(alpha = 0.8f))
+            if (watch != null) {
+                ActionButton(stringResource(R.string.action_resume), onResume, glyph = Glyph.Play)
+                ActionButton(stringResource(R.string.action_remove), onRemoveWatch, primary = false, idleText = Color.White.copy(alpha = 0.8f), glyph = Glyph.Close)
+            } else if (current != null) {
+                ActionButton(stringResource(R.string.action_open), onOpen, glyph = Glyph.Play)
+                ActionButton(stringResource(R.string.action_options), onOptions, primary = false, idleText = Color.White.copy(alpha = 0.8f), glyph = Glyph.More)
             } else {
-                ActionButton("+  " + stringResource(R.string.add_site), onAdd)
+                ActionButton(stringResource(R.string.add_site), onAdd, glyph = Glyph.Plus)
             }
         }
         // Pages épinglées de ce site : ouvertes directement.
-        if (pins.isNotEmpty()) {
+        if (pins.isNotEmpty() && watch == null) {
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("★", color = Color.White.copy(alpha = 0.55f), fontSize = 14.sp)
+                GlyphIcon(Glyph.Star, Color.White.copy(alpha = 0.55f), 16.dp)
                 pins.forEach { pin -> Chip(pin.title, { onPin(pin) }) }
             }
         }
@@ -512,6 +539,7 @@ private fun SiteCard(
                     .size(CIRCLE)
                     .then(menuKey)
                     .then(moveKeys)
+                    .onGloballyPositioned { if (focused) LaunchOrigin.remember(it) }
                     .onFocusChanged {
                         focused = it.isFocused
                         if (it.isFocused) onFocus(accent)
@@ -593,6 +621,20 @@ private fun AddCard(index: Int, onClick: () -> Unit, onFocus: () -> Unit) {
 private val CIRCLE = 92.dp
 private val CIRCLE_SLOT = 112.dp
 
+/**
+ * Où se trouve l'élément qui ouvre un site (cercle ou vignette sélectionnée) : la page s'agrandit
+ * depuis lui à l'ouverture.
+ */
+object LaunchOrigin {
+    @Volatile var bounds: android.graphics.Rect? = null
+        private set
+
+    fun remember(coordinates: androidx.compose.ui.layout.LayoutCoordinates) {
+        val r = coordinates.boundsInWindow()
+        bounds = android.graphics.Rect(r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt())
+    }
+}
+
 /** Une seule ligne discrète : la version à gauche, l'état de la mise à jour à droite. */
 @Composable
 private fun Footer(update: UpdateUi) {
@@ -621,6 +663,7 @@ private fun ContinueRow(
     onOpen: (WatchEntry) -> Unit,
     onRemove: (WatchEntry) -> Unit,
     onFocus: (WatchEntry) -> Unit,
+    firstModifier: Modifier = Modifier,
 ) {
     Column {
         SectionLabel(stringResource(R.string.continue_title), Modifier.padding(start = 52.dp))
@@ -629,8 +672,8 @@ private fun ContinueRow(
             contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 10.dp, bottom = 6.dp),
             modifier = Modifier.fillMaxWidth().height(136.dp),
         ) {
-            itemsIndexed(entries, key = { _, it -> it.url }) { _, entry ->
-                WatchCard(entry, siteMap[entry.siteId], { onOpen(entry) }, { onRemove(entry) }, { onFocus(entry) })
+            itemsIndexed(entries, key = { _, it -> it.url }) { index, entry ->
+                WatchCard(entry, siteMap[entry.siteId], { onOpen(entry) }, { onRemove(entry) }, { onFocus(entry) }, if (index == 0) firstModifier else Modifier)
             }
         }
     }
@@ -638,12 +681,13 @@ private fun ContinueRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun WatchCard(entry: WatchEntry, site: Site?, onClick: () -> Unit, onRemove: () -> Unit, onFocus: () -> Unit) {
+private fun WatchCard(entry: WatchEntry, site: Site?, onClick: () -> Unit, onRemove: () -> Unit, onFocus: () -> Unit, modifier: Modifier = Modifier) {
     val siteName = site?.name ?: Hosts.of(entry.url)?.removePrefix("www.").orEmpty()
     var focused by remember { mutableStateOf(false) }
     Box(
-        Modifier
+        modifier
             .size(192.dp, 108.dp)
+            .onGloballyPositioned { if (focused) LaunchOrigin.remember(it) }
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus()

@@ -52,6 +52,7 @@ private val HIDES = listOf(0, 2, 3, 5, 10)
 private val ZOOMS = (100..200 step 10).toList()
 private val SEEKS = listOf(5, 10, 15, 30)
 private val OSDS = listOf(2, 4, 6, 10)
+private val UI_SCALES = listOf(1f, 1.15f, 1.3f)
 private val NAVIGATIONS = listOf(Navigation.STRICT, Navigation.RELAXED, Navigation.MIXED)
 
 /** Couleurs des touches de la télécommande. */
@@ -187,6 +188,15 @@ fun SettingsPane(
             }
 
             SectionLabel(stringResource(R.string.sec_general), Modifier.padding(top = 10.dp))
+            if (!phone) SettingRow(stringResource(R.string.s_ui_scale)) {
+                Segmented(
+                    listOf(stringResource(R.string.v_scale_normal), stringResource(R.string.v_scale_large), stringResource(R.string.v_scale_huge)),
+                    nearest(UI_SCALES, settings.uiScale),
+                ) { changed { settings.uiScale = UI_SCALES[it] } }
+            }
+            if (!phone) SettingRow(stringResource(R.string.s_onboarding)) {
+                Chip(stringResource(R.string.v_onboarding_show), { settings.onboardingDone = false })
+            }
             if (!phone) SettingRow(stringResource(R.string.s_startup)) {
                 Segmented(
                     listOf(stringResource(R.string.v_startup_menu), stringResource(R.string.v_startup_last)),

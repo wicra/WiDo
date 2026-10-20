@@ -32,6 +32,8 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -49,6 +51,7 @@ import dev.wido.core.ResumeUrl
 import dev.wido.core.Site
 import dev.wido.core.Zoom
 import dev.wido.tv.ui.BlockedRedirect
+import dev.wido.tv.ui.Glyph
 import dev.wido.tv.ui.PairPrompt
 import dev.wido.tv.ui.PhoneCornerCard
 import dev.wido.tv.ui.PhoneOverlay
@@ -139,6 +142,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             }
             if (site.id != ConfigRepository.LINK_SITE_ID) settings.lastSiteId = site.id
             loadingLabel.text = getString(R.string.loading_site, site.name)
+            dressOverlay(site)
             val blocker = app.repository.blockerFor(site)
             val scripts = ScriptInjector(this@PlayerActivity, site)
             scripts.early = scripts.earlyScript(app.repository.cosmeticFor(site), settings.youtubeAdblock, settings.sponsorBlock)
@@ -152,7 +156,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                     scripts,
                     onNavigationBlocked = { url ->
                         runOnUiThread {
-                            Toast.makeText(this@PlayerActivity, getString(R.string.toast_navigation_blocked, url.take(60)), Toast.LENGTH_SHORT).show()
+                            osd.showText(getString(R.string.toast_navigation_blocked, url.take(60)), OsdView.Kind.Blocked)
                         }
                     },
                     onPageVisible = {
@@ -228,7 +232,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         if (bridged) {
             val frameBridge = FrameBridge(
                 onMedia = { state -> runOnUiThread { onMediaState(state) } },
-                onSkip = { runOnUiThread { osd.showText(getString(R.string.osd_sponsor_skipped)) } },
+                onSkip = { runOnUiThread { osd.showText(getString(R.string.osd_sponsor_skipped), OsdView.Kind.Success) } },
                 onField = { focused -> runOnUiThread { onPageField(focused) } },
             )
             bridge = frameBridge
@@ -291,7 +295,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             cursor.visibility = View.GONE
         }
 
-        osd = OsdView(this, compact = !tv).apply { hideSeconds = settings.osdSeconds }
+        osd = OsdView(this, compact = !tv, scale = if (tv) settings.uiScale else 1f).apply { hideSeconds = settings.osdSeconds }
         root.addView(osd, osd.layoutParamsForRoot())
 
         topBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -567,8 +571,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         when (keyCode) {
             KeyEvent.KEYCODE_MEDIA_PLAY -> media("play")
             KeyEvent.KEYCODE_MEDIA_PAUSE -> media("pause")
-            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> media("seek", seek * (1 + minOf(repeat, 4)))
-            KeyEvent.KEYCODE_MEDIA_REWIND -> media("seek", -seek * (1 + minOf(repeat, 4)))
+            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> seekBy(seek * (1 + minOf(repeat, 4)))
+            KeyEvent.KEYCODE_MEDIA_REWIND -> seekBy(-seek * (1 + minOf(repeat, 4)))
             else -> if (repeat == 0) media("toggle")
         }
     }
@@ -577,8 +581,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private fun fullscreenKey(event: KeyEvent): Boolean {
         val seek = settings.seekSeconds.toDouble()
         when (event.keyCode) {
-            KeyEvent.KEYCODE_DPAD_LEFT -> if (event.action == KeyEvent.ACTION_DOWN) media("seek", -seek)
-            KeyEvent.KEYCODE_DPAD_RIGHT -> if (event.action == KeyEvent.ACTION_DOWN) media("seek", seek)
+            KeyEvent.KEYCODE_DPAD_LEFT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(-seek)
+            KeyEvent.KEYCODE_DPAD_RIGHT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(seek)
             KeyEvent.KEYCODE_DPAD_UP -> if (event.action == KeyEvent.ACTION_DOWN) videoVolume(1)
             KeyEvent.KEYCODE_DPAD_DOWN -> if (event.action == KeyEvent.ACTION_DOWN) videoVolume(-1)
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) media("toggle")
@@ -592,6 +596,25 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             adjustVolume(if (direction > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER)
         } else {
             media("vol", 0.1 * direction)
+        }
+    }
+
+    /** Avance ou recule ; la barre affiche le saut. */
+    private fun seekBy(seconds: Double) {
+        osd.markSeek(seconds)
+        media("seek", seconds)
+    }
+
+    /** Titre, site et image de la vidéo pour la barre de lecture. */
+    private fun refreshOsdInfo() {
+        val current = site ?: return
+        val wv = webView ?: return
+        osd.setInfo(wv.title?.takeIf { it != wv.url }, current.name)
+        val page = ResumeUrl.toRemember(current, wv.url) ?: return
+        val image = pageImage
+        lifecycleScope.launch {
+            val bitmap = (application as WiDoApp).thumbnails.forVideo(page, image)
+            osd.setThumb(bitmap?.asAndroidBitmap())
         }
     }
 
@@ -647,34 +670,62 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     // --- Menu rapide ------------------------------------------------------------------------
 
+    private var panelPending = false
+
+    /** Ouvre le menu rapide ; demande d'abord à la page si elle a un bouton « épisode suivant ». */
     private fun showPanel() {
+        if (panelView != null || panelPending) return
+        val wv = webView ?: return buildPanel(hasNext = false)
+        panelPending = true
+        wv.evaluateJavascript("($NEXT_SCRIPT)(false)") { raw ->
+            panelPending = false
+            buildPanel(hasNext = raw == "true")
+        }
+    }
+
+    private fun buildPanel(hasNext: Boolean) {
         if (panelView != null) return
         val c = client
         val current = site
-        fun action(label: String, run: () -> Unit) = QuickAction(label) {
+        fun action(label: String, glyph: Glyph, more: Boolean = false, run: () -> Unit) = QuickAction(label, glyph, more) {
             hidePanel()
             run()
         }
 
-        val native = c?.stream?.let { listOf(action(getString(R.string.panel_native)) { openNative() }) }.orEmpty()
+        val media = mediaState.value?.takeIf { it.duration > 0 }
         // Téléphone lié à une TV : la vidéo passe sur la TV, à la même seconde.
         val screen = if (!tv) (application as WiDoApp).link.selectedPeer() else null
-        val toTv = screen?.let { listOf(action(getString(R.string.panel_send_to_tv, it.name)) { sendToTv() }) }.orEmpty()
-        val actions = toTv + native + listOfNotNull(
-            action("▶  " + getString(R.string.panel_resume)) {},
-            action(getString(R.string.panel_reload)) { webView?.reload() },
-            action(getString(R.string.panel_home)) { current?.let { webView?.loadUrl(it.url) } },
-            if (tv) action(getString(if (cursorMode) R.string.panel_cursor_on else R.string.panel_cursor_off)) { toggleCursor() } else null,
-            action(getString(R.string.panel_zoom_out_short)) { changeZoom(-1) },
-            action(getString(R.string.panel_zoom_in_short)) { changeZoom(1) },
-            if (tv) action(getString(R.string.panel_phone)) { showPhone() } else null,
-            action(getString(R.string.panel_pin)) { pinCurrentPage() },
-            if (tv) action(getString(R.string.panel_hide_element)) { startPicking() } else null,
-            action(getString(R.string.panel_save_short)) { saveCurrentPage() },
-            action(sleepLabel()) { cycleSleep() },
-            if (tv) action(getString(R.string.panel_help)) { showHelp() } else null,
-            action(getString(R.string.panel_sites)) { finish() },
+        val toTv = screen?.let { action(getString(R.string.tile_on_tv), Glyph.Tv) { sendToTv() } }
+        val native = c?.stream?.let { action(getString(R.string.tile_native), Glyph.Native) { openNative() } }
+        val next = if (hasNext) action(getString(R.string.tile_next), Glyph.Next) { nextEpisode() } else null
+        val pin = action(getString(R.string.panel_pin), Glyph.Star) { pinCurrentPage() }
+        val zoomOut = action(getString(R.string.panel_zoom_out_short), Glyph.ZoomOut) { changeZoom(-1) }
+        val zoomIn = action(getString(R.string.panel_zoom_in_short), Glyph.ZoomIn) { changeZoom(1) }
+        val sleep = action(sleepLabel(), Glyph.Sleep, more = media == null) { cycleSleep() }
+        val sites = action(getString(R.string.panel_sites), Glyph.Sites) { finish() }
+        val hide = if (tv) action(getString(R.string.tile_hide), Glyph.Hide, more = media != null) { startPicking() } else null
+        val siteHome = action(getString(R.string.tile_site_home), Glyph.Globe, more = media != null) { current?.let { webView?.loadUrl(it.url) } }
+        val reload = action(getString(R.string.panel_reload), Glyph.Refresh, more = media != null) { webView?.reload() }
+        val extras = listOfNotNull(
+            action(getString(R.string.panel_save_short), Glyph.Save, more = true) { saveCurrentPage() },
+            if (tv) action(getString(if (cursorMode) R.string.tile_cursor_on else R.string.tile_cursor_off), Glyph.Cursor, more = true) { toggleCursor() } else null,
+            if (tv) action(getString(R.string.panel_phone), Glyph.Phone, more = true) { showPhone() } else null,
+            if (tv) action(getString(R.string.panel_help), Glyph.Help, more = true) { showHelp() } else null,
         )
+        // Une vidéo : ses commandes d'abord. Une page : ce qu'on fait d'une page.
+        val actions = if (media != null) {
+            listOfNotNull(
+                toTv,
+                action(getString(if (media.paused) R.string.tile_play else R.string.tile_pause), if (media.paused) Glyph.Play else Glyph.Pause) { media("toggle") },
+                next,
+                native,
+                action(getString(R.string.tile_restart), Glyph.Restart) { mediaJson(JSONObject().put("cmd", "seekTo").put("to", 0).toString()) },
+                sleep, pin, zoomOut, zoomIn, sites,
+                hide, siteHome, reload,
+            ) + extras
+        } else {
+            listOfNotNull(toTv, native, next, pin, zoomOut, zoomIn, hide, siteHome, reload, sites, sleep) + extras
+        }
 
         // La dernière redirection refusée : l'ouvrir une seule fois, l'autoriser pour ce site, ou l'ignorer.
         val blockedUrl = c?.lastBlockedUrl
@@ -683,19 +734,20 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             BlockedRedirect(
                 title = getString(R.string.panel_redirect_title),
                 host = blockedHost,
-                openOnce = action(getString(R.string.panel_open_once_short)) {
+                openOnce = action(getString(R.string.panel_open_once_short), Glyph.Globe) {
                     c.allowOnce(blockedUrl)
                     webView?.loadUrl(blockedUrl)
                 },
-                allow = action(getString(R.string.panel_allow_always)) { allowDomain(current, blockedHost, blockedUrl) },
-                ignore = action(getString(R.string.panel_ignore)) { c.dismissBlocked() },
+                allow = action(getString(R.string.panel_allow_always), Glyph.Check) { allowDomain(current, blockedHost, blockedUrl) },
+                ignore = action(getString(R.string.panel_ignore), Glyph.Close) { c.dismissBlocked() },
             )
         } else {
             null
         }
         val counts = getString(R.string.panel_blocked, c?.blockedRequests?.get() ?: 0, c?.blockedNavigations?.get() ?: 0)
 
-        showOverlay { QuickMenu(mediaState.value, redirect, actions, counts, compact = !tv, onDismiss = { hidePanel() }) }
+        val more = getString(R.string.tile_more)
+        showOverlay { QuickMenu(mediaState.value, redirect, actions, counts, compact = !tv, onDismiss = { hidePanel() }, moreLabel = more) }
     }
 
     /** Affiche un calque Compose par-dessus la page (menu rapide, téléphone) ; Retour le ferme. */
@@ -712,6 +764,13 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         panelView = null
         root.removeView(panel)
         webView?.requestFocus()
+    }
+
+    /** « Épisode suivant » : clique le bouton de la page qui mène à l'épisode suivant. */
+    private fun nextEpisode() {
+        webView?.evaluateJavascript("($NEXT_SCRIPT)(true)") { raw ->
+            osd.showText(getString(if (raw == "true") R.string.osd_next_episode else R.string.osd_next_none), if (raw == "true") OsdView.Kind.Success else OsdView.Kind.Warning)
+        }
     }
 
     // --- Saisie depuis le téléphone ----------------------------------------------------------
@@ -797,10 +856,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         wv.evaluateJavascript("($HIDE_SCRIPT)($fx,$fy)") { raw ->
             val selector = unquote(raw)
             if (selector == null) {
-                osd.showText(getString(R.string.osd_pick_nothing))
+                osd.showText(getString(R.string.osd_pick_nothing), OsdView.Kind.Warning)
             } else {
                 (application as WiDoApp).repository.addHide(current.id, selector)
-                osd.showText(getString(R.string.osd_pick_done))
+                osd.showText(getString(R.string.osd_pick_done), OsdView.Kind.Success)
             }
         }
     }
@@ -811,12 +870,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val current = site ?: return
         val url = ResumeUrl.toRemember(current, webView?.url)
         if (url == null) {
-            Toast.makeText(this, R.string.toast_pin_failed, Toast.LENGTH_SHORT).show()
+            osd.showText(getString(R.string.toast_pin_failed), OsdView.Kind.Warning)
             return
         }
         val title = webView?.title
         (application as WiDoApp).repository.addPin(current.id, title, url)
-        Toast.makeText(this, getString(R.string.toast_pinned, title?.take(40) ?: url), Toast.LENGTH_SHORT).show()
+        osd.showText(getString(R.string.toast_pinned, title?.take(40) ?: url), OsdView.Kind.Success)
     }
 
     // --- Minuteur de veille ------------------------------------------------------------------
@@ -863,10 +922,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val repository = (application as WiDoApp).repository
         val error = repository.allowDomain(current.id, host)
         if (error != null) {
-            Toast.makeText(this, error, Toast.LENGTH_LONG).show()
+            osd.showText(error, OsdView.Kind.Warning)
             return
         }
-        Toast.makeText(this, getString(R.string.toast_allowed, host), Toast.LENGTH_SHORT).show()
+        osd.showText(getString(R.string.toast_allowed, host), OsdView.Kind.Success)
         lifecycleScope.launch {
             val updated = repository.findSite(current.id) ?: return@launch
             site = updated
@@ -883,7 +942,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         if (host == null || (scheme != "https" && scheme != "http")) return
         val name = host.removePrefix("www.")
         val error = (application as WiDoApp).repository.addLocalSite(name, "$scheme://$host")
-        Toast.makeText(this, error ?: getString(R.string.toast_saved, name), Toast.LENGTH_LONG).show()
+        if (error != null) osd.showText(error, OsdView.Kind.Warning) else osd.showText(getString(R.string.toast_saved, name), OsdView.Kind.Success)
     }
 
     // --- Aide à l'écran ---------------------------------------------------------------------
@@ -942,16 +1001,34 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 topMargin = (18 * density).toInt()
             }
         }
+        // Logo du site sur un disque blanc, affiché dès qu'il est connu (à la place du nom de l'app).
+        val disc = (112 * density).toInt()
+        siteLogo = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            val pad = (26 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0xF2FFFFFF.toInt())
+            }
+            elevation = 18 * density
+            visibility = View.GONE
+        }
+        wordmark = logo
+        val logoBox = FrameLayout(this).apply {
+            addView(logo, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            addView(siteLogo, FrameLayout.LayoutParams(disc, disc, Gravity.CENTER))
+        }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            addView(logo)
+            addView(logoBox)
             addView(loadingLabel)
             addView(bar)
         }
         // Le logo « respire » pendant l'attente.
         overlayAnimator = ObjectAnimator.ofPropertyValuesHolder(
-            logo,
+            logoBox,
             PropertyValuesHolder.ofFloat(View.ALPHA, 0.6f, 1f),
             PropertyValuesHolder.ofFloat(View.SCALE_X, 0.95f, 1.04f),
             PropertyValuesHolder.ofFloat(View.SCALE_Y, 0.95f, 1.04f),
@@ -965,6 +1042,46 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             background = haloDrawable()
             addView(column, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         }
+    }
+
+    private var siteLogo: android.widget.ImageView? = null
+    private var wordmark: View? = null
+
+    /**
+     * L'écran d'ouverture prend la couleur et le logo du site : avec l'agrandissement depuis sa carte,
+     * on voit la carte devenir la page.
+     */
+    private fun dressOverlay(site: Site) {
+        val favicons = (application as WiDoApp).favicons
+        fun paint(color: Int) {
+            overlay.background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(blend(color, 0xFFFFFFFF.toInt(), 0.12f), blend(color, 0xFF000000.toInt(), 0.45f)),
+            )
+        }
+        val configured = site.color?.let { runCatching { Color.parseColor(it) }.getOrNull() }
+        (configured ?: favicons.cachedColor(site)?.let { it.toArgb() })?.let { paint(it) }
+        lifecycleScope.launch {
+            val icon = favicons.load(site) ?: return@launch
+            if (!overlayVisible) return@launch
+            siteLogo?.apply {
+                setImageBitmap(icon.image.asAndroidBitmap())
+                visibility = View.VISIBLE
+            }
+            wordmark?.visibility = View.INVISIBLE
+            if (configured == null) icon.color?.let { paint(it.toArgb()) }
+        }
+    }
+
+    private fun blend(a: Int, b: Int, t: Float): Int {
+        fun ch(shift: Int) = (((a shr shift) and 0xFF) * (1 - t) + ((b shr shift) and 0xFF) * t).toInt() and 0xFF
+        return (0xFF shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+    }
+
+    override fun finish() {
+        super.finish()
+        @Suppress("DEPRECATION")
+        overridePendingTransition(R.anim.wido_return, R.anim.wido_close)
     }
 
     private fun hideOverlay() {
@@ -1076,7 +1193,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private var pageImage: String? = null
 
     private fun captureMeta() {
-        webView?.evaluateJavascript(META_SCRIPT) { raw -> pageImage = unquote(raw)?.takeIf { it.startsWith("https://") } }
+        webView?.evaluateJavascript(META_SCRIPT) { raw ->
+            pageImage = unquote(raw)?.takeIf { it.startsWith("https://") }
+            refreshOsdInfo()
+        }
     }
 
     /** L'état du lecteur de la page est relevé de temps en temps, sans rien afficher : la progression reste à jour. */
@@ -1134,7 +1254,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val wv = webView ?: return
         val stream = client?.stream
         if (stream == null) {
-            osd.showText(getString(R.string.osd_native_none))
+            osd.showText(getString(R.string.osd_native_none), OsdView.Kind.Warning)
             return
         }
         // Le lecteur natif part de la seconde où en était la page.
@@ -1256,9 +1376,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         lifecycleScope.launch {
             if (app.link.play(peer, play)) {
                 media("pause")
-                Toast.makeText(this@PlayerActivity, getString(R.string.toast_sent_to_tv, peer.name), Toast.LENGTH_SHORT).show()
+                osd.showText(getString(R.string.toast_sent_to_tv, peer.name), OsdView.Kind.Success)
             } else {
-                Toast.makeText(this@PlayerActivity, getString(R.string.toast_tv_unreachable, peer.name), Toast.LENGTH_LONG).show()
+                osd.showText(getString(R.string.toast_tv_unreachable, peer.name), OsdView.Kind.Warning)
             }
         }
     }
@@ -1350,6 +1470,24 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val PROGRESS_POLL_MS = 10_000L
         private const val FOLLOW_POLL_MS = 2_000L
         private const val FRAME_EVERY_MS = 45_000L
+        /**
+         * Trouve (et clique si `go`) le lien ou bouton « épisode suivant » de la page : par son texte,
+         * son libellé d'accessibilité ou son titre. Renvoie vrai s'il existe.
+         */
+        private const val NEXT_SCRIPT = """function (go) {
+  var re = /((é|e)pisode suivant|next episode|prochain (é|e)pisode|next up)/i;
+  var els = document.querySelectorAll('a,button,[role=button]');
+  for (var i = 0; i < els.length; i++) {
+    var e = els[i];
+    var t = ((e.getAttribute('aria-label') || '') + ' ' + (e.getAttribute('title') || '') + ' ' + (e.textContent || '')).replace(/\s+/g, ' ');
+    if (t.length > 120 || !re.test(t)) continue;
+    var r = e.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0 && !e.href) continue;
+    if (go) e.click();
+    return true;
+  }
+  return false;
+}"""
         /** La plus grande vidéo visible (sinon la plus grande iframe, où se cache souvent le lecteur), en fractions de l'écran. */
         private const val VIDEO_RECT_SCRIPT = """(function () {
   var best = null, area = 0;

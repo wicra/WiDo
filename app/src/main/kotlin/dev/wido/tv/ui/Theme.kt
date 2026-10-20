@@ -17,6 +17,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,8 +95,15 @@ val LocalPhone = staticCompositionLocalOf { false }
 
 @Composable
 fun WiDoTheme(content: @Composable () -> Unit) {
-    val phone = (LocalContext.current.applicationContext as? dev.wido.tv.WiDoApp)?.isTv == false
-    CompositionLocalProvider(LocalPhone provides phone) { WiDoMaterial(content) }
+    val app = LocalContext.current.applicationContext as? dev.wido.tv.WiDoApp
+    val phone = app?.isTv == false
+    // TV : taille de l'interface réglable (projecteur regardé de loin). Le téléphone suit le système.
+    val scale = if (phone) 1f else app?.settings?.uiScale ?: 1f
+    val density = LocalDensity.current
+    CompositionLocalProvider(
+        LocalPhone provides phone,
+        LocalDensity provides Density(density.density * scale, density.fontScale),
+    ) { WiDoMaterial(content) }
 }
 
 @Composable

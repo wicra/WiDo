@@ -65,16 +65,24 @@ fun ActionButton(
     primary: Boolean = true,
     compact: Boolean = false,
     idleText: Color = Palette.TextPrimary,
+    /** Icône dessinée avant le texte. */
+    glyph: Glyph? = null,
 ) {
     FocusSurface(onClick, modifier, idle = if (primary) Palette.GlassStrong else Color.White.copy(alpha = 0.10f)) { focused ->
-        Text(
-            label,
-            color = onSurface(focused, idleText),
-            fontSize = if (compact) 14.sp else 15.sp,
-            fontWeight = if (primary || focused) FontWeight.Bold else FontWeight.SemiBold,
-            maxLines = 1,
-            modifier = Modifier.padding(horizontal = if (compact) 18.dp else 22.dp, vertical = if (compact) 8.dp else 11.dp),
-        )
+        Row(
+            Modifier.padding(start = if (glyph != null) (if (compact) 14.dp else 18.dp) else (if (compact) 18.dp else 22.dp), end = if (compact) 18.dp else 22.dp, top = if (compact) 8.dp else 11.dp, bottom = if (compact) 8.dp else 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (glyph != null) GlyphIcon(glyph, onSurface(focused, idleText), if (compact) 16.dp else 18.dp)
+            Text(
+                label,
+                color = onSurface(focused, idleText),
+                fontSize = if (compact) 14.sp else 15.sp,
+                fontWeight = if (primary || focused) FontWeight.Bold else FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
     }
 }
 

@@ -213,6 +213,30 @@ class Settings(private val context: Context) {
         get() = state.getString("selected_screen", null)
         set(v) = state.edit().putString("selected_screen", v).apply()
 
+    // --- Interface (observés par Compose : l'écran se redessine aussitôt) ----------------------
+    private val uiScaleState = androidx.compose.runtime.mutableFloatStateOf(prefs.getFloat("ui_scale", 1f))
+
+    /** Taille de l'interface sur TV : 1 (normale), 1,15 (grande), 1,3 (très grande). */
+    var uiScale: Float
+        get() = uiScaleState.floatValue
+        set(v) {
+            prefs.edit().putFloat("ui_scale", v).apply()
+            uiScaleState.floatValue = v
+        }
+
+    private val onboardingState = androidx.compose.runtime.mutableStateOf(
+        // Déjà utilisé avant cette version : pas de présentation.
+        state.getBoolean("onboarding_done", prefs.contains("last_site") || prefs.contains("help_seen")),
+    )
+
+    /** La présentation du premier lancement a été vue (ou passée). */
+    var onboardingDone: Boolean
+        get() = onboardingState.value
+        set(v) {
+            state.edit().putBoolean("onboarding_done", v).apply()
+            onboardingState.value = v
+        }
+
     var helpSeen: Boolean
         get() = prefs.getBoolean("help_seen", false)
         set(v) = prefs.edit().putBoolean("help_seen", v).apply()
@@ -224,6 +248,7 @@ class Settings(private val context: Context) {
         prefs.edit().clear().apply()
         if (keep != null) prefs.edit().putString(KEY_CONFIG_URL, keep).apply()
         if (last != null) prefs.edit().putString("last_site", last).apply()
+        uiScaleState.floatValue = 1f
     }
 
     private companion object {
