@@ -2,7 +2,7 @@
 
 ![WiDo](docs/assets/banner.png)
 
-Un navigateur de streaming pour **Google TV / Android TV**, pensé pour la télécommande, avec blocage de pubs configurable **à distance**. Open source (MIT).
+Un navigateur de streaming pour **Google TV / Android TV**, pensé pour la télécommande, avec blocage de pubs configurable **à distance**. La même appli tourne sur **téléphone Android** : interface tactile, télécommande, et une vidéo qui passe d'un écran à l'autre. Open source (MIT).
 
 > Né d'un besoin simple : sur un projecteur Google TV, pas d'Opera ni d'extension. WiDo reprend ce que fait une extension de blocage, mais sur la TV, avec une liste de sites et des règles que tu modifies depuis GitHub, sans réinstaller l'app.
 
@@ -16,6 +16,7 @@ Un navigateur de streaming pour **Google TV / Android TV**, pensé pour la tél�
 - **Configuration distante** : un fichier JSON sur GitHub (sites, listes, règles). Un site change de domaine ? Tu modifies une ligne.
 - **Mise à jour depuis les releases GitHub**, sans serveur : l'app télécharge l'APK, vérifie sa somme SHA-256, puis Android demande confirmation.
 - **Lancement depuis Home Assistant** : `adb shell am start … --es site <id>`.
+- **Sur téléphone** : la même appli en version tactile, **Sur la TV** / **Reprendre sur le téléphone** à la même seconde, télécommande (touches, pavé, clavier en direct), « Partager → WiDo », et synchro de « mes écrans » (Reprendre, sites perso, épingles) entre le téléphone et les TV.
 
 Ce qu'il ne fait pas (encore) : API locale pour taper du texte à distance, profils, voir la [feuille de route](docs/ROADMAP.md).
 
@@ -37,6 +38,7 @@ Ce qu'il ne fait pas (encore) : API locale pour taper du texte à distance, prof
 | [Blocage](docs/BLOCKING.md) | Ce qui est bloqué, comment, et ses limites. |
 | [Scripts](docs/SCRIPTS.md) | Les scripts intégrés et les sélecteurs masqués. |
 | [Télécommande](docs/REMOTE-CONTROL.md) | Curseur aimanté, touches, barre de lecture, menu rapide. |
+| [Téléphone et écrans liés](docs/PHONE-AND-SCREENS.md) | L'appli sur téléphone, lier la TV, passer d'un écran à l'autre, synchro. |
 | [Réglages](docs/SETTINGS.md) | Curseur, zoom, volume, touches de couleur, démarrage. |
 | [Mises à jour](docs/UPDATES.md) | Fonctionnement via les releases GitHub. |
 | [Home Assistant](docs/HOME-ASSISTANT.md) | Scène « soirée cinéma », lancement d'un site. |

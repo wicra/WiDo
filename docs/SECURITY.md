@@ -21,6 +21,15 @@ WiDo injecte dans les pages (et leurs iframes) un **script interne** embarqué d
 - la passerelle native (`WiDoBridge`) n'expose **aucune** action sensible : un site malveillant qui l'appelle ne peut qu'envoyer un message à l'app, qui n'en traite que le type `media` ;
 - elle est installée avec des règles d'origine `*` pour atteindre les lecteurs dans des iframes d'autres domaines : c'est un choix assumé, limité à ce canal.
 
+## Écrans liés (téléphone, autres TV)
+
+- Le serveur local de la TV n'est ouvert que lorsque WiDo est à l'écran ; il est désactivable (Réglages → Écrans liés).
+- Sans jeton, il ne répond qu'à `/hello` (nom et identifiant de la TV) et `/pair` (demande de liaison). Une demande n'est acceptée que **validée à l'écran de la TV**, ou si elle porte la clé du QR code d'appairage, qui change après chaque usage.
+- Chaque appareil lié reçoit un jeton aléatoire de 128 bits, comparé en temps constant ; « Oublier » le révoque.
+- La synchronisation n'accepte que des clés connues (Reprendre, sites perso, épingles, masquages) et exige le niveau « Mon téléphone » côté TV. Cookies, connexions et réglages ne sont jamais transmis.
+- Les TV d'un même groupe publient une empreinte (SHA-256 tronqué) de la clé du groupe, jamais la clé ; elles s'authentifient avec un jeton dérivé.
+- Le trafic local est en `http` : sur un réseau partagé non fiable, désactive les écrans liés.
+
 ## Ce que WiDo ne protège pas
 
 - Le contenu des sites que tu configures : leur fiabilité reste ta responsabilité.

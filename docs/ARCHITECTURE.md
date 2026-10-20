@@ -19,6 +19,12 @@
   listes de blocage)
 ```
 
+## Écrans liés
+
+La même APK tourne sur TV et téléphone ; `DeviceKind` choisit l'interface (`MenuScreen` ou `PhoneHome`). Sur la TV, `RemoteServer` sert la télécommande du navigateur et les routes de `ScreenLink` (`/hello`, `/pair`, `/status`, `/play`, `/take`, `/cmd`, `/sync`), annoncées en mDNS (`LinkDiscovery`, `_wido._tcp`). Le téléphone n'a pas de serveur : il interroge la TV (`LinkClient`).
+
+La synchro repose sur `SyncLedger` (core) : chaque élément (vidéo de Reprendre, site perso, épingle, masquages d'un site) est une clé datée ; la fusion garde la version la plus récente, les suppressions sont conservées 60 jours. `ConfigRepository` date chaque modification locale au moment où elle a lieu, et applique ce que les autres écrans envoient. Voir [PHONE-AND-SCREENS.md](PHONE-AND-SCREENS.md).
+
 ## Pourquoi deux modules
 
 Toute la logique qui décide (analyser une configuration, bloquer ou non un hôte, autoriser ou non une navigation, comparer des versions, lire une release) vit dans **`core`**, du Kotlin pur. Elle se teste en secondes sur n'importe quel ordinateur, sans émulateur ni SDK Android. L'app n'est qu'une couche fine qui branche ces décisions sur la WebView, l'interface et le réseau.

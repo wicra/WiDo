@@ -79,7 +79,9 @@ Réglages → **Téléphone** → active **Télécommande téléphone**, puis sc
 - **Texte** : écrit dans le champ sélectionné de la page.
 - **Lien** : colle une adresse (vidéo, page) : elle s'ouvre sur la TV, dans le site du menu qui la connaît ou dans une fenêtre à part.
 
-Le serveur de la TV n'est ouvert que lorsque WiDo est à l'écran et que le réglage est actif. L'adresse contient un code secret : **Nouveau code** l'oublie, et les téléphones doivent rescanner. Le partage direct depuis le menu « Partager » d'Android demanderait une application sur le téléphone : pour l'instant, copie le lien et colle-le dans l'onglet **Lien**.
+Le serveur de la TV n'est ouvert que lorsque WiDo est à l'écran et que le réglage est actif. L'adresse contient un code secret : **Nouveau code** l'oublie, et les téléphones doivent rescanner.
+
+Avec **l'appli WiDo sur le téléphone**, tout cela est intégré (touches, pavé, clavier en direct, volume par les touches du téléphone), plus « Partager → WiDo », **Sur la TV** et **Reprendre sur le téléphone** : voir [PHONE-AND-SCREENS.md](PHONE-AND-SCREENS.md). La page dans le navigateur reste utile pour un téléphone sans l'appli (iPhone).
 
 ## Saisie de texte et voix
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.8.0
+
+### 📱 WiDo sur téléphone
+- **La même appli, en version tactile** : accueil en grille, Reprendre, épingles, réglages adaptés aux écrans étroits ; dans une page, le bouton ⋯ ouvre le menu rapide.
+- **Partager → WiDo** depuis n'importe quelle appli : regarder ici ou sur la TV.
+
+### 📺 Passer d'un écran à l'autre
+- **Sur la TV** : la page part sur la TV, à la même seconde. **Reprendre sur le téléphone** : la TV se met en pause, le téléphone reprend.
+- **En cours sur la TV** : image, titre, barre de lecture déplaçable, ⏪ ⏯ ⏩.
+- **Télécommande intégrée** : touches, pavé tactile, clavier en direct (chaque lettre s'écrit sur la TV), volume par les touches du téléphone.
+
+### 🔗 Écrans liés et synchro
+- **Liaison** par QR code ou par la liste des TV du réseau, validée sur la TV : **Invité** (télécommande, envoi) ou **Mon téléphone** (synchro).
+- **Synchro de mes écrans** : Reprendre, sites perso, épingles et éléments masqués ; le plus récent gagne, une vidéo finie disparaît partout. Mes TV se synchronisent aussi entre elles.
+
+### Corrigé
+- La position des vidéos n'était plus relevée après la sélection d'un champ de la page, ni après le réglage du minuteur de veille.
+
 ## 0.7.0
 
 ### 🚫 Plus de pub, sur tous les sites

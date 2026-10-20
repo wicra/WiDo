@@ -328,6 +328,8 @@ class ScreenLink(private val app: WiDoApp) {
                 val chosen = selectedPeer()
                 chosen?.let { refresh(it) }
                 if (tick % 8 == 0) _peers.value.filter { it.id != chosen?.id }.forEach { refresh(it) }
+                // Ce que la TV a regardé entre-temps arrive dans Reprendre sans relancer l'appli.
+                if (tick > 0 && tick % 15 == 0) syncSoon(immediate = true)
                 tick++
                 delay(STATUS_POLL_MS)
             }
