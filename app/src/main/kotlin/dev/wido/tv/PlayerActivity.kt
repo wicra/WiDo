@@ -178,6 +178,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                     onAdWindow = { url -> runOnUiThread { adWindow?.open(url) } },
                     onMediaStream = { runOnUiThread { onStreamFound() } },
                     onPageError = { code, failed -> runOnUiThread { showPageError(code, failed) } },
+                    onRendererGone = { runOnUiThread { onRendererGone() } },
                 ),
             )
             // Rafraîchit la configuration pour la prochaine ouverture, sans bloquer la lecture.
@@ -322,9 +323,16 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
         wv.requestFocus()
         pendingSeek = intent.getDoubleExtra(EXTRA_POSITION, 0.0)
-        autoStart = intent.getBooleanExtra(EXTRA_AUTOPLAY, false)
         // Une page épinglée, sinon la dernière page visitée du site (réglage « Reprendre »), sinon son accueil.
         val pinned = intent.getStringExtra(EXTRA_URL)?.let { ResumeUrl.toRemember(site, it) }
+        autoStart = intent.getBooleanExtra(EXTRA_AUTOPLAY, false)
+        // Cette vidéo a fait tomber la session précédente : pas de lecture ni de plein écran automatiques,
+        // sinon le même plantage recommence aussitôt (et boucle vers l'accueil). Elle se lance avec OK.
+        if (autoStart && pinned != null && settings.openPage == pinned) {
+            autoStart = false
+            root.postDelayed({ osd.showText(getString(R.string.osd_autoplay_skipped), OsdView.Kind.Warning) }, 1_500)
+        }
+        settings.openPage = pinned
         wv.loadUrl(pinned ?: if (settings.resumeLastPage) ResumeUrl.startUrl(site, settings.lastUrlFor(site.id)) else site.url)
     }
 
@@ -397,7 +405,13 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_MENU) {
                 if (event.action == KeyEvent.ACTION_UP) {
                     // Le relâchement de l'appui long qui vient d'ouvrir le menu ne doit pas le refermer.
-                    if (code == KeyEvent.KEYCODE_BACK && backLongPressed) backLongPressed = false else hidePanel()
+                    when {
+                        code == KeyEvent.KEYCODE_BACK && backLongPressed -> backLongPressed = false
+                        // Page perdue : rien derrière l'écran d'erreur, Retour ramène à l'accueil.
+                        rendererLost && code == KeyEvent.KEYCODE_BACK -> goHome()
+                        rendererLost -> Unit
+                        else -> hidePanel()
+                    }
                 }
                 return true
             }
@@ -1473,6 +1487,56 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
     }
 
+    // --- Moteur de la page arrêté ----------------------------------------------------------
+
+    /**
+     * Le moteur de la page s'est arrêté (le lecteur du site a planté, ou la TV manquait de mémoire). La
+     * WebView est perdue : on la retire, la position est gardée, et WiDo propose de réessayer au lieu de
+     * se fermer d'un coup.
+     */
+    private var rendererLost = false
+
+    private fun onRendererGone() {
+        rendererLost = true
+        val current = site
+        val dead = webView
+        val url = dead?.url
+        val position = currentPosition()
+        rememberPage()
+        webView = null
+        dead?.let {
+            root.removeView(it)
+            runCatching { it.destroy() }
+        }
+        WebViewPool.clear()
+        // Plein écran vidéo du site : sa vue part avec la page.
+        customView?.let { root.removeView(it) }
+        customView = null
+        customCallback = null
+        cinema = false
+        hidePauseScreen()
+        root.removeCallbacks(autoStartPoll)
+        root.removeCallbacks(progressPoll)
+        mediaState.value = null
+        panelView?.let { hidePanel() }
+        showOverlay {
+            dev.wido.tv.ui.PageError(
+                title = getString(R.string.err_crash_title),
+                body = getString(R.string.err_crash_body),
+                retry = getString(R.string.err_retry),
+                back = getString(R.string.err_back),
+                edit = null,
+                onRetry = {
+                    // Une page toute neuve, à la même seconde, lecture lancée à la main (OK).
+                    if (current != null) startActivity(intent(this, current.id, url, position))
+                    finish()
+                },
+                onBack = { goHome() },
+                onEdit = {},
+            )
+        }
+    }
+
     /** Retour à l'accueil de WiDo (sans quitter l'appli si le lecteur a été ouvert d'ailleurs). */
     private fun goHome() {
         if (isTaskRoot) startActivity(Intent(this, MainActivity::class.java))
@@ -1714,7 +1778,14 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val thumbnails = (application as WiDoApp).thumbnails
         runCatching {
             android.view.PixelCopy.request(window, rect, bitmap, { result ->
-                if (result == android.view.PixelCopy.SUCCESS) kotlin.concurrent.thread { thumbnails.saveFrame(page, bitmap) }
+                if (result == android.view.PixelCopy.SUCCESS) {
+                    kotlin.concurrent.thread {
+                        thumbnails.saveFrame(page, bitmap)
+                        bitmap.recycle()
+                    }
+                } else {
+                    bitmap.recycle()
+                }
             }, android.os.Handler(android.os.Looper.getMainLooper()))
         }
     }
@@ -1831,6 +1902,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             it.destroy()
         }
         webView = null
+        // Fermeture normale : la page n'a pas fait tomber l'appli.
+        if (isFinishing) settings.openPage = null
         super.onDestroy()
     }
 
@@ -1890,7 +1963,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 })()"""
         private const val PROGRESS_POLL_MS = 10_000L
         private const val FOLLOW_POLL_MS = 2_000L
-        private const val FRAME_EVERY_MS = 45_000L
+        private const val FRAME_EVERY_MS = 90_000L
         private const val PAUSE_SCREEN_MS = 1_200L
         private const val DOUBLE_BACK_MS = 450L
         /** Étiquette du vinyle de l'accueil, rapportée au rayon du disque (50 dp sur 86 dp au focus). */

@@ -77,6 +77,14 @@ class Settings(private val context: Context) {
         get() = prefs.getBoolean("auto_fullscreen", true)
         set(v) = prefs.edit().putBoolean("auto_fullscreen", v).apply()
 
+    /**
+     * Page vidéo ouverte dans le lecteur, effacée à sa fermeture normale. Encore là à la réouverture :
+     * la session précédente s'est mal terminée (plantage, appli tuée) ; on n'y relance pas la lecture seule.
+     */
+    var openPage: String?
+        get() = state.getString("open_page", null)
+        set(v) = state.edit().putString("open_page", v).apply()
+
     /** Sons de l'interface sur TV : coupés, doux ou normaux ([UiSound]). */
     var uiSounds: Int
         get() = prefs.getInt("ui_sounds", UiSound.NORMAL)

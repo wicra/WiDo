@@ -3,6 +3,7 @@
 ## 0.9.1
 
 ### Corrigé
+- **L'appli se fermait pendant une vidéo, puis Reprendre ramenait en boucle à l'accueil.** Quand le moteur de la page s'arrête (le lecteur du site plante, ou la TV manque de mémoire), Android fermait toute l'appli ; en rouvrant la même vidéo, sa lecture automatique relançait le même plantage. Désormais WiDo reste ouvert et affiche « La page s'est arrêtée » avec Réessayer (même seconde) et Retour. Une vidéo qui a fait tomber la session précédente se rouvre sans lecture automatique : OK pour la lancer. Les captures d'image pour Reprendre sont aussi plus espacées (moins de mémoire utilisée).
 - **L'appli téléphone pouvait se fermer** en revenant dessus (notification de la TV ou lecture en arrière-plan arrêtée trop tôt, par exemple après la demande d'autorisation des notifications).
 - **Reprendre retombait sur l'accueil du site** quand le site ne couvrait plus l'adresse de la vidéo : la vidéo s'ouvre maintenant avec le site qui la connaît.
 - **Retour ne quitte plus WiDo** après une vidéo envoyée depuis le téléphone : il ramène à l'accueil.

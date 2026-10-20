@@ -370,4 +370,7 @@
         <item quantity="one">%d video in progress</item>
         <item quantity="other">%d videos in progress</item>
     </plurals>
+    <string name="err_crash_title">The page stopped</string>
+    <string name="err_crash_body">The site\'s player crashed, or the TV ran out of memory. Your position is saved: try again and the video will pick up where you left off.</string>
+    <string name="osd_autoplay_skipped">This video stopped abruptly last time: press OK to start it</string>
 </resources>

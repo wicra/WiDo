@@ -370,4 +370,7 @@
         <item quantity="one">%d vidéo en cours</item>
         <item quantity="other">%d vidéos en cours</item>
     </plurals>
+    <string name="err_crash_title">La page s\'est arrêtée</string>
+    <string name="err_crash_body">Le lecteur du site a planté, ou la TV manquait de mémoire. Ta position est gardée : réessaie, la vidéo repartira là où tu en étais.</string>
+    <string name="osd_autoplay_skipped">Cette vidéo s\'était arrêtée brusquement : appuie sur OK pour la lancer</string>
 </resources>

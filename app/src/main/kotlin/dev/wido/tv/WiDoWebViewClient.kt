@@ -34,6 +34,8 @@ class WiDoWebViewClient(
     private val onMediaStream: (MediaStream) -> Unit = {},
     /** La page n'a pas pu s'ouvrir (code d'erreur de la WebView, adresse) : l'app affiche son propre écran. */
     private val onPageError: (Int, String) -> Unit = { _, _ -> },
+    /** Le moteur de la page s'est arrêté (plantage, ou tué faute de mémoire) : sans ça, Android ferme toute l'appli. */
+    private val onRendererGone: () -> Unit = {},
 ) : WebViewClient() {
     /** Meilleur flux vidéo repéré sur la page affichée. */
     @Volatile var stream: MediaStream? = null
@@ -149,6 +151,11 @@ class WiDoWebViewClient(
     override fun onPageFinished(view: WebView, url: String?) {
         injector.inject(view)
         onPageVisible()
+    }
+
+    override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+        onRendererGone()
+        return true
     }
 
     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
