@@ -5,7 +5,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -17,6 +16,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.lerp
 import dev.wido.tv.UiSound
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -70,6 +70,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -266,7 +267,6 @@ fun MenuScreen(
                 Tab.Continue -> ContinuePane(
                     entries = watching,
                     sites = sites,
-                    focused = focusedWatch,
                     onFocus = { entry ->
                         focusedWatch = entry
                         sites.firstOrNull { it.site.id == entry.siteId }?.let { m ->
@@ -596,14 +596,15 @@ internal fun SiteCard(
                     .size(CIRCLE)
                     .then(menuKey)
                     .then(moveKeys)
-                    .onGloballyPositioned { if (focused) LaunchOrigin.remember(it, accent) }
                     .onFocusChanged {
                         if (it.isFocused && !focused) UiSound.focus()
                         focused = it.isFocused
                         if (it.isFocused) onFocus(accent)
                     }
                     .then(rackWave(distance ?: if (focused) 0 else null, focused))
-                    .shadow(if (focused) 26.dp else 6.dp, CircleShape, clip = false, ambientColor = accent, spotColor = accent)
+                    // Après la vague : l'ouverture part du disque tel qu'on le voit (agrandi, soulevé).
+                    .onGloballyPositioned { if (focused) LaunchOrigin.remember(it, accent) }
+                    .shadow(if (focused) 18.dp else 4.dp, CircleShape, clip = false)
                     .clip(CircleShape)
                     .then(if (moving) Modifier.border(2.5.dp, Color.White, CircleShape) else Modifier)
                     .combinedClickable(onClick = onClick, onLongClick = onOptions),
@@ -638,7 +639,8 @@ private fun CircleLogo(icon: SiteIcon?, name: String, focused: Boolean) {
                 icon.image,
                 contentDescription = null,
                 contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                modifier = Modifier.size(disc * 0.62f).graphicsLayer { alpha = if (focused) 1f else 0.9f },
+                filterQuality = androidx.compose.ui.graphics.FilterQuality.High,
+                modifier = Modifier.size(disc * 0.64f).graphicsLayer { alpha = if (focused) 1f else 0.92f },
             )
         } else {
             Text(name.firstOrNull()?.uppercase().orEmpty(), color = Palette.Ink, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
@@ -680,12 +682,11 @@ internal fun AddCard(index: Int, onClick: () -> Unit, onFocus: () -> Unit, dista
 private val CIRCLE = 86.dp
 private val CIRCLE_SLOT = 104.dp
 
-/** Arrivée avec un léger dépassement : le disque « claque » en place. */
-private val SnapBack = CubicBezierEasing(0.34f, 1.45f, 0.64f, 1f)
-
 /**
  * La vague du bac à disques : le disque choisi sort (plus grand, soulevé), ses voisins s'écartent et
- * s'inclinent de moins en moins loin. Chaque voisin bouge un peu après le précédent : l'onde se propage.
+ * s'inclinent de moins en moins loin. Des ressorts plutôt que des durées fixes : le mouvement reste
+ * fluide quand on enchaîne les flèches (il repart de sa vitesse au lieu de redémarrer), et les voisins,
+ * plus souples à mesure qu'ils sont loin, suivent avec un léger retard : l'onde se propage.
  */
 @Composable
 private fun rackWave(distance: Int?, focused: Boolean): Modifier {
@@ -698,7 +699,10 @@ private fun rackWave(distance: Int?, focused: Boolean): Modifier {
         3 -> 0.25f
         else -> 0f
     }
-    val spec = tween<Float>(460, delayMillis = if (far in 1..3) far * 45 else 0, easing = SnapBack)
+    val spec = androidx.compose.animation.core.spring<Float>(
+        dampingRatio = 0.72f,
+        stiffness = if (far in 1..3) 420f / (1f + 0.6f * far) else 420f,
+    )
     val scale by animateFloatAsState(
         when {
             d == 0 && focused -> 1.2f
@@ -707,8 +711,8 @@ private fun rackWave(distance: Int?, focused: Boolean): Modifier {
         },
         spec, label = "rackScale",
     )
-    val lift by animateFloatAsState(if (d == 0) (if (focused) -16f else -8f) else -5f * decay, spec, label = "rackLift")
-    val tilt by animateFloatAsState(if (d == 0) 0f else -side * 32f * decay, spec, label = "rackTilt")
+    val lift by animateFloatAsState(if (d == 0) (if (focused) -14f else -7f) else -4f * decay, spec, label = "rackLift")
+    val tilt by animateFloatAsState(if (d == 0) 0f else -side * 26f * decay, spec, label = "rackTilt")
     val shift by animateFloatAsState(if (d == 0) 0f else side * 8f * decay, spec, label = "rackShift")
     return Modifier.graphicsLayer {
         scaleX = scale
@@ -716,7 +720,7 @@ private fun rackWave(distance: Int?, focused: Boolean): Modifier {
         translationY = lift * density
         translationX = shift * density
         rotationY = tilt
-        cameraDistance = 12f * density
+        cameraDistance = 14f * density
     }
 }
 
@@ -735,83 +739,28 @@ private fun Vinyl(accent: Color, focused: Boolean) {
     val glow by animateFloatAsState(if (focused) 1f else 0f, tween(300), label = "vinylGlow")
     androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
         val r = size.minDimension / 2
-        drawCircle(Brush.radialGradient(listOf(Color(0xFF2A2A33), Color(0xFF111116), Color(0xFF060608)), center, r), r)
-        drawCircle(Brush.radialGradient(listOf(Color.Transparent, accent.copy(alpha = 0.12f + 0.22f * glow)), center, r), r)
-        val inner = r * 0.62f
-        val hair = 0.8.dp.toPx()
-        for (i in 0..8) {
-            drawCircle(Color.White.copy(alpha = if (i % 2 == 0) 0.075f else 0.035f), inner + (r * 0.95f - inner) * i / 8f, style = Stroke(hair))
+        // Vinyle : un noir franc, à peine plus clair au centre.
+        drawCircle(Brush.radialGradient(listOf(Color(0xFF1E1E24), Color(0xFF0B0B0E)), center, r), r)
+        // Sillons : des traits d'un pixel, bien contrastés (pas de flou de dégradé).
+        val inner = r * 0.64f
+        for (i in 0..6) {
+            drawCircle(Color.White.copy(alpha = if (i % 2 == 0) 0.16f else 0.08f), inner + (r * 0.93f - inner) * i / 6f, style = Stroke(1f))
         }
+        // Deux reflets nets qui défilent quand le disque tourne.
         rotate(angle.value) {
-            val light = Color.White.copy(alpha = 0.10f + 0.08f * glow)
+            val light = Color.White.copy(alpha = 0.14f + 0.1f * glow)
             drawCircle(
                 Brush.sweepGradient(
-                    0f to Color.Transparent, 0.06f to light, 0.12f to Color.Transparent,
-                    0.5f to Color.Transparent, 0.56f to light, 0.62f to Color.Transparent, 1f to Color.Transparent,
+                    0f to Color.Transparent, 0.07f to light, 0.11f to Color.Transparent,
+                    0.5f to Color.Transparent, 0.57f to light, 0.61f to Color.Transparent, 1f to Color.Transparent,
                     center = center,
                 ),
-                r * 0.97f,
+                r * 0.95f,
             )
         }
-        drawCircle(accent.copy(alpha = 0.6f + 0.4f * glow), r * 0.6f, style = Stroke(2.2.dp.toPx()))
-        drawCircle(Color.White.copy(alpha = 0.10f + 0.25f * glow), r - hair, style = Stroke(1.dp.toPx()))
-    }
-}
-
-/**
- * Où se trouve l'élément qui ouvre un site (cercle ou vignette sélectionnée) : la page s'agrandit
- * depuis lui à l'ouverture.
- */
-object LaunchOrigin {
-    @Volatile var bounds: android.graphics.Rect? = null
-        private set
-
-    /** Couleur de l'élément (celle du site), pour le cercle qui s'agrandit. */
-    @Volatile var color: Int = 0xFF1E5BFF.toInt()
-        private set
-
-    fun remember(coordinates: androidx.compose.ui.layout.LayoutCoordinates, color: Color) {
-        val r = coordinates.boundsInWindow()
-        bounds = android.graphics.Rect(r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt())
-        this.color = color.toArgb()
-    }
-}
-
-/**
- * Fond d'ambiance : l'image de la vidéo sélectionnée, très adoucie (réduite puis agrandie, ce qui la
- * floute même sans effet de flou du système) et assombrie pour que le texte reste lisible.
- */
-@Composable
-private fun Backdrop(entry: WatchEntry?) {
-    val app = LocalContext.current.applicationContext as WiDoApp
-    var soft by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
-    LaunchedEffect(entry?.url) {
-        soft = entry?.let { e ->
-            app.thumbnails.forVideo(e.url, e.image)?.let { image ->
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                    val src = image.asAndroidBitmap()
-                    val w = 28
-                    val h = (src.height * w / src.width.toFloat()).toInt().coerceAtLeast(1)
-                    android.graphics.Bitmap.createScaledBitmap(src, w, h, true).asImageBitmap()
-                }
-            }
-        }
-    }
-    androidx.compose.animation.Crossfade(soft, animationSpec = tween(700), label = "backdrop") { image ->
-        if (image != null) {
-            Box(Modifier.fillMaxSize()) {
-                androidx.compose.foundation.Image(
-                    image,
-                    contentDescription = null,
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    filterQuality = androidx.compose.ui.graphics.FilterQuality.Low,
-                    alpha = 0.6f,
-                    modifier = Modifier.fillMaxSize().then(if (android.os.Build.VERSION.SDK_INT >= 31) Modifier.blur(24.dp) else Modifier),
-                )
-                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Palette.Background.copy(alpha = 0.85f), 0.65f to Palette.Background.copy(alpha = 0.25f))))
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Palette.Background.copy(alpha = 0.95f))))
-            }
-        }
+        // Anneau à la couleur du site autour de l'étiquette, et bord du disque.
+        drawCircle(accent, r * 0.6f, style = Stroke(2.5.dp.toPx()))
+        drawCircle(lerp(Color.White.copy(alpha = 0.18f), accent, glow), r - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
     }
 }
 
@@ -842,14 +791,15 @@ internal fun parseColor(hex: String?): Color? = hex?.let {
 }
 
 /**
- * Onglet « Reprendre » : la vidéo sélectionnée en grand (titre, site, temps restant, Reprendre, Retirer)
- * et toutes les vidéos en cours en vignettes, la plus récente d'abord. OK reprend, appui long retire.
+ * Onglet « Reprendre », sur toute la page : un en-tête discret, puis les vidéos en cours en grandes
+ * vignettes, la plus récente d'abord, avec leur titre en clair sous l'image (deux lignes), le site et le
+ * temps restant. Plusieurs vidéos d'un même site ont chacune leur vignette. OK reprend ; appui long ou
+ * Menu retire la vidéo.
  */
 @Composable
 private fun ContinuePane(
     entries: List<WatchEntry>,
     sites: List<MenuSite>,
-    focused: WatchEntry?,
     onFocus: (WatchEntry) -> Unit,
     onOpen: (WatchEntry) -> Unit,
     onRemove: (WatchEntry) -> Unit,
@@ -867,74 +817,89 @@ private fun ContinuePane(
         }
         return
     }
-    val current = focused?.takeIf { f -> entries.any { it.url == f.url } } ?: entries.first()
     val siteMap = remember(sites) { sites.associateBy { it.site.id } }
     Column(modifier.fillMaxSize()) {
-        Hero(
-            siteMap[current.siteId],
-            watch = current,
-            onResume = { onOpen(current) },
-            onRemoveWatch = { onRemove(current) },
-            empty = false,
-            onOpen = {},
-            onOptions = {},
-            onAdd = {},
-            pins = emptyList(),
-            onPin = {},
-            compact = true,
-        )
+        Row(Modifier.fillMaxWidth().padding(start = 52.dp, end = 52.dp, top = 10.dp), verticalAlignment = Alignment.Bottom) {
+            Text(
+                pluralStringResource(R.plurals.continue_count, entries.size, entries.size),
+                fontSize = 28.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = (-1).sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(stringResource(R.string.continue_hint_tv), color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        }
         androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(4),
-            contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 22.dp, bottom = 40.dp),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-            verticalArrangement = Arrangement.spacedBy(22.dp),
+            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
+            contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 22.dp, bottom = 48.dp),
+            horizontalArrangement = Arrangement.spacedBy(28.dp),
+            verticalArrangement = Arrangement.spacedBy(26.dp),
             modifier = Modifier.weight(1f).fillMaxWidth(),
         ) {
             items(entries.size, key = { entries[it].url }) { i ->
                 val entry = entries[i]
-                WatchCard(
-                    entry,
-                    siteMap[entry.siteId]?.site,
-                    { onOpen(entry) },
-                    { onRemove(entry) },
-                    { onFocus(entry) },
-                    Modifier.fillMaxWidth().aspectRatio(16f / 9f),
-                )
+                WatchTile(entry, siteMap[entry.siteId]?.site, { onOpen(entry) }, { onRemove(entry) }, { onFocus(entry) })
             }
         }
     }
 }
 
+/** Une vidéo en cours : l'image (avancement en bas), puis le titre, le site et le temps restant. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun WatchCard(entry: WatchEntry, site: Site?, onClick: () -> Unit, onRemove: () -> Unit, onFocus: () -> Unit, modifier: Modifier = Modifier) {
+private fun WatchTile(entry: WatchEntry, site: Site?, onClick: () -> Unit, onRemove: () -> Unit, onFocus: () -> Unit) {
     val siteName = site?.name ?: Hosts.of(entry.url)?.removePrefix("www.").orEmpty()
     var focused by remember { mutableStateOf(false) }
-    Box(
-        modifier
-            .onGloballyPositioned { if (focused) LaunchOrigin.remember(it, Palette.Accent) }
-            .onFocusChanged {
-                if (it.isFocused && !focused) UiSound.focus()
-                focused = it.isFocused
-                if (it.isFocused) onFocus()
+    val left = if (entry.duration > 0) stringResource(R.string.watch_left, ((entry.duration - entry.position) / 60).toInt().coerceAtLeast(1)) else null
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .onFocusChanged {
+                    if (it.isFocused && !focused) UiSound.focus()
+                    focused = it.isFocused
+                    if (it.isFocused) onFocus()
+                }
+                .onKeyEvent { e ->
+                    val menu = e.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_MENU && e.nativeKeyEvent.action == KeyEvent.ACTION_UP
+                    if (menu) onRemove()
+                    menu
+                }
+                .liftEffect(focused, CardShape, focusScale = 1.06f, lift = 22.dp)
+                .onGloballyPositioned { if (focused) LaunchOrigin.remember(it, Palette.Accent) }
+                .clip(CardShape)
+                .background(Palette.Glass)
+                .then(if (focused) Modifier.border(3.dp, Color.White, CardShape) else Modifier)
+                .combinedClickable(onClick = onClick, onLongClick = onRemove),
+        ) {
+            VideoArt(rememberWatchImage(entry), site, entry.url, Modifier.matchParentSize(), badge = 30.dp)
+            if (focused) {
+                Box(Modifier.align(Alignment.Center).size(58.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.92f)), contentAlignment = Alignment.Center) {
+                    GlyphIcon(Glyph.Play, Palette.Ink, 26.dp)
+                }
             }
-            .liftEffect(focused, CardShape, focusScale = 1.08f, lift = 22.dp)
-            .clip(CardShape)
-            .background(Palette.Glass)
-            .then(if (focused) Modifier.border(2.dp, Color.White, CardShape) else Modifier)
-            .combinedClickable(onClick = onClick, onLongClick = onRemove),
-    ) {
-        // L'image de la vidéo (ou de la page), avec le logo du site ; sinon la couleur et le logo du site.
-        VideoArt(rememberWatchImage(entry), site, entry.url, Modifier.matchParentSize())
-        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color(0xE6000000))))
-        Column(Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) {
-            Text(entry.title, fontSize = 14.sp, fontWeight = FontWeight.Bold, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (siteName.isNotEmpty()) Text(siteName, color = Color.White.copy(alpha = 0.65f), fontSize = 12.sp, maxLines = 1)
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.25f))) {
+                Box(Modifier.fillMaxWidth(entry.progress).height(4.dp).background(if (focused) Color.White else Palette.Accent))
+            }
         }
-        // Avancement de la vidéo.
-        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.25f))) {
-            Box(Modifier.fillMaxWidth(entry.progress).height(3.dp).background(Color.White))
-        }
+        Text(
+            entry.title,
+            color = if (focused) Color.White else Color.White.copy(alpha = 0.85f),
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            lineHeight = 21.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            listOfNotNull(siteName.takeIf { it.isNotEmpty() }, left).joinToString("  ·  "),
+            color = Color.White.copy(alpha = if (focused) 0.8f else 0.55f),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

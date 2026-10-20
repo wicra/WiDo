@@ -1128,26 +1128,58 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     /**
-     * Ouverture depuis l'accueil (TV) : le cercle du site, à sa place exacte, s'agrandit en douceur
-     * jusqu'à couvrir l'écran, puis se fond dans l'écran d'attente (fond de l'appli, logo du site).
+     * Ouverture depuis l'accueil (TV), comme un seul geste : l'accueil reste à l'écran (sa capture), le
+     * vinyle choisi part de sa place exacte, grandit en tournant et glisse vers le centre ; son étiquette
+     * (le logo du site) devient le logo de l'écran d'attente, à la même place et à la même taille. Le
+     * disque se fond alors dans l'écran d'attente.
      */
     private fun playOpening(content: View) {
         val origin = intent.getIntArrayExtra(EXTRA_ORIGIN)?.takeIf { it.size == 4 } ?: return
+        val snapshot = LaunchSnapshot.take()
+        val shot = snapshot?.let { bitmap ->
+            android.widget.ImageView(this).apply {
+                scaleType = android.widget.ImageView.ScaleType.FIT_XY
+                setImageBitmap(bitmap)
+            }.also { overlay.addView(it, FrameLayout.LayoutParams(MATCH, MATCH)) }
+        }
         val reveal = RevealView(this, intent.getIntExtra(EXTRA_COLOR, 0xFF1E5BFF.toInt()))
         overlay.addView(reveal, FrameLayout.LayoutParams(MATCH, MATCH))
         content.alpha = 0f
+        site?.let { current ->
+            lifecycleScope.launch { (application as WiDoApp).favicons.load(current)?.let { reveal.logo = it.image.asAndroidBitmap() } }
+        }
         reveal.post {
-            val cx = (origin[0] + origin[2]) / 2f
-            val cy = (origin[1] + origin[3]) / 2f
-            val start = (origin[2] - origin[0]) / 2f
-            val end = kotlin.math.hypot(maxOf(cx, reveal.width - cx), maxOf(cy, reveal.height - cy))
+            val density = resources.displayMetrics.density
+            val cx0 = (origin[0] + origin[2]) / 2f
+            val cy0 = (origin[1] + origin[3]) / 2f
+            val r0 = (origin[2] - origin[0]) / 2f
+            // Où sera le logo de l'écran d'attente (centre de sa boîte), dans les coordonnées du dessin.
+            val box = wordmark?.parent as? View
+            val here = IntArray(2).also { reveal.getLocationInWindow(it) }
+            val target = IntArray(2).also { box?.getLocationInWindow(it) }
+            val cx1 = if (box != null && box.width > 0) target[0] - here[0] + box.width / 2f else reveal.width / 2f
+            val cy1 = if (box != null && box.height > 0) target[1] - here[1] + box.height / 2f else reveal.height / 2f
+            val label0 = r0 * LABEL_RATIO
+            val label1 = 56 * density
+            val r1 = kotlin.math.hypot(maxOf(cx1, reveal.width - cx1), maxOf(cy1, reveal.height - cy1)) * 1.05f
             ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = 420
-                interpolator = android.view.animation.DecelerateInterpolator(2.2f)
-                addUpdateListener { reveal.set(cx, cy, start + (end - start) * it.animatedFraction, 220f * it.animatedFraction) }
+                duration = 620
+                interpolator = android.view.animation.PathInterpolator(0.45f, 0f, 0.15f, 1f)
+                addUpdateListener {
+                    val f = it.animatedValue as Float
+                    reveal.set(
+                        cx0 + (cx1 - cx0) * f,
+                        cy0 + (cy1 - cy0) * f,
+                        r0 + (r1 - r0) * f,
+                        label0 + (label1 - label0) * f,
+                        40f + 320f * f,
+                    )
+                }
                 doOnEnd {
-                    content.animate().alpha(1f).setDuration(220).start()
-                    reveal.animate().alpha(0f).setDuration(260).withEndAction { overlay.removeView(reveal) }.start()
+                    shot?.let { overlay.removeView(it) }
+                    snapshot?.recycle()
+                    content.alpha = 1f
+                    reveal.animate().alpha(0f).setDuration(280).withEndAction { overlay.removeView(reveal) }.start()
                 }
                 start()
             }
@@ -1155,31 +1187,42 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     /**
-     * Le vinyle choisi qui s'agrandit jusqu'à remplir l'écran : disque noir, sillons, reflets qui
-     * tournent et étiquette à la couleur du site. Dessiné directement (fluide, même sur une petite clé TV).
+     * Le vinyle de l'ouverture : disque noir, sillons, reflets qui tournent, anneau à la couleur du site
+     * et étiquette blanche avec le logo, comme sur l'accueil. Dessiné directement (fluide sur une clé TV).
      */
     private class RevealView(context: Context, color: Int) : View(context) {
         private val disc = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
         private val groove = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             style = android.graphics.Paint.Style.STROKE
             this.color = Color.WHITE
+            strokeWidth = 1.5f
         }
         private val sheen = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-        private val label = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = color }
         private val ring = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             style = android.graphics.Paint.Style.STROKE
             this.color = color
         }
-        private val hole = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = 0xFF060608.toInt() }
+        private val label = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = 0xF7FFFFFF.toInt() }
+        private val picture = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG)
+        private val dest = android.graphics.RectF()
         private var cx = 0f
         private var cy = 0f
         private var radius = 0f
+        private var labelRadius = 0f
         private var spin = 0f
 
-        fun set(x: Float, y: Float, r: Float, angle: Float) {
+        /** Logo du site sur l'étiquette (dès qu'il est chargé). */
+        var logo: android.graphics.Bitmap? = null
+            set(v) {
+                field = v
+                invalidate()
+            }
+
+        fun set(x: Float, y: Float, r: Float, labelR: Float, angle: Float) {
             cx = x
             cy = y
             radius = r
+            labelRadius = labelR
             spin = angle
             invalidate()
         }
@@ -1187,30 +1230,37 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         override fun onDraw(canvas: android.graphics.Canvas) {
             if (radius <= 0) return
             disc.shader = android.graphics.RadialGradient(
-                cx, cy, radius, intArrayOf(0xFF2A2A33.toInt(), 0xFF111116.toInt(), 0xFF060608.toInt()), null, android.graphics.Shader.TileMode.CLAMP,
+                cx, cy, radius, intArrayOf(0xFF1E1E24.toInt(), 0xFF0B0B0E.toInt()), null, android.graphics.Shader.TileMode.CLAMP,
             )
             canvas.drawCircle(cx, cy, radius, disc)
-            // Sillons : de l'étiquette au bord.
-            val inner = radius * 0.36f
-            groove.strokeWidth = maxOf(1f, radius * 0.003f)
-            for (i in 0..17) {
-                groove.alpha = if (i % 2 == 0) 0x16 else 0x0A
-                canvas.drawCircle(cx, cy, inner + (radius * 0.97f - inner) * i / 17f, groove)
+            // Sillons : de l'anneau au bord, un trait fin tous les 14 px environ.
+            val inner = labelRadius * 1.12f
+            val outer = radius * 0.95f
+            if (outer > inner) {
+                val count = ((outer - inner) / 14f).toInt().coerceIn(4, 40)
+                for (i in 0..count) {
+                    groove.alpha = if (i % 2 == 0) 0x2A else 0x14
+                    canvas.drawCircle(cx, cy, inner + (outer - inner) * i / count, groove)
+                }
             }
-            // Deux reflets opposés qui tournent : le disque tourne.
             canvas.save()
             canvas.rotate(spin, cx, cy)
             sheen.shader = android.graphics.SweepGradient(
                 cx, cy,
-                intArrayOf(0, 0x24FFFFFF, 0, 0, 0x24FFFFFF, 0, 0),
-                floatArrayOf(0f, 0.06f, 0.12f, 0.5f, 0.56f, 0.62f, 1f),
+                intArrayOf(0, 0x26FFFFFF, 0, 0, 0x26FFFFFF, 0, 0),
+                floatArrayOf(0f, 0.07f, 0.11f, 0.5f, 0.57f, 0.61f, 1f),
             )
-            canvas.drawCircle(cx, cy, radius * 0.97f, sheen)
+            canvas.drawCircle(cx, cy, radius * 0.95f, sheen)
             canvas.restore()
-            ring.strokeWidth = maxOf(2f, radius * 0.012f)
-            canvas.drawCircle(cx, cy, radius * 0.355f, ring)
-            canvas.drawCircle(cx, cy, radius * 0.33f, label)
-            canvas.drawCircle(cx, cy, radius * 0.02f, hole)
+            ring.strokeWidth = maxOf(3f, labelRadius * 0.06f)
+            canvas.drawCircle(cx, cy, labelRadius * 1.06f, ring)
+            canvas.drawCircle(cx, cy, labelRadius, label)
+            logo?.let { bitmap ->
+                val half = labelRadius * 0.62f
+                val ratio = bitmap.height.toFloat() / bitmap.width.coerceAtLeast(1)
+                dest.set(cx - half, cy - half * ratio, cx + half, cy + half * ratio)
+                canvas.drawBitmap(bitmap, null, dest, picture)
+            }
         }
     }
 
@@ -1869,6 +1919,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val FRAME_EVERY_MS = 45_000L
         private const val PAUSE_SCREEN_MS = 5_000L
         private const val DOUBLE_BACK_MS = 450L
+        /** Étiquette du vinyle de l'accueil, rapportée au rayon du disque (50 dp sur 86 dp au focus). */
+        private const val LABEL_RATIO = 0.58f
         private const val KEEP_VISIBLE_SCRIPT = """(function () {
   try {
     Object.defineProperty(document, 'hidden', { get: function () { return false; } });

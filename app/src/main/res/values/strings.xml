@@ -365,4 +365,9 @@
     <string name="v_sounds_normal">Normal</string>
     <string name="continue_empty_title">Rien en cours</string>
     <string name="continue_empty_body">Les vidéos commencées s\'affichent ici : OK pour reprendre à la seconde près.</string>
+    <string name="continue_hint_tv">OK pour reprendre  ·  appui long ou Menu pour retirer</string>
+    <plurals name="continue_count">
+        <item quantity="one">%d vidéo en cours</item>
+        <item quantity="other">%d vidéos en cours</item>
+    </plurals>
 </resources>

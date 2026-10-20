@@ -143,7 +143,7 @@ class Settings(private val context: Context) {
     // --- Reprise et ordre --------------------------------------------------------------------
     /** Ouvrir un site là où on l'avait laissé, plutôt que sur son accueil. */
     var resumeLastPage: Boolean
-        get() = prefs.getBoolean("resume", true)
+        get() = prefs.getBoolean("resume", false)
         set(v) = prefs.edit().putBoolean("resume", v).apply()
 
     fun lastUrlFor(siteId: String): String? = state.getString("last_url_$siteId", null)

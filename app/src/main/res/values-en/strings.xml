@@ -365,4 +365,9 @@
     <string name="v_sounds_normal">Normal</string>
     <string name="continue_empty_title">Nothing in progress</string>
     <string name="continue_empty_body">Videos you start show up here: press OK to resume at the exact second.</string>
+    <string name="continue_hint_tv">OK to resume  ·  long press or Menu to remove</string>
+    <plurals name="continue_count">
+        <item quantity="one">%d video in progress</item>
+        <item quantity="other">%d videos in progress</item>
+    </plurals>
 </resources>

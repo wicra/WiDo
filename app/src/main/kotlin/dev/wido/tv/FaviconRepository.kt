@@ -49,7 +49,8 @@ class FaviconRepository(private val context: Context) {
         map
     }
 
-    private fun keyOf(site: Site) = sha1(site.icon ?: site.url)
+    // « v2 » : icônes reprises en plus grand (les anciennes, souvent en 16-32 px, étaient floues).
+    private fun keyOf(site: Site) = sha1("v2:" + (site.icon ?: site.url))
 
     /** Couleur déjà connue du site, sans réseau ni décodage : de quoi colorer la carte dès le premier affichage. */
     fun cachedColor(site: Site): Color? = colors[keyOf(site)]?.let { Color(it) }
@@ -147,13 +148,27 @@ class FaviconRepository(private val context: Context) {
             runCatching { discover(site.url) }.getOrNull()?.let { candidates += it }
             runCatching { URI(site.url).resolve("/favicon.ico").toString() }.getOrNull()?.let { candidates += it }
         }
+        // La plus grande des icônes proposées (on s'arrête dès qu'elle est assez grande pour un disque net).
+        var best: Bitmap? = null
         for (url in candidates.take(5)) {
             if (!url.startsWith("https://")) continue
             val bytes = runCatching { Http.get(url, MAX_ICON_BYTES, timeoutMs = 6_000) }.getOrNull() ?: continue
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: continue
-            if (bitmap.width >= 16 && bitmap.height >= 16) return bitmap
+            if (bitmap.width < 16 || bitmap.height < 16) continue
+            if (best == null || bitmap.width > best.width) best = bitmap
+            if (bitmap.width >= SHARP_PX) break
         }
-        return null
+        return best?.let(::sharpen)
+    }
+
+    /**
+     * Une petite icône (favicon de 16 à 48 px) agrandie au filtre doux devient floue sur la TV : on la
+     * double d'abord pixel par pixel (bords francs), l'affichage n'a plus qu'à la réduire un peu.
+     */
+    private fun sharpen(bitmap: Bitmap): Bitmap {
+        if (bitmap.width >= SHARP_PX) return bitmap
+        val factor = (SHARP_PX + bitmap.width - 1) / bitmap.width
+        return Bitmap.createScaledBitmap(bitmap, bitmap.width * factor, bitmap.height * factor, false)
     }
 
     /** Icônes déclarées dans la page d'accueil, la plus grande (et `apple-touch-icon`) d'abord. */
@@ -184,6 +199,7 @@ class FaviconRepository(private val context: Context) {
     private companion object {
         val LINK = Regex("<link\\b[^>]*>", RegexOption.IGNORE_CASE)
         const val MAX_ICON_BYTES = 512_000
+        const val SHARP_PX = 128
         const val TTL_MS = 14L * 24 * 60 * 60 * 1000
         const val MISS_TTL_MS = 24L * 60 * 60 * 1000
     }

@@ -8,12 +8,13 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.sin
 
 /**
- * Sons de l'interface (TV) : un tic doux au passage du focus, un « toc » franc à la validation, le
- * disque posé à l'ouverture d'un site, un souffle au retour. Synthétisés au premier lancement (pas de
+ * Sons de l'interface (TV) : un tic doux au passage du focus, un « toc » franc à la validation, un
+ * claquement de doigts avec son écho à l'ouverture d'un site, deux notes au retour. Synthétisés au premier lancement (pas de
  * fichiers audio à fournir), joués en sons système : ils ne coupent jamais la vidéo.
  */
 object UiSound {
@@ -85,7 +86,7 @@ object UiSound {
 
     // --- Synthèse -------------------------------------------------------------------------
 
-    private const val VERSION = 1
+    private const val VERSION = 2
     private const val RATE = 44_100
 
     private fun render(kind: Kind): FloatArray = when (kind) {
@@ -101,25 +102,66 @@ object UiSound {
                 sin(phase) * exp(-t / 0.045) * 0.9 + sin(2 * PI * 2_400 * t) * exp(-t / 0.002) * 0.25
             }
         }
-        // Disque posé : un coup sourd, puis le grain du sillon (craquements) et une montée légère.
-        Kind.Open -> {
-            var phase = 0.0
-            var shimmer = 0.0
-            val random = java.util.Random(7)
-            synth(0.55) { t, dt ->
-                phase += 2 * PI * (70 + 160 * exp(-t / 0.02)) * dt
-                shimmer += 2 * PI * (420 + 900 * (t / 0.55)) * dt
-                val thump = sin(phase) * exp(-t / 0.08) * 0.85
-                val rise = sin(shimmer) * sin(PI * (t / 0.55)) * 0.12
-                val crackle = if (random.nextFloat() < 0.004f) (random.nextFloat() - 0.5) * 0.5 * exp(-t / 0.3) else 0.0
-                thump + rise + crackle
-            }
-        }
+        // Claquement de doigts : attaque très brève vers 2,5 kHz, un peu d'air aigu, puis quelques échos.
+        Kind.Open -> snapWithEchoes()
         // Retour : deux notes qui descendent, plus douces que la validation.
         Kind.Back -> synth(0.12) { t, _ ->
             val f = if (t < 0.05) 880.0 else 620.0
             val local = if (t < 0.05) t else t - 0.05
             sin(2 * PI * f * t) * exp(-local / 0.025) * 0.4
+        }
+    }
+
+    private fun snapWithEchoes(): FloatArray {
+        val random = java.util.Random(11)
+        val n = (0.03 * RATE).toInt()
+        val core = snap(n, random, air = 1.0)
+        val soft = snap(n, random, air = 0.3)
+        val out = DoubleArray((0.45 * RATE).toInt())
+        for (i in 0 until n) out[i] += core[i]
+        // Échos de la pièce : de plus en plus loin, de plus en plus faibles.
+        for ((ms, gain) in listOf(51 to 0.19, 117 to 0.13, 172 to 0.16, 258 to 0.09)) {
+            val at = ms * RATE / 1000
+            for (i in 0 until n) out[at + i] += soft[i] * gain
+        }
+        val peak = out.maxOf { abs(it) }.coerceAtLeast(1e-6)
+        val fade = (0.004 * RATE).toInt()
+        return FloatArray(out.size) { i ->
+            val tail = if (i > out.size - fade) (out.size - i).toDouble() / fade else 1.0
+            (out[i] / peak * 0.9 * tail).toFloat()
+        }
+    }
+
+    private fun snap(n: Int, random: java.util.Random, air: Double): DoubleArray {
+        val noise = DoubleArray(n) { random.nextDouble() * 2 - 1 }
+        val mid = bandPass(noise, 2_470.0, 2.2)
+        val high = bandPass(noise, 6_800.0, 1.4)
+        return DoubleArray(n) { i ->
+            val t = i.toDouble() / RATE
+            val attack = (t / 0.0005).coerceAtMost(1.0)
+            (mid[i] * exp(-t / 0.0035) * 2.6 + high[i] * exp(-t / 0.0025) * 3.4 * air + sin(2 * PI * 2_470 * t) * exp(-t / 0.005) * 0.3) * attack
+        }
+    }
+
+    /** Filtre passe-bande du second ordre (biquad). */
+    private fun bandPass(x: DoubleArray, f0: Double, q: Double): DoubleArray {
+        val w = 2 * PI * f0 / RATE
+        val alpha = sin(w) / (2 * q)
+        val a0 = 1 + alpha
+        val a1 = -2 * kotlin.math.cos(w)
+        val a2 = 1 - alpha
+        var x1 = 0.0
+        var x2 = 0.0
+        var y1 = 0.0
+        var y2 = 0.0
+        return DoubleArray(x.size) { i ->
+            val v = x[i]
+            val y = (alpha * v - alpha * x2 - a1 * y1 - a2 * y2) / a0
+            x2 = x1
+            x1 = v
+            y2 = y1
+            y1 = y
+            y
         }
     }
 

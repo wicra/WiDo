@@ -9,9 +9,10 @@
 - **Accueil TV** : le titre n'est plus coupé sous l'en-tête en descendant vers les sites (la scène et les rangées tiennent dans l'écran).
 
 ### Nouveau
-- **Onglet Reprendre (TV)** à côté de Sites et Réglages : toutes les vidéos en cours en grandes vignettes, la sélectionnée en grand avec Reprendre / Retirer, son image floutée en fond. L'accueil Sites ne montre plus que les sites.
-- **Les sites en vinyles** : chaque site est un disque (sillons, anneau à sa couleur, logo sur l'étiquette). Le disque choisi sort du bac, grandit et tourne ; ses voisins s'inclinent en vague, comme quand on feuillette des disques. À l'ouverture, c'est ce disque qui s'agrandit jusqu'à remplir l'écran.
-- **Sons de l'interface (TV)** : tic au passage, « toc » à la validation, disque posé à l'ouverture, souffle au retour. Réglages → Apparence : Désactivé, Doux ou Normal.
+- **Onglet Reprendre (TV)** à côté de Sites et Réglages, sur toute la page : grandes vignettes avec le titre en clair, le site et le temps restant, l'image de la vidéo sélectionnée floutée en fond. Plusieurs vidéos d'un même site ont chacune leur vignette. Appui long ou Menu pour retirer.
+- **Les sites en vinyles** : chaque site est un disque net (sillons fins, anneau à sa couleur, logo sur l'étiquette blanche). Le disque choisi sort du bac, grandit et tourne ; ses voisins s'inclinent en vague, avec des mouvements souples même quand on enchaîne les flèches.
+- **Ouverture d'un site en un seul geste** : l'accueil reste à l'écran, le vinyle grandit en tournant et glisse vers le centre ; son étiquette devient le logo de l'écran d'attente.
+- **Sons de l'interface (TV)** : tic au passage, « toc » à la validation, claquement de doigts avec écho à l'ouverture d'un site, deux notes au retour. Réglages → Apparence : Désactivé, Doux ou Normal.
 - **Retour deux fois vite** dans une page : retour direct aux sites. Retour depuis Reprendre ou Réglages ramène aussi aux sites.
 - **Écran de pause (TV)** : après 5 s en pause, la page s'assombrit avec le titre, le site, le temps restant et l'heure de fin. OK relance la vidéo, n'importe quelle autre touche retire l'écran.
 - **Fond d'ambiance** : à l'accueil TV, la vidéo de Reprendre sélectionnée s'affiche floutée en fond.
@@ -21,6 +22,8 @@
 - **Télécommande par gestes** (téléphone, onglet TV) : glisser = flèches, toucher = OK, appui long = Retour.
 
 ### Amélioré
+- **Un site s'ouvre à neuf** sur son accueil (réglage « Ouvrir un site » : Accueil du site par défaut) ; les vidéos commencées se reprennent depuis l'onglet Reprendre.
+- **Logos des sites plus nets** : la plus grande icône proposée par le site est choisie, et une petite icône est agrandie sans flou.
 - **Plus de barre de lecture de WiDo** par-dessus celle du site : seul le saut s'affiche (« +30 s »). Le temps restant et l'heure de fin sont sur l'écran de pause.
 - **Réglages rangés par thème** : sur la TV, une colonne de thèmes à gauche et leurs réglages à droite.
 - **Téléphone : après « Sur la TV », l'onglet TV s'ouvre** (depuis le lecteur, Reprendre, un appui long ou le partage) : la vidéo se pilote tout de suite.

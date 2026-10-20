@@ -90,6 +90,7 @@ class MainActivity : ComponentActivity(), RemoteTarget {
     private fun openPlayer(intent: Intent) {
         val from = if (app.isTv) dev.wido.tv.ui.LaunchOrigin.bounds else null
         if (from != null) {
+            LaunchSnapshot.capture(this)
             intent.putExtra(PlayerActivity.EXTRA_ORIGIN, intArrayOf(from.left, from.top, from.right, from.bottom))
                 .putExtra(PlayerActivity.EXTRA_COLOR, dev.wido.tv.ui.LaunchOrigin.color)
         }
