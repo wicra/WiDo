@@ -54,7 +54,7 @@ Un plateau en bas de l'écran ; la page reste visible au-dessus. Une rangée de 
 Sur une **vidéo**, le menu commence par ses commandes : Lecture/Pause, **Suivant** (si la page a un bouton « épisode suivant », WiDo le clique pour toi), **Lecteur** (lecteur natif), **Début** (reprendre au début), Veille. Sur une **page**, il commence par Épingler, A− / A+, Masquer, Accueil du site, Recharger.
 
 - Recharger la page, **Accueil du site**, activer/désactiver le curseur
-- **A− / A+** : texte plus petit / plus grand (mémorisé par site)
+- **A− / A+** : texte plus petit / plus grand (mémorisé par site) ; le menu reste ouvert pour ajuster plusieurs fois, comme pour Veille
 - **Téléphone** : un QR code s'affiche ; scanne-le avec ton téléphone (même réseau), tape ton texte, il arrive dans le champ sélectionné de la page (ou le premier champ de recherche). « Envoyer + Entrée » valide aussi la recherche.
 - **Épingler** la page à l'accueil ([CUSTOM-SITES](CUSTOM-SITES.md))
 - **Masquer un élément** : pour une pop-up ou un bandeau qui résiste. Pointe-le avec le curseur (les flèches le déplacent librement), puis **OK** : il disparaît, et restera masqué aux prochaines visites. **Retour** annule. Options du site → « Réafficher les éléments masqués » annule tout.
