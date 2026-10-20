@@ -190,6 +190,28 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         }
     }
 
+    /**
+     * Le site du menu qui peut afficher `url` (son domaine ou ses domaines autorisés), ou un site
+     * éphémère pour cette seule adresse (lien envoyé depuis le téléphone) : redirections souples,
+     * pop-ups bloquées, listes de blocage actives.
+     */
+    suspend fun siteForUrl(url: String): Site {
+        val config = ensureLoaded()
+        val host = Hosts.of(url).orEmpty()
+        val known = LocalSites.merge(config.sites, _local.value)
+            .firstOrNull { it.enabled && NavigationPolicy.allowedDomains(it).any { d -> Hosts.matches(host, d) } }
+            ?.let { SiteOverrides.apply(it, overrides) }
+            ?.let { UserHides.apply(it, _hides.value) }
+        return known ?: Site(
+            id = LINK_SITE_ID,
+            name = host.removePrefix("www."),
+            url = url,
+            scripts = listOf("block-popups"),
+            navigation = dev.wido.core.Navigation.RELAXED,
+            allowInsecure = Hosts.schemeOf(url) == "http",
+        )
+    }
+
     suspend fun findSite(id: String): Site? {
         val config = ensureLoaded()
         return LocalSites.merge(config.sites, _local.value)
@@ -424,10 +446,12 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     private fun sha1(s: String) =
         MessageDigest.getInstance("SHA-1").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
 
-    private companion object {
-        const val TAG = "WiDoConfig"
-        const val MAX_CONFIG_BYTES = 1_000_000
-        const val MAX_LIST_BYTES = 8_000_000
+    companion object {
+        private const val TAG = "WiDoConfig"
+        /** Identifiant du site éphémère d'un lien ouvert depuis le téléphone. */
+        const val LINK_SITE_ID = "lien"
+        private const val MAX_CONFIG_BYTES = 1_000_000
+        private const val MAX_LIST_BYTES = 8_000_000
 
         /**
          * Listes recommandées, ajoutées à celles de la configuration (réglage « Listes recommandées ») :
@@ -436,7 +460,7 @@ class ConfigRepository(private val context: Context, private val settings: Setti
          * exceptions qui réparent les sites cassés par les autres listes). Mises à jour par leurs
          * communautés, plusieurs fois par jour : WiDo les relit toutes les 6 heures.
          */
-        val RECOMMENDED_LISTS = listOf(
+        private val RECOMMENDED_LISTS = listOf(
             "https://easylist.to/easylist/easylist.txt",
             "https://easylist-downloads.adblockplus.org/liste_fr.txt",
             "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt",
@@ -444,6 +468,6 @@ class ConfigRepository(private val context: Context, private val settings: Setti
             "https://ublockorigin.github.io/uAssets/filters/quick-fixes.txt",
             "https://ublockorigin.github.io/uAssets/filters/unbreak.txt",
         )
-        const val LIST_TTL_MS = 6 * 60 * 60 * 1000L
+        private const val LIST_TTL_MS = 6 * 60 * 60 * 1000L
     }
 }

@@ -165,3 +165,16 @@ class ContinueWatchingTest {
         assertNull(ContinueWatching.youtubeThumbnail("https://vimeo.com/123"))
     }
 }
+
+class RemoteProtocolTest {
+    @Test fun parsesCommands() {
+        assertEquals(RemoteCommand.Key(RemoteKey.PLAY_PAUSE), RemoteProtocol.parse("""{"cmd":"key","key":"play_pause"}"""))
+        assertEquals(RemoteCommand.Move(400f, -3f), RemoteProtocol.parse("""{"cmd":"move","dx":9999,"dy":-3}"""))
+        assertEquals(RemoteCommand.Tap, RemoteProtocol.parse("""{"cmd":"tap"}"""))
+        assertEquals(RemoteCommand.Type("salut", true), RemoteProtocol.parse("""{"cmd":"type","text":"salut\n","submit":true}"""))
+        assertEquals(RemoteCommand.Open("https://exemple.org"), RemoteProtocol.parse("""{"cmd":"open","url":"exemple.org"}"""))
+        assertNull(RemoteProtocol.parse("""{"cmd":"open","url":"javascript:alert(1)"}"""))
+        assertNull(RemoteProtocol.parse("""{"cmd":"key","key":"power"}"""))
+        assertNull(RemoteProtocol.parse("nope"))
+    }
+}

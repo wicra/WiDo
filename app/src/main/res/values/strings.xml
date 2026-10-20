@@ -192,4 +192,18 @@
     <string name="resize_fill">Image : étirée</string>
     <string name="a_native">Lire dans WiDo</string>
     <string name="continue_title">Reprendre</string>
+    <string name="remote_touchpad">Pavé</string>
+    <string name="remote_keys">Touches</string>
+    <string name="remote_text">Texte</string>
+    <string name="remote_link">Lien</string>
+    <string name="remote_touchpad_hint">Glisse pour déplacer le curseur · touche pour cliquer</string>
+    <string name="remote_scroll">Défiler</string>
+    <string name="remote_link_placeholder">Colle un lien (vidéo, page…)</string>
+    <string name="remote_open">Ouvrir sur la TV</string>
+    <string name="s_phone_remote">Télécommande téléphone</string>
+    <string name="remote_scan">Scanne ce code avec ton téléphone (même réseau) et garde la page : pavé tactile, touches, texte et liens.</string>
+    <string name="remote_new_code">Nouveau code</string>
+    <string name="remote_off_hint">Active-la pour piloter WiDo depuis ton téléphone.</string>
+    <string name="osd_link_opened">Lien reçu du téléphone</string>
+    <string name="sec_phone">Téléphone</string>
 </resources>

@@ -38,6 +38,8 @@ import dev.wido.tv.KeyAction
 import dev.wido.tv.ListStatus
 import dev.wido.tv.R
 import dev.wido.tv.Settings
+import dev.wido.tv.WiDoApp
+import androidx.compose.ui.platform.LocalContext
 
 private val SPEEDS = listOf(0.6f, 1.0f, 1.5f, 2.2f)
 private val SIZES = listOf(1.3f, 1.8f, 2.5f)
@@ -81,6 +83,7 @@ fun SettingsPane(
         version++
     }
 
+    val remote = (LocalContext.current.applicationContext as WiDoApp).remote
     val on = stringResource(R.string.v_on)
     val off = stringResource(R.string.v_off)
 
@@ -191,6 +194,21 @@ fun SettingsPane(
                 ) { changed { settings.newSitesNavigation = NAVIGATIONS[it] } }
             }
 
+            SectionLabel(stringResource(R.string.sec_phone), Modifier.padding(top = 10.dp))
+            SettingRow(stringResource(R.string.s_phone_remote)) {
+                Segmented(listOf(on, off), if (settings.phoneRemote) 0 else 1) {
+                    changed { settings.phoneRemote = it == 0 }
+                    remote.restart()
+                }
+            }
+            if (settings.phoneRemote) {
+                RemotePairing(remote.url) {
+                    changed { settings.newRemoteToken() }
+                    remote.restart()
+                }
+            } else {
+                Text(stringResource(R.string.remote_off_hint), color = Palette.TextSecondary, fontSize = 13.sp)
+            }
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 ActionButton(stringResource(R.string.settings_reset), { changed { settings.resetComfort() } }, primary = false, idleText = Color.White.copy(alpha = 0.7f))
@@ -205,6 +223,23 @@ fun SettingsPane(
                 .height(56.dp)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Palette.Background.copy(alpha = 0.9f)))),
         )
+    }
+}
+
+/** QR code d'appairage de la télécommande sur téléphone, et bouton pour changer le code. */
+@Composable
+private fun RemotePairing(url: String?, onNewCode: () -> Unit) {
+    if (url == null) {
+        Text(stringResource(R.string.phone_no_network), color = Palette.Warning, fontSize = 14.sp)
+        return
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.clip(RoundedCornerShape(14.dp)).background(Color.White).padding(10.dp)) { QrCode(url, 150.dp) }
+        Column(Modifier.width(380.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.remote_scan), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(url.substringBefore("?"), color = Palette.TextSecondary, fontSize = 13.sp)
+            ActionButton(stringResource(R.string.remote_new_code), onNewCode, primary = false, compact = true)
+        }
     }
 }
 

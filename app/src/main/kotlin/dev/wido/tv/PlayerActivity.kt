@@ -41,6 +41,8 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import dev.wido.core.Hosts
 import dev.wido.core.Navigation
+import dev.wido.core.RemoteCommand
+import dev.wido.core.RemoteKey
 import dev.wido.core.ResumeUrl
 import dev.wido.core.Site
 import dev.wido.core.Zoom
@@ -62,7 +64,7 @@ import org.json.JSONTokener
  * (ou Menu) = menu rapide, touches média = lecteur vidéo, touches de couleur = raccourcis configurables,
  * volume = indicateur WiDo, CH+/CH- = défilement de la page.
  */
-class PlayerActivity : ComponentActivity() {
+class PlayerActivity : ComponentActivity(), RemoteTarget {
     private lateinit var settings: Settings
     private lateinit var audio: AudioManager
     private lateinit var root: FrameLayout
@@ -120,14 +122,16 @@ class PlayerActivity : ComponentActivity() {
         val siteId = intent.getStringExtra(EXTRA_SITE).orEmpty().let { if (it == LAST_SITE) settings.lastSiteId.orEmpty() else it }
         val app = application as WiDoApp
         lifecycleScope.launch {
-            val site = app.repository.findSite(siteId)
+            // Lien envoyé depuis le téléphone : le site du menu qui le connaît, ou un site éphémère.
+            val linkUrl = intent.getStringExtra(EXTRA_URL)
+            val site = if (siteId == ConfigRepository.LINK_SITE_ID && linkUrl != null) app.repository.siteForUrl(linkUrl) else app.repository.findSite(siteId)
             this@PlayerActivity.site = site
             if (site == null) {
                 Toast.makeText(this@PlayerActivity, getString(R.string.player_unknown_site, siteId), Toast.LENGTH_LONG).show()
                 finish()
                 return@launch
             }
-            settings.lastSiteId = site.id
+            if (site.id != ConfigRepository.LINK_SITE_ID) settings.lastSiteId = site.id
             loadingLabel.text = getString(R.string.loading_site, site.name)
             val blocker = app.repository.blockerFor(site)
             val scripts = ScriptInjector(this@PlayerActivity, site)
@@ -953,9 +957,11 @@ class PlayerActivity : ComponentActivity() {
         super.onResume()
         webView?.onResume()
         root.postDelayed(progressPoll, PROGRESS_POLL_MS)
+        (application as WiDoApp).remote.attach(this)
     }
 
     override fun onPause() {
+        (application as WiDoApp).remote.detach(this)
         root.removeCallbacks(progressPoll)
         webView?.onPause()
         saveSeen()
@@ -976,6 +982,51 @@ class PlayerActivity : ComponentActivity() {
         if (state.duration > 0) {
             (application as WiDoApp).repository.recordProgress(current.id, page, webView?.title, pageImage, state.time, state.duration)
         }
+    }
+
+    // --- Télécommande sur téléphone ----------------------------------------------------------
+
+    override fun onRemote(command: RemoteCommand) {
+        when (command) {
+            is RemoteCommand.Key -> when (command.key) {
+                RemoteKey.HOME -> finish()
+                else -> pressKey(keyCodeOf(command.key))
+            }
+            is RemoteCommand.Move -> {
+                if (panelView != null || webView == null) return
+                if (!cursorMode) toggleCursor()
+                val density = resources.displayMetrics.density
+                cursor.moveBy(command.dx * density * settings.cursorSpeed, command.dy * density * settings.cursorSpeed)
+                cursor.wake()
+            }
+            RemoteCommand.Tap -> {
+                if (panelView == null && !cursorMode) toggleCursor()
+                pressKey(KeyEvent.KEYCODE_DPAD_CENTER)
+            }
+            is RemoteCommand.Scroll -> webView?.scrollBy(0, (command.dy * resources.displayMetrics.density).toInt())
+            is RemoteCommand.Type -> {
+                typeText(command.text, command.submit)
+                osd.showText(getString(R.string.osd_text_sent))
+            }
+            is RemoteCommand.Open -> {
+                val current = site
+                val own = current?.let { ResumeUrl.toRemember(it, command.url) }
+                if (own != null) {
+                    webView?.loadUrl(own)
+                } else {
+                    startActivity(intent(this, ConfigRepository.LINK_SITE_ID, command.url))
+                    finish()
+                }
+                osd.showText(getString(R.string.osd_link_opened))
+            }
+        }
+    }
+
+    /** Une touche de télécommande, comme si on l'avait pressée : elle passe par toute la logique du lecteur. */
+    private fun pressKey(code: Int) {
+        val now = SystemClock.uptimeMillis()
+        dispatchKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, code, 0))
+        dispatchKeyEvent(KeyEvent(now, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, code, 0))
     }
 
     // --- Vidéo de la page : métadonnées, reprise, lecteur natif ------------------------------
@@ -1169,4 +1220,22 @@ class PlayerActivity : ComponentActivity() {
                 if (positionSeconds > 0) putExtra(EXTRA_POSITION, positionSeconds)
             }
     }
+}
+
+/** Code de touche Android d'une touche de la télécommande sur téléphone. */
+fun keyCodeOf(key: RemoteKey): Int = when (key) {
+    RemoteKey.UP -> KeyEvent.KEYCODE_DPAD_UP
+    RemoteKey.DOWN -> KeyEvent.KEYCODE_DPAD_DOWN
+    RemoteKey.LEFT -> KeyEvent.KEYCODE_DPAD_LEFT
+    RemoteKey.RIGHT -> KeyEvent.KEYCODE_DPAD_RIGHT
+    RemoteKey.OK -> KeyEvent.KEYCODE_DPAD_CENTER
+    RemoteKey.BACK -> KeyEvent.KEYCODE_BACK
+    RemoteKey.HOME -> KeyEvent.KEYCODE_HOME
+    RemoteKey.MENU -> KeyEvent.KEYCODE_MENU
+    RemoteKey.PLAY_PAUSE -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+    RemoteKey.REWIND -> KeyEvent.KEYCODE_MEDIA_REWIND
+    RemoteKey.FORWARD -> KeyEvent.KEYCODE_MEDIA_FAST_FORWARD
+    RemoteKey.VOLUME_UP -> KeyEvent.KEYCODE_VOLUME_UP
+    RemoteKey.VOLUME_DOWN -> KeyEvent.KEYCODE_VOLUME_DOWN
+    RemoteKey.MUTE -> KeyEvent.KEYCODE_VOLUME_MUTE
 }

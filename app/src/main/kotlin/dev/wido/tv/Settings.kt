@@ -155,6 +155,22 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("field_qr", true)
         set(v) = prefs.edit().putBoolean("field_qr", v).apply()
 
+    /** Télécommande sur téléphone : serveur local ouvert tant que WiDo est à l'écran. */
+    var phoneRemote: Boolean
+        get() = prefs.getBoolean("phone_remote", false)
+        set(v) = prefs.edit().putBoolean("phone_remote", v).apply()
+
+    /** Jeton permanent de la télécommande sur téléphone (dans l'adresse du QR code). */
+    val remoteToken: String
+        get() = state.getString("remote_token", null) ?: newRemoteToken()
+
+    /** Change le jeton : les téléphones déjà appairés doivent rescanner le QR code. */
+    fun newRemoteToken(): String {
+        val token = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
+        state.edit().putString("remote_token", token).apply()
+        return token
+    }
+
     var helpSeen: Boolean
         get() = prefs.getBoolean("help_seen", false)
         set(v) = prefs.edit().putBoolean("help_seen", v).apply()

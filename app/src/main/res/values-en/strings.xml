@@ -192,4 +192,18 @@
     <string name="resize_fill">Picture: stretched</string>
     <string name="a_native">Play in WiDo</string>
     <string name="continue_title">Continue watching</string>
+    <string name="remote_touchpad">Touchpad</string>
+    <string name="remote_keys">Keys</string>
+    <string name="remote_text">Text</string>
+    <string name="remote_link">Link</string>
+    <string name="remote_touchpad_hint">Slide to move the cursor · tap to click</string>
+    <string name="remote_scroll">Scroll</string>
+    <string name="remote_link_placeholder">Paste a link (video, page…)</string>
+    <string name="remote_open">Open on TV</string>
+    <string name="s_phone_remote">Phone remote</string>
+    <string name="remote_scan">Scan this code with your phone (same network) and keep the page: touchpad, keys, text and links.</string>
+    <string name="remote_new_code">New code</string>
+    <string name="remote_off_hint">Turn it on to control WiDo from your phone.</string>
+    <string name="osd_link_opened">Link received from phone</string>
+    <string name="sec_phone">Phone</string>
 </resources>
