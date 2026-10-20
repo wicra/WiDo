@@ -33,12 +33,12 @@ private fun DrawScope.drawGlyph(glyph: Glyph, color: Color) {
     val s = size.width
     fun p(x: Float, y: Float) = Offset(x * s, y * s)
     val stroke = Stroke(width = s * 0.09f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-    fun poly(vararg pts: Offset, closed: Boolean = true) = Path().apply {
+    fun poly(pts: List<Offset>, closed: Boolean = true) = Path().apply {
         moveTo(pts[0].x, pts[0].y)
         pts.drop(1).forEach { lineTo(it.x, it.y) }
         if (closed) close()
     }
-    fun speaker() = drawPath(poly(p(0.16f, 0.4f), p(0.3f, 0.4f), p(0.47f, 0.25f), p(0.47f, 0.75f), p(0.3f, 0.6f), p(0.16f, 0.6f)), color)
+    fun speaker() = drawPath(poly(listOf(p(0.16f, 0.4f), p(0.3f, 0.4f), p(0.47f, 0.25f), p(0.47f, 0.75f), p(0.3f, 0.6f), p(0.16f, 0.6f))), color)
     fun wave(r: Float) = drawArc(color, -45f, 90f, false, topLeft = p(0.47f - r, 0.5f - r), size = Size(2 * r * s, 2 * r * s), style = stroke)
 
     when (glyph) {
@@ -54,30 +54,30 @@ private fun DrawScope.drawGlyph(glyph: Glyph, color: Color) {
             val head = s * 0.13f
             drawPath(poly(tip + dir * head, tip - normal * head, tip + normal * head), color)
         }
-        Glyph.Play -> drawPath(poly(p(0.34f, 0.24f), p(0.78f, 0.5f), p(0.34f, 0.76f)), color)
+        Glyph.Play -> drawPath(poly(listOf(p(0.34f, 0.24f), p(0.78f, 0.5f), p(0.34f, 0.76f))), color)
         Glyph.Pause -> {
             drawRoundRect(color, p(0.3f, 0.25f), Size(0.14f * s, 0.5f * s), CornerRadius(0.04f * s))
             drawRoundRect(color, p(0.56f, 0.25f), Size(0.14f * s, 0.5f * s), CornerRadius(0.04f * s))
         }
         Glyph.Rewind -> {
-            drawPath(poly(p(0.5f, 0.28f), p(0.16f, 0.5f), p(0.5f, 0.72f)), color)
-            drawPath(poly(p(0.84f, 0.28f), p(0.5f, 0.5f), p(0.84f, 0.72f)), color)
+            drawPath(poly(listOf(p(0.5f, 0.28f), p(0.16f, 0.5f), p(0.5f, 0.72f))), color)
+            drawPath(poly(listOf(p(0.84f, 0.28f), p(0.5f, 0.5f), p(0.84f, 0.72f))), color)
         }
         Glyph.Forward -> {
-            drawPath(poly(p(0.16f, 0.28f), p(0.5f, 0.5f), p(0.16f, 0.72f)), color)
-            drawPath(poly(p(0.5f, 0.28f), p(0.84f, 0.5f), p(0.5f, 0.72f)), color)
+            drawPath(poly(listOf(p(0.16f, 0.28f), p(0.5f, 0.5f), p(0.16f, 0.72f))), color)
+            drawPath(poly(listOf(p(0.5f, 0.28f), p(0.84f, 0.5f), p(0.5f, 0.72f))), color)
         }
-        Glyph.Up -> drawPath(poly(p(0.28f, 0.62f), p(0.5f, 0.4f), p(0.72f, 0.62f), closed = false), color, style = stroke)
-        Glyph.Down -> drawPath(poly(p(0.28f, 0.38f), p(0.5f, 0.6f), p(0.72f, 0.38f), closed = false), color, style = stroke)
-        Glyph.Left -> drawPath(poly(p(0.62f, 0.28f), p(0.4f, 0.5f), p(0.62f, 0.72f), closed = false), color, style = stroke)
-        Glyph.Right -> drawPath(poly(p(0.38f, 0.28f), p(0.6f, 0.5f), p(0.38f, 0.72f), closed = false), color, style = stroke)
+        Glyph.Up -> drawPath(poly(listOf(p(0.28f, 0.62f), p(0.5f, 0.4f), p(0.72f, 0.62f)), closed = false), color, style = stroke)
+        Glyph.Down -> drawPath(poly(listOf(p(0.28f, 0.38f), p(0.5f, 0.6f), p(0.72f, 0.38f)), closed = false), color, style = stroke)
+        Glyph.Left -> drawPath(poly(listOf(p(0.62f, 0.28f), p(0.4f, 0.5f), p(0.62f, 0.72f)), closed = false), color, style = stroke)
+        Glyph.Right -> drawPath(poly(listOf(p(0.38f, 0.28f), p(0.6f, 0.5f), p(0.38f, 0.72f)), closed = false), color, style = stroke)
         Glyph.Back -> {
-            drawPath(poly(p(0.76f, 0.74f), p(0.76f, 0.46f), p(0.26f, 0.46f), closed = false), color, style = stroke)
-            drawPath(poly(p(0.4f, 0.32f), p(0.26f, 0.46f), p(0.4f, 0.6f), closed = false), color, style = stroke)
+            drawPath(poly(listOf(p(0.76f, 0.74f), p(0.76f, 0.46f), p(0.26f, 0.46f)), closed = false), color, style = stroke)
+            drawPath(poly(listOf(p(0.4f, 0.32f), p(0.26f, 0.46f), p(0.4f, 0.6f)), closed = false), color, style = stroke)
         }
         Glyph.Home -> {
-            drawPath(poly(p(0.16f, 0.5f), p(0.5f, 0.2f), p(0.84f, 0.5f), closed = false), color, style = stroke)
-            drawPath(poly(p(0.27f, 0.42f), p(0.27f, 0.8f), p(0.73f, 0.8f), p(0.73f, 0.42f), closed = false), color, style = stroke)
+            drawPath(poly(listOf(p(0.16f, 0.5f), p(0.5f, 0.2f), p(0.84f, 0.5f)), closed = false), color, style = stroke)
+            drawPath(poly(listOf(p(0.27f, 0.42f), p(0.27f, 0.8f), p(0.73f, 0.8f), p(0.73f, 0.42f)), closed = false), color, style = stroke)
         }
         Glyph.Menu -> listOf(0.3f, 0.5f, 0.7f).forEach { y ->
             drawLine(color, p(0.22f, y), p(0.78f, y), strokeWidth = stroke.width, cap = StrokeCap.Round)
