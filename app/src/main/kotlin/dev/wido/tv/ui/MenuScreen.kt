@@ -5,6 +5,19 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import dev.wido.tv.UiSound
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -85,15 +98,16 @@ private sealed interface Editor {
     data class Edit(val site: Site) : Editor
 }
 
-private enum class Tab { Sites, Settings }
+private enum class Tab { Sites, Continue, Settings }
 
 /** Voile qui assombrit le bas de l'écran d'accueil, sous la rangée de cartes. */
 private val MenuVeil = Brush.verticalGradient(0.3f to Color.Transparent, 1f to Color(0xD908080E))
 
 /**
- * Écran d'accueil : le logo, les onglets Sites / Réglages et l'état en haut. L'onglet Sites montre en
- * grand le site sélectionné (son nom, Ouvrir, Options) au-dessus d'une rangée de cartes ; le fond prend
- * la lumière de la carte sélectionnée. L'onglet Réglages remplace la scène par la liste des réglages.
+ * Écran d'accueil : le logo, les onglets Sites / Reprendre / Réglages et l'état en haut. L'onglet Sites
+ * montre en grand le site sélectionné (son nom, Ouvrir, Options) au-dessus d'un bac de disques ; le fond
+ * prend la lumière du disque sélectionné. Reprendre : toutes les vidéos en cours, en grandes vignettes.
+ * Retour, depuis Reprendre ou Réglages, ramène aux sites.
  */
 @Composable
 fun MenuScreen(
@@ -104,6 +118,8 @@ fun MenuScreen(
     /** Ouvrir aussitôt le formulaire de ce site perso (adresse qui ne répond plus). */
     editSiteId: String? = null,
     onEditHandled: () -> Unit = {},
+    /** Augmente à chaque double appui sur Retour dans le lecteur : retour à l'onglet Sites. */
+    sitesSignal: Int = 0,
 ) {
     val state by vm.config.collectAsState()
     val update by vm.update.collectAsState()
@@ -129,10 +145,23 @@ fun MenuScreen(
     val light by animateColorAsState(if (tab == Tab.Settings) Palette.Accent else siteLight, tween(700), label = "light")
     val second by animateColorAsState(if (tab == Tab.Settings) Palette.Purple else Palette.Violet, tween(700), label = "light2")
     val firstCard = remember { FocusRequester() }
-    val firstWatch = remember { FocusRequester() }
-    // La vidéo de « Reprendre » sélectionnée : la scène la montre à la place du site.
+    // Un FocusRequester par disque : revenir aux sites remet le focus sur le dernier choisi.
+    val cardFocus = remember { mutableMapOf<String, FocusRequester>() }
+    // La vidéo de « Reprendre » sélectionnée : son image en fond d'ambiance, ses infos dans la scène.
     var focusedWatch by remember { mutableStateOf<WatchEntry?>(null) }
     var initialFocus by remember { mutableStateOf(false) }
+    // Le disque tiré du bac (dernier focalisé) : ses voisins s'écartent en vague.
+    var rackIndex by remember { mutableIntStateOf(-1) }
+    var refocusSites by remember { mutableIntStateOf(0) }
+    fun backToSites() {
+        tab = Tab.Sites
+        refocusSites++
+    }
+    LaunchedEffect(sitesSignal) { if (sitesSignal > 0) backToSites() }
+    androidx.activity.compose.BackHandler(enabled = tab != Tab.Sites && editor == null && actionsFor == null && !showCatalog) {
+        UiSound.back()
+        backToSites()
+    }
     LaunchedEffect(editSiteId, sites) {
         val id = editSiteId ?: return@LaunchedEffect
         val site = sites.firstOrNull { it.site.id == id }?.site ?: return@LaunchedEffect
@@ -140,11 +169,11 @@ fun MenuScreen(
         onEditHandled()
     }
 
-    // Au lancement : sur la dernière vidéo en cours (OK et le film repart), sinon sur le premier site.
+    // Au lancement : sur le premier site.
     LaunchedEffect(sites.isNotEmpty()) {
         if (sites.isEmpty() || initialFocus) return@LaunchedEffect
         initialFocus = true
-        runCatching { if (watching.isNotEmpty()) firstWatch.requestFocus() else firstCard.requestFocus() }
+        runCatching { firstCard.requestFocus() }
     }
 
     val glows = if (tab == Tab.Settings) {
@@ -155,7 +184,7 @@ fun MenuScreen(
 
     Box(Modifier.fillMaxSize().halo(glows, if (tab == Tab.Sites) MenuVeil else null)) {
         // Une vidéo de Reprendre sélectionnée : son image, floutée et assombrie, en fond d'ambiance.
-        Backdrop(if (tab == Tab.Sites) focusedWatch else null)
+        Backdrop(if (tab == Tab.Continue) focusedWatch ?: watching.firstOrNull() else null)
         Column(Modifier.fillMaxSize()) {
             TopBar(state, tab, onTab = { tab = it }, onRefresh = vm::refresh)
             when (tab) {
@@ -163,6 +192,12 @@ fun MenuScreen(
                 // Reprendre, épingles…), la page défile au focus au lieu d'écraser les boutons.
                 Tab.Sites -> BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                   val viewport = maxHeight
+                  // De retour sur les sites (Retour, double Retour dans le lecteur) : le focus revient au dernier disque.
+                  LaunchedEffect(refocusSites) {
+                      if (refocusSites == 0) return@LaunchedEffect
+                      androidx.compose.runtime.withFrameNanos { }
+                      runCatching { (currentId?.let { cardFocus[it] } ?: firstCard).requestFocus() }
+                  }
                   Column(
                     Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = viewport),
                     verticalArrangement = Arrangement.SpaceBetween,
@@ -172,43 +207,27 @@ fun MenuScreen(
                     val current = if (addFocused) null else sites.firstOrNull { it.site.id == currentId } ?: sites.firstOrNull()
                     Hero(
                         current,
-                        watch = focusedWatch?.takeIf { w -> watching.any { it.url == w.url } },
-                        onResume = { focusedWatch?.let(onOpenWatch) },
-                        onRemoveWatch = { focusedWatch?.let { vm.removeWatch(it.url) }; focusedWatch = null },
+                        watch = null,
+                        onResume = {},
+                        onRemoveWatch = {},
                         empty = sites.isEmpty() && !state.loading,
                         onOpen = { current?.let { onOpen(it.site) } },
                         onOptions = { current?.let { actionsFor = it.site } },
                         onAdd = { showCatalog = true },
                         pins = current?.let { c -> pins.filter { it.siteId == c.site.id } }.orEmpty(),
                         onPin = onOpenPin,
-                        // Avec la rangée « Reprendre », la scène se fait plus compacte pour tout faire tenir ;
-                        // sur un écran court, encore plus (titre seul, sans adresse ni épingles) : rien ne défile sous l'en-tête.
-                        compact = watching.isNotEmpty(),
-                        tight = watching.isNotEmpty() && viewport < 520.dp,
+                        tight = viewport < 420.dp,
                     )
                   }
                   Column {
-                    if (watching.isNotEmpty()) {
-                        ContinueRow(
-                            entries = watching,
-                            siteMap = sites.associate { it.site.id to it.site },
-                            onOpen = onOpenWatch,
-                            onRemove = { vm.removeWatch(it.url) },
-                            onFocus = { entry ->
-                                currentId = entry.siteId
-                                addFocused = false
-                                focusedWatch = entry
-                            },
-                            firstModifier = Modifier.focusRequester(firstWatch),
-                        )
-                    }
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.Bottom,
-                        contentPadding = PaddingValues(start = 44.dp, end = 52.dp, top = 12.dp),
-                        modifier = Modifier.fillMaxWidth().height(if (watching.isNotEmpty()) 146.dp else 166.dp),
+                        contentPadding = PaddingValues(start = 44.dp, end = 52.dp, top = 22.dp),
+                        modifier = Modifier.fillMaxWidth().height(180.dp),
                     ) {
                         itemsIndexed(sites, key = { _, it -> it.site.id }) { index, entry ->
+                            val focus = cardFocus.getOrPut(entry.site.id) { if (index == 0) firstCard else FocusRequester() }
                             SiteCard(
                                 entry = entry,
                                 index = index,
@@ -220,10 +239,11 @@ fun MenuScreen(
                                 onFocus = { color ->
                                     currentId = entry.site.id
                                     addFocused = false
-                                    focusedWatch = null
+                                    rackIndex = index
                                     siteLight = color
                                 },
-                                modifier = if (index == 0) Modifier.focusRequester(firstCard) else Modifier,
+                                distance = if (rackIndex < 0) null else index - rackIndex,
+                                modifier = Modifier.focusRequester(focus),
                             )
                         }
                         item(key = "add") {
@@ -232,16 +252,34 @@ fun MenuScreen(
                                 onClick = { showCatalog = true },
                                 onFocus = {
                                     addFocused = true
-                                    focusedWatch = null
+                                    rackIndex = sites.size
                                     siteLight = Palette.Accent
                                 },
+                                distance = if (rackIndex < 0) null else sites.size - rackIndex,
                             )
                         }
                     }
-                    if (watching.isEmpty()) Footer(update, remember(state) { settings.blockedThisMonth() }) else Spacer(Modifier.height(14.dp))
+                    Footer(update, remember(state) { settings.blockedThisMonth() })
                   }
                   }
                 }
+                Tab.Continue -> ContinuePane(
+                    entries = watching,
+                    sites = sites,
+                    focused = focusedWatch,
+                    onFocus = { entry ->
+                        focusedWatch = entry
+                        sites.firstOrNull { it.site.id == entry.siteId }?.let { m ->
+                            siteLight = parseColor(m.site.color) ?: Palette.Accent
+                        }
+                    },
+                    onOpen = onOpenWatch,
+                    onRemove = { entry ->
+                        vm.removeWatch(entry.url)
+                        if (focusedWatch?.url == entry.url) focusedWatch = null
+                    },
+                    modifier = Modifier.weight(1f),
+                )
                 Tab.Settings -> SettingsPane(settings, lists, vm::updateLists, Modifier.weight(1f))
             }
         }
@@ -308,6 +346,7 @@ private fun TopBar(state: ConfigState, tab: Tab, onTab: (Tab) -> Unit, onRefresh
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             TabItem(stringResource(R.string.tab_sites), tab == Tab.Sites) { onTab(Tab.Sites) }
+            TabItem(stringResource(R.string.continue_title), tab == Tab.Continue) { onTab(Tab.Continue) }
             TabItem(stringResource(R.string.action_settings), tab == Tab.Settings) { onTab(Tab.Settings) }
         }
         StatusPill(state, onRefresh, Modifier.align(Alignment.CenterEnd))
@@ -496,10 +535,10 @@ private fun rememberEntrance(index: Int): Modifier {
 }
 
 /**
- * Un site dans la rangée : un cercle avec son logo (le nom et l'adresse sont déjà dans la scène au-dessus).
- * Au repos : du verre. Avec le focus : il se soulève, passe à la couleur pleine du site avec un reflet,
- * le logo sur un disque blanc. Les cercles arrivent en vague à l'ouverture. OK ouvre le site ; la
- * touche Menu ou l'appui long ouvrent ses options.
+ * Un site dans le bac : un vinyle, son logo sur l'étiquette (le nom et l'adresse sont dans la scène
+ * au-dessus). Le disque focalisé sort du bac, grandit et tourne ; ses voisins s'inclinent en vague,
+ * comme quand on feuillette des disques. Les disques arrivent en vague à l'ouverture. OK ouvre le site ;
+ * la touche Menu ou l'appui long ouvrent ses options.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -512,6 +551,8 @@ internal fun SiteCard(
     onMove: (Int) -> Unit,
     onMoveDone: () -> Unit,
     onFocus: (Color) -> Unit,
+    /** Écart avec le disque sélectionné (0 = lui), null si aucun : règle la vague. */
+    distance: Int? = null,
     modifier: Modifier = Modifier,
 ) {
     val site = entry.site
@@ -557,16 +598,18 @@ internal fun SiteCard(
                     .then(moveKeys)
                     .onGloballyPositioned { if (focused) LaunchOrigin.remember(it, accent) }
                     .onFocusChanged {
+                        if (it.isFocused && !focused) UiSound.focus()
                         focused = it.isFocused
                         if (it.isFocused) onFocus(accent)
                     }
-                    .liftEffect(focused, CircleShape, focusScale = 1.14f, lift = 24.dp)
+                    .then(rackWave(distance ?: if (focused) 0 else null, focused))
+                    .shadow(if (focused) 26.dp else 6.dp, CircleShape, clip = false, ambientColor = accent, spotColor = accent)
                     .clip(CircleShape)
-                    .then(if (focused) Modifier.background(siteGradient(accent)).background(GlassSheen) else Modifier.background(Palette.Glass))
-                    .border(if (moving) 2.5.dp else 1.dp, if (moving) Color.White else Palette.GlassBorder, CircleShape)
+                    .then(if (moving) Modifier.border(2.5.dp, Color.White, CircleShape) else Modifier)
                     .combinedClickable(onClick = onClick, onLongClick = onOptions),
                 contentAlignment = Alignment.Center,
             ) {
+                Vinyl(accent, focused)
                 CircleLogo(icon, site.name, focused)
             }
         }
@@ -582,12 +625,12 @@ internal fun SiteCard(
     }
 }
 
-/** Le logo dans le cercle : discret sur le verre, sur un disque blanc quand le cercle a le focus. */
+/** L'étiquette du vinyle : le logo sur un disque blanc, un peu voilé au repos. */
 @Composable
 private fun CircleLogo(icon: SiteIcon?, name: String, focused: Boolean) {
-    val disc by animateDpAsState(if (focused) 58.dp else 52.dp, label = "logoDisc")
+    val disc by animateDpAsState(if (focused) 50.dp else 46.dp, label = "logoDisc")
     Box(
-        Modifier.size(disc).clip(CircleShape).background(if (focused) Color.White.copy(alpha = 0.95f) else Color.Transparent),
+        Modifier.size(disc).clip(CircleShape).background(Color.White.copy(alpha = if (focused) 0.97f else 0.8f)),
         contentAlignment = Alignment.Center,
     ) {
         if (icon != null) {
@@ -598,23 +641,23 @@ private fun CircleLogo(icon: SiteIcon?, name: String, focused: Boolean) {
                 modifier = Modifier.size(disc * 0.62f).graphicsLayer { alpha = if (focused) 1f else 0.9f },
             )
         } else {
-            Text(name.firstOrNull()?.uppercase().orEmpty(), color = if (focused) Palette.Ink else Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+            Text(name.firstOrNull()?.uppercase().orEmpty(), color = Palette.Ink, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
         }
     }
 }
 
 /** « Ajouter » : un cercle en pointillé discret, blanc plein au focus. */
 @Composable
-internal fun AddCard(index: Int, onClick: () -> Unit, onFocus: () -> Unit) {
+internal fun AddCard(index: Int, onClick: () -> Unit, onFocus: () -> Unit, distance: Int? = null) {
     var focused by remember { mutableStateOf(false) }
     Column(rememberEntrance(index).width(CIRCLE_SLOT), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(CIRCLE_SLOT), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(CIRCLE_SLOT).then(rackWave(distance ?: if (focused) 0 else null, focused)), contentAlignment = Alignment.Center) {
             FocusSurface(
                 onClick,
                 Modifier.size(CIRCLE).border(1.5.dp, if (focused) Color.Transparent else Color.White.copy(alpha = 0.2f), CircleShape),
                 shape = CircleShape,
                 idle = Color.White.copy(alpha = 0.06f),
-                focusScale = 1.14f,
+                focusScale = 1f,
                 onFocusChange = {
                     focused = it
                     if (it) onFocus()
@@ -636,6 +679,84 @@ internal fun AddCard(index: Int, onClick: () -> Unit, onFocus: () -> Unit) {
 
 private val CIRCLE = 86.dp
 private val CIRCLE_SLOT = 104.dp
+
+/** Arrivée avec un léger dépassement : le disque « claque » en place. */
+private val SnapBack = CubicBezierEasing(0.34f, 1.45f, 0.64f, 1f)
+
+/**
+ * La vague du bac à disques : le disque choisi sort (plus grand, soulevé), ses voisins s'écartent et
+ * s'inclinent de moins en moins loin. Chaque voisin bouge un peu après le précédent : l'onde se propage.
+ */
+@Composable
+private fun rackWave(distance: Int?, focused: Boolean): Modifier {
+    val d = distance ?: Int.MAX_VALUE
+    val far = kotlin.math.abs(d)
+    val side = if (d < 0) -1f else 1f
+    val decay = when (far) {
+        1 -> 1f
+        2 -> 0.55f
+        3 -> 0.25f
+        else -> 0f
+    }
+    val spec = tween<Float>(460, delayMillis = if (far in 1..3) far * 45 else 0, easing = SnapBack)
+    val scale by animateFloatAsState(
+        when {
+            d == 0 && focused -> 1.2f
+            d == 0 -> 1.07f
+            else -> 1f - 0.05f * decay
+        },
+        spec, label = "rackScale",
+    )
+    val lift by animateFloatAsState(if (d == 0) (if (focused) -16f else -8f) else -5f * decay, spec, label = "rackLift")
+    val tilt by animateFloatAsState(if (d == 0) 0f else -side * 32f * decay, spec, label = "rackTilt")
+    val shift by animateFloatAsState(if (d == 0) 0f else side * 8f * decay, spec, label = "rackShift")
+    return Modifier.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+        translationY = lift * density
+        translationX = shift * density
+        rotationY = tilt
+        cameraDistance = 12f * density
+    }
+}
+
+/**
+ * Le disque : vinyle noir, sillons fins, un anneau à la couleur du site autour de l'étiquette, et deux
+ * reflets. Focalisé, il tourne (les reflets défilent) et le bord s'éclaire de la couleur du site.
+ * L'angle n'est lu qu'au dessin : la rotation ne recompose rien.
+ */
+@Composable
+private fun Vinyl(accent: Color, focused: Boolean) {
+    val angle = if (focused) {
+        rememberInfiniteTransition(label = "vinyl").animateFloat(32f, 392f, infiniteRepeatable(tween(3_600, easing = LinearEasing)), label = "vinylSpin")
+    } else {
+        remember { mutableFloatStateOf(32f) }
+    }
+    val glow by animateFloatAsState(if (focused) 1f else 0f, tween(300), label = "vinylGlow")
+    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+        val r = size.minDimension / 2
+        drawCircle(Brush.radialGradient(listOf(Color(0xFF2A2A33), Color(0xFF111116), Color(0xFF060608)), center, r), r)
+        drawCircle(Brush.radialGradient(listOf(Color.Transparent, accent.copy(alpha = 0.12f + 0.22f * glow)), center, r), r)
+        val inner = r * 0.62f
+        val hair = 0.8.dp.toPx()
+        for (i in 0..8) {
+            drawCircle(Color.White.copy(alpha = if (i % 2 == 0) 0.075f else 0.035f), inner + (r * 0.95f - inner) * i / 8f, style = Stroke(hair))
+        }
+        rotate(angle.value) {
+            val light = Color.White.copy(alpha = 0.10f + 0.08f * glow)
+            drawCircle(
+                Brush.sweepGradient(
+                    0f to Color.Transparent, 0.06f to light, 0.12f to Color.Transparent,
+                    0.5f to Color.Transparent, 0.56f to light, 0.62f to Color.Transparent, 1f to Color.Transparent,
+                    center = center,
+                ),
+                r * 0.97f,
+            )
+        }
+        drawCircle(accent.copy(alpha = 0.6f + 0.4f * glow), r * 0.6f, style = Stroke(2.2.dp.toPx()))
+        drawCircle(Color.White.copy(alpha = 0.10f + 0.25f * glow), r - hair, style = Stroke(1.dp.toPx()))
+    }
+}
 
 /**
  * Où se trouve l'élément qui ouvre un site (cercle ou vignette sélectionnée) : la page s'agrandit
@@ -720,25 +841,65 @@ internal fun parseColor(hex: String?): Color? = hex?.let {
     runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull()
 }
 
-/** « Reprendre » : les vidéos en cours, la plus récente d'abord. OK reprend, appui long retire la carte. */
+/**
+ * Onglet « Reprendre » : la vidéo sélectionnée en grand (titre, site, temps restant, Reprendre, Retirer)
+ * et toutes les vidéos en cours en vignettes, la plus récente d'abord. OK reprend, appui long retire.
+ */
 @Composable
-private fun ContinueRow(
+private fun ContinuePane(
     entries: List<WatchEntry>,
-    siteMap: Map<String, Site>,
+    sites: List<MenuSite>,
+    focused: WatchEntry?,
+    onFocus: (WatchEntry) -> Unit,
     onOpen: (WatchEntry) -> Unit,
     onRemove: (WatchEntry) -> Unit,
-    onFocus: (WatchEntry) -> Unit,
-    firstModifier: Modifier = Modifier,
+    modifier: Modifier = Modifier,
 ) {
-    Column {
-        SectionLabel(stringResource(R.string.continue_title), Modifier.padding(start = 52.dp))
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 10.dp, bottom = 6.dp),
-            modifier = Modifier.fillMaxWidth().height(126.dp),
+    if (entries.isEmpty()) {
+        Column(
+            modifier.fillMaxSize().padding(horizontal = 52.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         ) {
-            itemsIndexed(entries, key = { _, it -> it.url }) { index, entry ->
-                WatchCard(entry, siteMap[entry.siteId], { onOpen(entry) }, { onRemove(entry) }, { onFocus(entry) }, if (index == 0) firstModifier else Modifier)
+            GlyphIcon(Glyph.Play, Color.White.copy(alpha = 0.5f), 44.dp)
+            Text(stringResource(R.string.continue_empty_title), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp)
+            Text(stringResource(R.string.continue_empty_body), color = Palette.TextSecondary, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+        return
+    }
+    val current = focused?.takeIf { f -> entries.any { it.url == f.url } } ?: entries.first()
+    val siteMap = remember(sites) { sites.associateBy { it.site.id } }
+    Column(modifier.fillMaxSize()) {
+        Hero(
+            siteMap[current.siteId],
+            watch = current,
+            onResume = { onOpen(current) },
+            onRemoveWatch = { onRemove(current) },
+            empty = false,
+            onOpen = {},
+            onOptions = {},
+            onAdd = {},
+            pins = emptyList(),
+            onPin = {},
+            compact = true,
+        )
+        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(4),
+            contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 22.dp, bottom = 40.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        ) {
+            items(entries.size, key = { entries[it].url }) { i ->
+                val entry = entries[i]
+                WatchCard(
+                    entry,
+                    siteMap[entry.siteId]?.site,
+                    { onOpen(entry) },
+                    { onRemove(entry) },
+                    { onFocus(entry) },
+                    Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+                )
             }
         }
     }
@@ -751,9 +912,9 @@ private fun WatchCard(entry: WatchEntry, site: Site?, onClick: () -> Unit, onRem
     var focused by remember { mutableStateOf(false) }
     Box(
         modifier
-            .size(178.dp, 100.dp)
             .onGloballyPositioned { if (focused) LaunchOrigin.remember(it, Palette.Accent) }
             .onFocusChanged {
+                if (it.isFocused && !focused) UiSound.focus()
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
             }
@@ -767,8 +928,8 @@ private fun WatchCard(entry: WatchEntry, site: Site?, onClick: () -> Unit, onRem
         VideoArt(rememberWatchImage(entry), site, entry.url, Modifier.matchParentSize())
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color(0xE6000000))))
         Column(Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) {
-            Text(entry.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (siteName.isNotEmpty()) Text(siteName, color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp, maxLines = 1)
+            Text(entry.title, fontSize = 14.sp, fontWeight = FontWeight.Bold, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (siteName.isNotEmpty()) Text(siteName, color = Color.White.copy(alpha = 0.65f), fontSize = 12.sp, maxLines = 1)
         }
         // Avancement de la vidéo.
         Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.25f))) {

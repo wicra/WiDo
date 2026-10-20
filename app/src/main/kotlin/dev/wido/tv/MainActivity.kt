@@ -30,6 +30,9 @@ class MainActivity : ComponentActivity(), RemoteTarget {
     /** Une vidéo vient de partir sur la TV : l'onglet TV s'affiche, pour la piloter. */
     private val showTvTab = MutableStateFlow(false)
 
+    /** Double appui sur Retour dans le lecteur : retour à l'onglet Sites (compteur, pour rejouer). */
+    private val sitesRequest = MutableStateFlow(0)
+
     /** Un site perso à modifier dès l'ouverture (son adresse ne répond plus). */
     private val editRequest = MutableStateFlow<String?>(null)
 
@@ -38,6 +41,7 @@ class MainActivity : ComponentActivity(), RemoteTarget {
         val launched = handleIntent(intent)
         // Option « Rouvrir le dernier site » : seulement au lancement depuis l'accueil de la TV.
         val settings = app.settings
+        if (app.isTv) UiSound.init(this, settings.uiSounds)
         if (app.isTv && !launched && savedInstanceState == null && intent.action == Intent.ACTION_MAIN && settings.startupLastSite) {
             settings.lastSiteId?.let { startActivity(PlayerActivity.intent(this, it)) }
         }
@@ -52,7 +56,8 @@ class MainActivity : ComponentActivity(), RemoteTarget {
                     Onboarding(vm) { app.settings.onboardingDone = true }
                 } else if (app.isTv) {
                     val edit by editRequest.collectAsState()
-                    MenuScreen(vm, onOpen, onOpenPin, onOpenWatch, editSiteId = edit, onEditHandled = { editRequest.value = null })
+                    val sitesSignal by sitesRequest.collectAsState()
+                    MenuScreen(vm, onOpen, onOpenPin, onOpenWatch, editSiteId = edit, onEditHandled = { editRequest.value = null }, sitesSignal = sitesSignal)
                     // Un téléphone du réseau demande à se lier : la TV demande confirmation.
                     PairPromptHost(app.link)
                 } else {
@@ -88,6 +93,7 @@ class MainActivity : ComponentActivity(), RemoteTarget {
             intent.putExtra(PlayerActivity.EXTRA_ORIGIN, intArrayOf(from.left, from.top, from.right, from.bottom))
                 .putExtra(PlayerActivity.EXTRA_COLOR, dev.wido.tv.ui.LaunchOrigin.color)
         }
+        if (app.isTv) UiSound.open()
         startActivity(intent)
         @Suppress("DEPRECATION")
         if (from != null) overridePendingTransition(0, 0)
@@ -201,6 +207,11 @@ class MainActivity : ComponentActivity(), RemoteTarget {
             editRequest.value = it
             return true
         }
+        if (intent.getBooleanExtra(EXTRA_SHOW_SITES, false)) {
+            intent.removeExtra(EXTRA_SHOW_SITES)
+            sitesRequest.value++
+            return true
+        }
         if (intent.getBooleanExtra(EXTRA_SHOW_TV, false)) {
             intent.removeExtra(EXTRA_SHOW_TV)
             showTvTab.value = true
@@ -222,6 +233,11 @@ class MainActivity : ComponentActivity(), RemoteTarget {
         private const val EXTRA_SHOW_TV = "show_tv"
 
         private const val EXTRA_EDIT_SITE = "edit_site"
+        private const val EXTRA_SHOW_SITES = "show_sites"
+
+        /** L'accueil, sur l'onglet Sites (double appui sur Retour dans le lecteur). */
+        fun showSites(context: android.content.Context): Intent =
+            Intent(context, MainActivity::class.java).putExtra(EXTRA_SHOW_SITES, true).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
         /** L'accueil, avec le formulaire d'un site perso ouvert (adresse à corriger). */
         fun editSite(context: android.content.Context, siteId: String): Intent =

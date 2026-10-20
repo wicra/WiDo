@@ -77,6 +77,14 @@ class Settings(private val context: Context) {
         get() = prefs.getBoolean("auto_fullscreen", true)
         set(v) = prefs.edit().putBoolean("auto_fullscreen", v).apply()
 
+    /** Sons de l'interface sur TV : coupés, doux ou normaux ([UiSound]). */
+    var uiSounds: Int
+        get() = prefs.getInt("ui_sounds", UiSound.NORMAL)
+        set(v) {
+            prefs.edit().putInt("ui_sounds", v).apply()
+            UiSound.setLevel(v)
+        }
+
     /** Les touches de volume règlent le volume du système avec l'indicateur de WiDo. */
     var customVolume: Boolean
         get() = prefs.getBoolean("custom_volume", true)
@@ -301,6 +309,7 @@ class Settings(private val context: Context) {
         if (last != null) prefs.edit().putString("last_site", last).apply()
         uiScaleState.floatValue = 1f
         dev.wido.tv.ui.Ambience.mode = dev.wido.tv.ui.Ambience.BLUE
+        UiSound.setLevel(UiSound.NORMAL)
     }
 
     private companion object {

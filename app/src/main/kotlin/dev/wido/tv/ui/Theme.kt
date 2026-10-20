@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.wido.tv.R
+import dev.wido.tv.UiSound
 
 /**
  * Ambiance choisie dans les réglages : la couleur des halos et de la lumière. « Noir » : fond noir pur
@@ -224,12 +225,19 @@ fun Modifier.tvFocusable(
     var focused by remember { mutableStateOf(false) }
     return this
         .onFocusChanged {
+            if (it.isFocused && !focused) UiSound.focus()
             focused = it.isFocused
             onFocusChange(it.isFocused)
         }
         .liftEffect(focused, shape, focusScale, lift)
         .clip(shape)
-        .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+        .combinedClickable(
+            onClick = {
+                UiSound.select()
+                onClick()
+            },
+            onLongClick = onLongClick?.let { long -> { UiSound.select(); long() } },
+        )
 }
 
 /**

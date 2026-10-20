@@ -102,16 +102,11 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     /** Dernier état connu du lecteur vidéo de la page, affiché dans le menu rapide. */
     private val mediaState = mutableStateOf<MediaState?>(null)
     private var passivePoll = false
-    private val poll = Runnable {
-        if (osd.isShowing) {
-            passivePoll = true
-            media("state")
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settings = (application as WiDoApp).settings
+        if (tv) UiSound.init(this, settings.uiSounds)
         audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -477,10 +472,30 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 }
             }
             KeyEvent.ACTION_UP -> {
-                if (backLongPressed) backLongPressed = false else goBackOrExit()
+                when {
+                    backLongPressed -> backLongPressed = false
+                    // Deux appuis rapides : retour direct aux sites, d'où qu'on soit dans la page.
+                    event.eventTime - lastBackUp < DOUBLE_BACK_MS -> {
+                        lastBackUp = 0L
+                        backToSites()
+                    }
+                    else -> {
+                        lastBackUp = event.eventTime
+                        goBackOrExit()
+                    }
+                }
             }
         }
         return true
+    }
+
+    private var lastBackUp = 0L
+
+    /** L'accueil, onglet Sites. */
+    private fun backToSites() {
+        if (tv) UiSound.back()
+        startActivity(MainActivity.showSites(this))
+        finish()
     }
 
     private fun goBackOrExit() {
@@ -491,6 +506,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             wv != null && wv.canGoBack() -> wv.goBack()
             else -> {
                 // Ouvert depuis le téléphone ou Home Assistant sans l'accueil derrière : on y revient au lieu de quitter.
+                if (tv) UiSound.back()
                 if (isTaskRoot) startActivity(Intent(this, MainActivity::class.java))
                 finish()
             }
@@ -687,9 +703,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         publishNowPlaying(state)
         if (!state.paused) captureFrame()
         applyPendingSeek(state)
-        osd.showMedia(state, passive)
-        root.removeCallbacks(poll)
-        if (osd.isShowing) root.postDelayed(poll, POLL_MS) // la barre avance pendant qu'elle est visible
+        // Pas de barre de lecture par-dessus celle du site : seulement le saut demandé (« +30 s »).
+        if (!passive) osd.showSeek()
     }
 
     /** Règle le volume du système sans le panneau d'Android, et affiche l'indicateur de WiDo. */
@@ -1129,7 +1144,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             ValueAnimator.ofFloat(0f, 1f).apply {
                 duration = 420
                 interpolator = android.view.animation.DecelerateInterpolator(2.2f)
-                addUpdateListener { reveal.set(cx, cy, start + (end - start) * it.animatedFraction) }
+                addUpdateListener { reveal.set(cx, cy, start + (end - start) * it.animatedFraction, 220f * it.animatedFraction) }
                 doOnEnd {
                     content.animate().alpha(1f).setDuration(220).start()
                     reveal.animate().alpha(0f).setDuration(260).withEndAction { overlay.removeView(reveal) }.start()
@@ -1139,22 +1154,63 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
     }
 
-    /** Un disque de la couleur du site, dessiné directement (fluide, même sur une petite clé TV). */
+    /**
+     * Le vinyle choisi qui s'agrandit jusqu'à remplir l'écran : disque noir, sillons, reflets qui
+     * tournent et étiquette à la couleur du site. Dessiné directement (fluide, même sur une petite clé TV).
+     */
     private class RevealView(context: Context, color: Int) : View(context) {
-        private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = color }
+        private val disc = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        private val groove = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.STROKE
+            this.color = Color.WHITE
+        }
+        private val sheen = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        private val label = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = color }
+        private val ring = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.STROKE
+            this.color = color
+        }
+        private val hole = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = 0xFF060608.toInt() }
         private var cx = 0f
         private var cy = 0f
         private var radius = 0f
+        private var spin = 0f
 
-        fun set(x: Float, y: Float, r: Float) {
+        fun set(x: Float, y: Float, r: Float, angle: Float) {
             cx = x
             cy = y
             radius = r
+            spin = angle
             invalidate()
         }
 
         override fun onDraw(canvas: android.graphics.Canvas) {
-            if (radius > 0) canvas.drawCircle(cx, cy, radius, paint)
+            if (radius <= 0) return
+            disc.shader = android.graphics.RadialGradient(
+                cx, cy, radius, intArrayOf(0xFF2A2A33.toInt(), 0xFF111116.toInt(), 0xFF060608.toInt()), null, android.graphics.Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(cx, cy, radius, disc)
+            // Sillons : de l'étiquette au bord.
+            val inner = radius * 0.36f
+            groove.strokeWidth = maxOf(1f, radius * 0.003f)
+            for (i in 0..17) {
+                groove.alpha = if (i % 2 == 0) 0x16 else 0x0A
+                canvas.drawCircle(cx, cy, inner + (radius * 0.97f - inner) * i / 17f, groove)
+            }
+            // Deux reflets opposés qui tournent : le disque tourne.
+            canvas.save()
+            canvas.rotate(spin, cx, cy)
+            sheen.shader = android.graphics.SweepGradient(
+                cx, cy,
+                intArrayOf(0, 0x24FFFFFF, 0, 0, 0x24FFFFFF, 0, 0),
+                floatArrayOf(0f, 0.06f, 0.12f, 0.5f, 0.56f, 0.62f, 1f),
+            )
+            canvas.drawCircle(cx, cy, radius * 0.97f, sheen)
+            canvas.restore()
+            ring.strokeWidth = maxOf(2f, radius * 0.012f)
+            canvas.drawCircle(cx, cy, radius * 0.355f, ring)
+            canvas.drawCircle(cx, cy, radius * 0.33f, label)
+            canvas.drawCircle(cx, cy, radius * 0.02f, hole)
         }
     }
 
@@ -1736,7 +1792,6 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         if (backgrounded) BackgroundPlayService.stop(this)
         if (BackgroundBridge.controller != null) BackgroundBridge.controller = null
         overlayAnimator?.cancel()
-        root.removeCallbacks(poll)
         root.removeCallbacks(sleepWarning)
         root.removeCallbacks(sleepNow)
         root.removeCallbacks(hideFieldCard)
@@ -1813,6 +1868,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val FOLLOW_POLL_MS = 2_000L
         private const val FRAME_EVERY_MS = 45_000L
         private const val PAUSE_SCREEN_MS = 5_000L
+        private const val DOUBLE_BACK_MS = 450L
         private const val KEEP_VISIBLE_SCRIPT = """(function () {
   try {
     Object.defineProperty(document, 'hidden', { get: function () { return false; } });
@@ -1873,7 +1929,6 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val ACCENT = 0xFFFFFFFF.toInt()
         private const val OVERLAY_TIMEOUT_MS = 20_000L
         private const val HELP_TIMEOUT_MS = 15_000L
-        private const val POLL_MS = 700L
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val LONG_PRESS_MS = 600L
         /**

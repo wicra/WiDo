@@ -167,6 +167,12 @@ fun SettingsPane(
             ) { changed { settings.ambience = Ambience.ALL[it] } }
         }
         if (!phone) {
+            SettingRow(stringResource(R.string.s_ui_sounds)) {
+                Segmented(
+                    listOf(off, stringResource(R.string.v_sounds_soft), stringResource(R.string.v_sounds_normal)),
+                    settings.uiSounds.coerceIn(0, 2),
+                ) { changed { settings.uiSounds = it } }
+            }
             SettingRow(stringResource(R.string.s_ui_scale)) {
                 Segmented(
                     listOf(stringResource(R.string.v_scale_normal), stringResource(R.string.v_scale_large), stringResource(R.string.v_scale_huge)),

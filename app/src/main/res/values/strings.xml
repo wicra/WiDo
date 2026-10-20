@@ -360,4 +360,9 @@
     <string name="err_edit">Modifier l\'adresse</string>
     <string name="remote_gestures">Gestes</string>
     <string name="remote_gestures_hint">Glisse vers une direction pour te déplacer\nTouche pour OK · Appui long pour Retour</string>
+    <string name="s_ui_sounds">Sons de l\'interface</string>
+    <string name="v_sounds_soft">Doux</string>
+    <string name="v_sounds_normal">Normal</string>
+    <string name="continue_empty_title">Rien en cours</string>
+    <string name="continue_empty_body">Les vidéos commencées s\'affichent ici : OK pour reprendre à la seconde près.</string>
 </resources>

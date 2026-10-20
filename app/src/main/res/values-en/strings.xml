@@ -360,4 +360,9 @@
     <string name="err_edit">Edit address</string>
     <string name="remote_gestures">Gestures</string>
     <string name="remote_gestures_hint">Swipe in a direction to move\nTap for OK · Long press for Back</string>
+    <string name="s_ui_sounds">Interface sounds</string>
+    <string name="v_sounds_soft">Soft</string>
+    <string name="v_sounds_normal">Normal</string>
+    <string name="continue_empty_title">Nothing in progress</string>
+    <string name="continue_empty_body">Videos you start show up here: press OK to resume at the exact second.</string>
 </resources>

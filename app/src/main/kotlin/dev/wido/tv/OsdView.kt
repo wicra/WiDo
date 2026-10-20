@@ -153,6 +153,13 @@ class OsdView(context: Context, private val compact: Boolean = false, scale: Flo
         seekAt = SystemClock.uptimeMillis()
     }
 
+    /** Le saut qui vient d'être demandé (« +30 s »), seul : le lecteur du site montre déjà sa barre. */
+    fun showSeek() {
+        val seek = seekLabel?.takeIf { SystemClock.uptimeMillis() - seekAt < 1_500 } ?: return
+        seekLabel = null
+        showText(seek)
+    }
+
     /** `passive` : rafraîchit les valeurs d'une barre déjà visible, sans la maintenir affichée. */
     fun showMedia(state: MediaState, passive: Boolean = false) {
         if (passive && !isShowing) return
