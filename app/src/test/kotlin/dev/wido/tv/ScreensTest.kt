@@ -126,7 +126,7 @@ class ScreensTest {
         shot("telephone-menu-mini-lecteur")
     }
 
-    @Test @Config(qualifiers = "w960dp-h540dp-xhdpi-television")
+    @Test @Config(qualifiers = "w960dp-h540dp-land-television-xhdpi")
     fun tvMenuRapide() {
         compose.setContent {
             WiDoTheme {
@@ -138,7 +138,7 @@ class ScreensTest {
         shot("tv-menu-rapide")
     }
 
-    @Test @Config(qualifiers = "w960dp-h540dp-xhdpi-television")
+    @Test @Config(qualifiers = "w960dp-h540dp-land-television-xhdpi")
     fun tvAccueil() {
         compose.setContent {
             WiDoTheme {
@@ -156,7 +156,7 @@ class ScreensTest {
     }
 
     @OptIn(ExperimentalRoborazziApi::class)
-    @Test @Config(qualifiers = "w960dp-h540dp-xhdpi-television")
+    @Test @Config(qualifiers = "w960dp-h540dp-land-television-xhdpi")
     fun tvDemandeDeLiaison() {
         val pending = PairingDesk.Pending(PairRequest(DeviceInfo("p", "Pixel de Sergio", DeviceRole.PHONE), "12345678"), 0)
         compose.setContent { WiDoTheme { PairPrompt(pending) { _, _ -> } } }
