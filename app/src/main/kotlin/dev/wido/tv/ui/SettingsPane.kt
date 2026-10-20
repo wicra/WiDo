@@ -261,6 +261,12 @@ fun SettingsPane(
                 SettingRow(stringResource(R.string.s_device_name_phone)) {
                     DeviceNameField(settings.deviceName) { changed { settings.deviceName = it } }
                 }
+                SettingRow(stringResource(R.string.s_tv_notification)) {
+                    Segmented(listOf(on, off), if (settings.tvNotification) 0 else 1) { changed { settings.tvNotification = it == 0 } }
+                }
+                SettingRow(stringResource(R.string.s_background_play)) {
+                    Segmented(listOf(on, off), if (settings.backgroundPlay) 0 else 1) { changed { settings.backgroundPlay = it == 0 } }
+                }
             }
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {

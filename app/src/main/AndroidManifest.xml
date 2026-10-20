@@ -5,6 +5,13 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Mise à jour depuis les releases GitHub : l'utilisateur confirme l'installation. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Téléphone : notifications de lecture (TV pilotée, lecture en arrière-plan). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -68,6 +75,18 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation|smallestScreenSize|screenLayout|uiMode"
             android:screenOrientation="sensorLandscape" />
+
+        <!-- Téléphone : la TV qui lit une vidéo, pilotée depuis une notification. -->
+        <service
+            android:name=".TvRemoteService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+        <!-- Téléphone : la vidéo continue quand on quitte l'appli. -->
+        <service
+            android:name=".BackgroundPlayService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

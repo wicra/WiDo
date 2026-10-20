@@ -77,7 +77,20 @@ class MainActivity : ComponentActivity(), RemoteTarget {
         super.onStart()
         ViewModelProvider(this)[MenuViewModel::class.java].onForeground()
         // Téléphone : recherche des TV, état de celle choisie, synchro de « mes écrans ».
-        if (!app.isTv) app.link.startPolling()
+        if (!app.isTv) {
+            app.link.startPolling()
+            askNotifications()
+        }
+    }
+
+    private val notificationPermission = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {}
+
+    /** Une fois, quand un écran est lié : les notifications de lecture (TV pilotée, arrière-plan). */
+    private fun askNotifications() {
+        if (android.os.Build.VERSION.SDK_INT < 33 || app.settings.notificationsAsked || app.link.peers.value.isEmpty()) return
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        app.settings.notificationsAsked = true
+        notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
     }
 
     override fun onStop() {
@@ -99,11 +112,14 @@ class MainActivity : ComponentActivity(), RemoteTarget {
 
     override fun onPause() {
         (application as WiDoApp).remote.detach(this)
+        // Téléphone : la TV lit une vidéo, la notification prend le relais (encore visible : démarrage permis).
+        if (!app.isTv && !isChangingConfigurations) TvRemoteService.startIfPlaying(this)
         super.onPause()
     }
 
     override fun onResume() {
         super.onResume()
+        if (!app.isTv) TvRemoteService.stop(this)
         (application as WiDoApp).remote.attach(this)
         // Une fois l'accueil affiché, une WebView se prépare au calme : le prochain site s'ouvrira vite.
         window.decorView.postDelayed({ if (!isFinishing) WebViewPool.prepare(this) }, PREPARE_DELAY_MS)

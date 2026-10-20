@@ -324,4 +324,15 @@
     <string name="onb_done">C\'est parti</string>
     <string name="onb_later">Plus tard</string>
     <string name="onb_skip">Passer</string>
+    <string name="msg_removed">Retiré de Reprendre</string>
+    <string name="msg_undo">Annuler</string>
+    <string name="action_open_site">Ouvrir %1$s</string>
+    <string name="continue_hint">Glisse une vidéo vers la gauche pour la retirer ; appui long pour plus de choix.</string>
+    <string name="s_tv_notification">Notification de la TV</string>
+    <string name="s_background_play">Lecture en arrière-plan</string>
+    <string name="notif_channel">Lecture</string>
+    <string name="notif_rewind">Reculer</string>
+    <string name="notif_forward">Avancer</string>
+    <string name="notif_tv_title">TV</string>
+    <string name="notif_on_tv">Sur %1$s</string>
 </resources>

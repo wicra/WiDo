@@ -75,6 +75,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
     implementation("androidx.media3:media3-exoplayer-dash:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
+    // Notifications de lecture (téléphone) : session média, écran verrouillé, volume de la TV.
+    implementation("androidx.media:media:1.7.0")
     // QR code de la saisie depuis un téléphone (génération seulement).
     implementation("com.google.zxing:core:3.5.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")

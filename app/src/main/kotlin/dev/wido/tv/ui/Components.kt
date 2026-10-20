@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -95,17 +96,26 @@ fun Chip(
     selected: Boolean = false,
     idleText: Color = if (selected) Palette.TextPrimary else Color.White.copy(alpha = 0.8f),
     idle: Color = if (selected) Color.White.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.10f),
+    /** Icône dessinée avant le texte ; `glyphTint` en impose la couleur (sinon celle du texte). */
+    glyph: Glyph? = null,
+    glyphTint: Color? = null,
 ) {
     FocusSurface(onClick, modifier, idle = idle, focusScale = 1.08f) { focused ->
-        Text(
-            label,
-            color = onSurface(focused, idleText),
-            fontSize = 14.sp,
-            fontWeight = if (selected || focused) FontWeight.Bold else FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 15.dp, vertical = 8.dp),
-        )
+        Row(
+            Modifier.padding(start = if (glyph != null) 11.dp else 15.dp, end = 15.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (glyph != null) GlyphIcon(glyph, glyphTint ?: onSurface(focused, idleText), 14.dp)
+            Text(
+                label,
+                color = onSurface(focused, idleText),
+                fontSize = 14.sp,
+                fontWeight = if (selected || focused) FontWeight.Bold else FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -262,7 +272,7 @@ fun DialogFrame(
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         // Téléphone : presque toute la largeur, et la hauteur qu'il faut (le contenu défile au-delà).
         val size = if (phone) {
-            Modifier.fillMaxWidth(0.94f).heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.86f).dp)
+            Modifier.fillMaxWidth(0.94f).widthIn(max = 640.dp).heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.86f).dp)
         } else {
             Modifier.width(width).heightIn(max = 480.dp)
         }

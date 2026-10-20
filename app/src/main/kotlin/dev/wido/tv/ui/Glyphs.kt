@@ -25,7 +25,7 @@ import kotlin.math.sin
 enum class Glyph {
     Refresh, Play, Pause, Rewind, Forward, Up, Down, Left, Right, Back, Home, Menu, VolumeDown, VolumeUp, Mute,
     Star, ZoomIn, ZoomOut, Hide, Save, Sleep, Help, Sites, Cursor, Phone, Native, Tv, Next, Restart, More,
-    Check, Warning, Blocked, Close, Plus, Globe,
+    Check, Warning, Blocked, Close, Plus, Globe, Dot,
 }
 
 @Composable
@@ -179,6 +179,7 @@ private fun DrawScope.drawGlyph(glyph: Glyph, color: Color) {
             drawOval(color, p(0.34f, 0.14f), Size(0.32f * s, 0.72f * s), style = stroke)
             drawLine(color, p(0.14f, 0.5f), p(0.86f, 0.5f), strokeWidth = stroke.width * 0.8f)
         }
+        Glyph.Dot -> drawCircle(color, radius = 0.24f * s, center = p(0.5f, 0.5f))
         Glyph.Mute -> {
             speaker()
             drawLine(color, p(0.62f, 0.4f), p(0.82f, 0.6f), strokeWidth = stroke.width, cap = StrokeCap.Round)

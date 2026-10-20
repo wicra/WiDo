@@ -143,7 +143,7 @@ fun PhoneTvTab(
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(peers, key = { it.id }) { peer ->
                             val online = states[peer.id]?.online == true
-                            Chip((if (online) "● " else "○ ") + peer.name, { link.selectScreen(peer.id) }, selected = peer.id == selected?.id)
+                            Chip(peer.name, { link.selectScreen(peer.id) }, selected = peer.id == selected?.id, glyph = Glyph.Dot, glyphTint = if (online) Palette.Ok else Palette.TextMuted)
                         }
                     }
                 }
@@ -213,7 +213,7 @@ private fun FoundRow(found: LinkDiscovery.Found, onPair: () -> Unit) {
 
 /** Ce qui passe sur la TV : image, titre, barre de lecture déplaçable, commandes et « Reprendre sur le téléphone ». */
 @Composable
-private fun NowPlayingCard(peer: Peer, state: ScreenLink.ScreenState, link: ScreenLink, onPlayHere: () -> Unit) {
+internal fun NowPlayingCard(peer: Peer, state: ScreenLink.ScreenState, link: ScreenLink, onPlayHere: () -> Unit) {
     val haptic = LocalHapticFeedback.current
     Column(
         Modifier.fillMaxWidth().glassPanel(Palette.Glass, PanelShape).padding(16.dp),
@@ -297,7 +297,7 @@ private fun NowPlayingCard(peer: Peer, state: ScreenLink.ScreenState, link: Scre
 
 /** Télécommande : touches, pavé tactile ou clavier en direct. */
 @Composable
-private fun RemotePanel(link: ScreenLink) {
+internal fun RemotePanel(link: ScreenLink) {
     var mode by remember { mutableStateOf(RemoteMode.Keys) }
     Column(
         Modifier.fillMaxWidth().glassPanel(Palette.GlassFaint, PanelShape).padding(16.dp),
@@ -576,5 +576,32 @@ private fun ManualAddressDialog(onDismiss: () -> Unit, onPair: (String, Int) -> 
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
         )
         if (error) Text(stringResource(R.string.screens_address_invalid), color = Palette.Warning, fontSize = 13.sp)
+    }
+}
+
+/**
+ * Tablette : la TV à droite de l'accueil, en permanence (ce qu'elle lit et la télécommande). Sans TV
+ * liée, un mot pour en lier une.
+ */
+@Composable
+fun TvSidePane(link: ScreenLink, onPlayHere: (NowPlaying) -> Unit, onOpenTvTab: () -> Unit) {
+    val peers by link.peers.collectAsState()
+    val states by link.states.collectAsState()
+    val selectedId by link.selected.collectAsState()
+    val scope = rememberCoroutineScope()
+    val peer = peers.firstOrNull { it.id == selectedId } ?: peers.firstOrNull()
+    LazyColumn(
+        contentPadding = PaddingValues(start = 8.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        if (peer == null) {
+            item { EmptyScreens() }
+            item { SmallPill(stringResource(R.string.tab_tv), primary = true, onClick = onOpenTvTab) }
+        } else {
+            val st = states[peer.id] ?: ScreenLink.ScreenState()
+            item(key = "now") { NowPlayingCard(peer, st, link) { scope.launch { link.take(peer)?.let(onPlayHere) } } }
+            if (st.online) item(key = "remote") { RemotePanel(link) }
+        }
     }
 }

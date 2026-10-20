@@ -59,7 +59,7 @@ fun SiteActionsDialog(
         if (pins.isNotEmpty()) {
             SectionLabel(stringResource(R.string.pins_remove))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                pins.forEach { pin -> Chip("✕  ${pin.title}", { onRemovePin(pin) }) }
+                pins.forEach { pin -> Chip(pin.title, { onRemovePin(pin) }, glyph = Glyph.Close) }
             }
         }
     }

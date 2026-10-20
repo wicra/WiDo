@@ -240,6 +240,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             WebViewCompat.addDocumentStartJavaScript(wv, injector?.internalScript().orEmpty(), setOf("*"))
         }
         injector?.includeInternal = !bridged
+        // Téléphone, lecture en arrière-plan : la page se croit toujours visible (sinon beaucoup de sites coupent la vidéo).
+        if (documentStart && !tv && settings.backgroundPlay) WebViewCompat.addDocumentStartJavaScript(wv, KEEP_VISIBLE_SCRIPT, setOf("*"))
         // Protections (masquage, YouTube) avant le moindre script de la page, quand la WebView le permet.
         val early = injector?.early.orEmpty()
         if (documentStart && early.isNotBlank()) {
@@ -605,6 +607,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         media("seek", seconds)
     }
 
+    private var osdThumb: android.graphics.Bitmap? = null
+
     /** Titre, site et image de la vidéo pour la barre de lecture. */
     private fun refreshOsdInfo() {
         val current = site ?: return
@@ -614,7 +618,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val image = pageImage
         lifecycleScope.launch {
             val bitmap = (application as WiDoApp).thumbnails.forVideo(page, image)
-            osd.setThumb(bitmap?.asAndroidBitmap())
+            osdThumb = bitmap?.asAndroidBitmap()
+            osd.setThumb(osdThumb)
         }
     }
 
@@ -638,6 +643,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         passivePoll = false
         mediaState.value = state
         mediaAt = SystemClock.elapsedRealtime()
+        if (backgrounded) BackgroundBridge.update(playbackInfo(state))
         publishNowPlaying(state)
         if (!state.paused) captureFrame()
         applyPendingSeek(state)
@@ -1102,7 +1108,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     override fun onResume() {
         super.onResume()
+        if (backgrounded) {
+            backgrounded = false
+            BackgroundPlayService.stop(this)
+        }
         webView?.onResume()
+        root.removeCallbacks(progressPoll)
         root.postDelayed(progressPoll, PROGRESS_POLL_MS)
         (application as WiDoApp).remote.attach(this)
     }
@@ -1111,12 +1122,43 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         captureFrame(force = true)
         (application as WiDoApp).remote.detach(this)
         if (tv) (application as WiDoApp).link.nowPlaying.value = null
-        root.removeCallbacks(progressPoll)
-        webView?.onPause()
+        // Téléphone, vidéo en cours, réglage actif : elle continue en arrière-plan (notification de lecture).
+        val playing = mediaState.value?.let { !it.paused && it.duration > 0 } == true
+        if (!tv && settings.backgroundPlay && playing && !isChangingConfigurations && !isFinishing) {
+            backgrounded = true
+            BackgroundBridge.controller = { command -> backgroundCommand(command) }
+            mediaState.value?.let { BackgroundBridge.update(playbackInfo(it)) }
+            BackgroundPlayService.start(this)
+        } else {
+            root.removeCallbacks(progressPoll)
+            webView?.onPause()
+        }
         saveSeen()
         rememberPage()
         super.onPause()
     }
+
+    /** La lecture continue alors que l'appli n'est plus à l'écran. */
+    private var backgrounded = false
+
+    private fun backgroundCommand(command: String) {
+        val seek = settings.seekSeconds.toDouble()
+        when (command) {
+            "rewind" -> media("seek", -seek)
+            "forward" -> media("seek", seek)
+            else -> media(command)
+        }
+        root.postDelayed({ passivePoll = true; media("state") }, 400)
+    }
+
+    private fun playbackInfo(state: MediaState) = PlaybackInfo(
+        title = webView?.title?.takeIf { it.isNotBlank() } ?: site?.name.orEmpty(),
+        subtitle = site?.name.orEmpty(),
+        position = state.time,
+        duration = state.duration,
+        playing = !state.paused,
+        art = osdThumb,
+    )
 
     /**
      * Retient la page affichée (et la position d'une vidéo YouTube) pour la prochaine ouverture du site,
@@ -1421,6 +1463,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     override fun onDestroy() {
+        if (backgrounded) BackgroundPlayService.stop(this)
+        if (BackgroundBridge.controller != null) BackgroundBridge.controller = null
         overlayAnimator?.cancel()
         root.removeCallbacks(poll)
         root.removeCallbacks(sleepWarning)
@@ -1470,6 +1514,17 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val PROGRESS_POLL_MS = 10_000L
         private const val FOLLOW_POLL_MS = 2_000L
         private const val FRAME_EVERY_MS = 45_000L
+        private const val KEEP_VISIBLE_SCRIPT = """(function () {
+  try {
+    Object.defineProperty(document, 'hidden', { get: function () { return false; } });
+    Object.defineProperty(document, 'visibilityState', { get: function () { return 'visible'; } });
+    Object.defineProperty(document, 'webkitHidden', { get: function () { return false; } });
+  } catch (e) {}
+  ['visibilitychange', 'webkitvisibilitychange', 'blur'].forEach(function (t) {
+    window.addEventListener(t, function (e) { e.stopImmediatePropagation(); }, true);
+    document.addEventListener(t, function (e) { e.stopImmediatePropagation(); }, true);
+  });
+})()"""
         /**
          * Trouve (et clique si `go`) le lien ou bouton « épisode suivant » de la page : par son texte,
          * son libellé d'accessibilité ou son titre. Renvoie vrai s'il existe.

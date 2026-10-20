@@ -127,6 +127,11 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     @Synchronized
     fun removeWatch(url: String) = saveWatching(ContinueWatching.remove(_watching.value, url))
 
+    /** Remet une vidéo retirée par erreur, à sa place (par date). */
+    @Synchronized
+    fun restoreWatch(entry: WatchEntry) =
+        saveWatching((_watching.value.filterNot { it.url == entry.url } + entry).sortedByDescending { it.updatedAt }.take(ContinueWatching.MAX))
+
     private fun saveWatching(next: List<WatchEntry>) {
         if (next == _watching.value) return
         writeAtomically(watchingFile, ContinueWatching.encode(next))

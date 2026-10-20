@@ -62,6 +62,9 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
 
     fun removeWatch(url: String) = app.repository.removeWatch(url)
 
+    /** « Annuler » après un retrait. */
+    fun restoreWatch(entry: dev.wido.core.WatchEntry) = app.repository.restoreWatch(entry)
+
     /** Chaque fonction renvoie un message d'erreur à afficher, ou null si c'est fait. */
     fun addSite(name: String, url: String, options: LocalSites.SiteOptions): String? =
         app.repository.addLocalSite(name, url, options)

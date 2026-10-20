@@ -324,4 +324,15 @@
     <string name="onb_done">Let\'s go</string>
     <string name="onb_later">Later</string>
     <string name="onb_skip">Skip</string>
+    <string name="msg_removed">Removed from Continue watching</string>
+    <string name="msg_undo">Undo</string>
+    <string name="action_open_site">Open %1$s</string>
+    <string name="continue_hint">Swipe a video left to remove it; long press for more.</string>
+    <string name="s_tv_notification">TV notification</string>
+    <string name="s_background_play">Background playback</string>
+    <string name="notif_channel">Playback</string>
+    <string name="notif_rewind">Rewind</string>
+    <string name="notif_forward">Forward</string>
+    <string name="notif_tv_title">TV</string>
+    <string name="notif_on_tv">On %1$s</string>
 </resources>

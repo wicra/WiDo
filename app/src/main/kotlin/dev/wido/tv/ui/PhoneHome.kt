@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -82,6 +84,15 @@ import kotlinx.coroutines.launch
 
 private enum class PhoneTab { Home, Continue, Tv, Settings }
 
+/** Message bref en bas de l'écran, avec une action d'annulation éventuelle. */
+private data class PhoneMessage(val text: String, val undo: (() -> Unit)? = null)
+
+/** Ce qu'un appui long a désigné : une vidéo de Reprendre ou une page épinglée. */
+private sealed interface LongPressed {
+    data class Watch(val entry: WatchEntry) : LongPressed
+    data class Pinned(val pin: Pin) : LongPressed
+}
+
 private sealed interface PhoneEditor {
     data object Add : PhoneEditor
     data class Edit(val site: Site) : PhoneEditor
@@ -121,7 +132,8 @@ fun PhoneHome(
     var editor by remember { mutableStateOf<PhoneEditor?>(null) }
     var actionsFor by remember { mutableStateOf<Site?>(null) }
     var showCatalog by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<PhoneMessage?>(null) }
+    var pressed by remember { mutableStateOf<LongPressed?>(null) }
 
     // Un QR code d'appairage scanné : direction l'onglet TV, qui s'en occupe.
     androidx.compose.runtime.LaunchedEffect(pairTarget) { if (pairTarget != null) tab = PhoneTab.Tv }
@@ -135,50 +147,87 @@ fun PhoneHome(
     /** « Sur la TV » depuis l'accueil ou Reprendre. */
     fun sendToTv(play: HandoffPlay) {
         val peer = screen ?: return
-        scope.launch { message = if (link.play(peer, play)) sentTo else unreachable }
+        scope.launch { message = PhoneMessage(if (link.play(peer, play)) sentTo else unreachable) }
     }
 
+    val removedText = stringResource(R.string.msg_removed)
+    /** Retirer de Reprendre, avec « Annuler » quelques secondes. */
+    fun removeWatch(entry: WatchEntry) {
+        vm.removeWatch(entry.url)
+        message = PhoneMessage(removedText) { vm.restoreWatch(entry) }
+    }
+    val siteMap = remember(sites) { sites.associate { it.site.id to it.site } }
+    val nowOnTv = screenState?.status?.playing?.takeIf { tvOnline }
+
     val light by animateColorAsState(if (tab == PhoneTab.Tv) Palette.Purple else Palette.Accent, label = "phoneLight")
-    Box(Modifier.fillMaxSize().halo(listOf(Glow(light, 0.1f, 0.0f, 0.9f, 0.45f), Glow(Palette.Violet, 1.0f, 0.75f, 0.8f, 0.4f)))) {
-        Column(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f)) {
-                when (tab) {
-                    PhoneTab.Home -> HomeTab(
-                        sites = sites,
-                        watching = watching,
-                        pins = pins,
-                        nowOnTv = screenState?.status?.playing?.takeIf { tvOnline },
-                        tvName = screen?.name,
-                        loading = state.loading && sites.isEmpty(),
-                        update = { UpdateBanner(update, vm::install, horizontal = 0.dp) },
-                        onOpen = onOpen,
-                        onOptions = { actionsFor = it },
-                        onAdd = { showCatalog = true },
-                        onOpenPin = onOpenPin,
-                        onOpenWatch = onOpenWatch,
-                        onShowTv = { tab = PhoneTab.Tv },
-                        onRefresh = vm::refresh,
-                    )
-                    PhoneTab.Continue -> ContinueTab(
-                        entries = watching,
-                        siteMap = sites.associate { it.site.id to it.site },
-                        tvName = screen?.name?.takeIf { tvOnline },
-                        onOpen = onOpenWatch,
-                        onRemove = { vm.removeWatch(it.url) },
-                        onSendToTv = { sendToTv(HandoffPlay(it.url, it.siteId, it.title, it.position)) },
-                    )
-                    PhoneTab.Tv -> PhoneTvTab(link, onPlayHere, pairTarget, onPairTargetHandled)
-                    PhoneTab.Settings -> Column(Modifier.fillMaxSize()) {
-                        PhoneTitle(stringResource(R.string.action_settings), Modifier.padding(start = 18.dp, top = 16.dp))
-                        SettingsPane(app.settings, lists, vm::updateLists, Modifier.weight(1f))
+    BoxWithConstraints(Modifier.fillMaxSize().halo(listOf(Glow(light, 0.1f, 0.0f, 0.9f, 0.45f), Glow(Palette.Violet, 1.0f, 0.75f, 0.8f, 0.4f)))) {
+        // Tablette ou téléphone en paysage large : onglets sur le côté, et la TV à droite de l'accueil.
+        val wide = maxWidth >= 840.dp
+        Row(Modifier.fillMaxSize()) {
+            if (wide) SideRail(tab, tvOnline) { tab = it }
+            Column(Modifier.weight(1f)) {
+                Box(Modifier.weight(1f)) {
+                    when (tab) {
+                        PhoneTab.Home -> Row(Modifier.fillMaxSize()) {
+                            Box(Modifier.weight(1.5f)) {
+                                HomeTab(
+                                    sites = sites,
+                                    watching = watching,
+                                    pins = pins,
+                                    loading = state.loading,
+                                    update = { UpdateBanner(update, vm::install, horizontal = 0.dp) },
+                                    onOpen = onOpen,
+                                    onOptions = { actionsFor = it },
+                                    onAdd = { showCatalog = true },
+                                    onOpenPin = onOpenPin,
+                                    onOpenWatch = onOpenWatch,
+                                    onLongPress = { pressed = it },
+                                    onRefresh = vm::refresh,
+                                )
+                            }
+                            if (wide) Box(Modifier.weight(1f)) { TvSidePane(link, onPlayHere) { tab = PhoneTab.Tv } }
+                        }
+                        PhoneTab.Continue -> ContinueTab(
+                            entries = watching,
+                            siteMap = siteMap,
+                            tvName = screen?.name?.takeIf { tvOnline },
+                            onOpen = onOpenWatch,
+                            onRemove = ::removeWatch,
+                            onSendToTv = { sendToTv(HandoffPlay(it.url, it.siteId, it.title, it.position)) },
+                            onLongPress = { pressed = LongPressed.Watch(it) },
+                        )
+                        PhoneTab.Tv -> PhoneTvTab(link, onPlayHere, pairTarget, onPairTargetHandled)
+                        PhoneTab.Settings -> Column(Modifier.fillMaxSize()) {
+                            PhoneTitle(stringResource(R.string.action_settings), Modifier.padding(start = 18.dp, top = 16.dp))
+                            SettingsPane(app.settings, lists, vm::updateLists, Modifier.weight(1f))
+                        }
+                    }
+                    message?.let { m ->
+                        Snack(m.text, Modifier.align(Alignment.BottomCenter), actionLabel = if (m.undo != null) stringResource(R.string.msg_undo) else null, onAction = m.undo) { message = null }
                     }
                 }
-                message?.let { text ->
-                    Snack(text, Modifier.align(Alignment.BottomCenter)) { message = null }
+                // Mini-lecteur : ce que lit la TV, dans tous les onglets (sauf là où la TV est déjà affichée).
+                if (nowOnTv != null && screen != null && tab != PhoneTab.Tv && !(wide && tab == PhoneTab.Home)) {
+                    MiniPlayer(nowOnTv, screenState.receivedAt, screen.name, onToggle = { link.key(dev.wido.core.RemoteKey.PLAY_PAUSE) }) { tab = PhoneTab.Tv }
                 }
+                if (!wide) BottomBar(tab, tvOnline) { tab = it }
             }
-            BottomBar(tab, tvOnline) { tab = it }
         }
+    }
+
+    pressed?.let { target ->
+        LongPressMenu(
+            target = target,
+            siteMap = siteMap,
+            tvName = screen?.name?.takeIf { tvOnline },
+            onDismiss = { pressed = null },
+            onOpenWatch = { pressed = null; onOpenWatch(it) },
+            onOpenPin = { pressed = null; onOpenPin(it) },
+            onOpenSite = { site -> pressed = null; onOpen(site) },
+            onSendToTv = { play -> pressed = null; sendToTv(play) },
+            onRemoveWatch = { pressed = null; removeWatch(it) },
+            onRemovePin = { pressed = null; vm.removePin(it) },
+        )
     }
 
     if (showCatalog) {
@@ -237,8 +286,6 @@ private fun HomeTab(
     sites: List<MenuSite>,
     watching: List<WatchEntry>,
     pins: List<Pin>,
-    nowOnTv: NowPlaying?,
-    tvName: String?,
     loading: Boolean,
     update: @Composable () -> Unit,
     onOpen: (Site) -> Unit,
@@ -246,10 +293,12 @@ private fun HomeTab(
     onAdd: () -> Unit,
     onOpenPin: (Pin) -> Unit,
     onOpenWatch: (WatchEntry) -> Unit,
-    onShowTv: () -> Unit,
+    onLongPress: (LongPressed) -> Unit,
     onRefresh: () -> Unit,
 ) {
     val full: androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
+    // Tirer vers le bas : configuration, listes et état de la TV se mettent à jour.
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(isRefreshing = loading, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(150.dp),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
@@ -264,16 +313,13 @@ private fun HomeTab(
             }
         }
         item(span = full) { update() }
-        if (nowOnTv != null && tvName != null) {
-            item(span = full) { NowOnTvStrip(nowOnTv, tvName, onShowTv) }
-        }
         if (watching.isNotEmpty()) {
             item(span = full) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SectionLabel(stringResource(R.string.continue_title))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(watching, key = { it.url }) { entry ->
-                            WatchTile(entry, sites.firstOrNull { it.site.id == entry.siteId }?.site, Modifier.width(220.dp)) { onOpenWatch(entry) }
+                            WatchTile(entry, sites.firstOrNull { it.site.id == entry.siteId }?.site, Modifier.width(220.dp), onLongClick = { onLongPress(LongPressed.Watch(entry)) }) { onOpenWatch(entry) }
                         }
                     }
                 }
@@ -284,13 +330,13 @@ private fun HomeTab(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SectionLabel(stringResource(R.string.pins_title))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        pins.forEach { pin -> Chip("★  ${pin.title}", { onOpenPin(pin) }) }
+                        pins.forEach { pin -> PressChip(pin.title, Glyph.Star, { onOpenPin(pin) }) { onLongPress(LongPressed.Pinned(pin)) } }
                     }
                 }
             }
         }
         item(span = full) { SectionLabel(stringResource(R.string.tab_sites)) }
-        if (loading) {
+        if (loading && sites.isEmpty()) {
             item(span = full) { Text(stringResource(R.string.status_loading), color = Palette.TextSecondary, fontSize = 14.sp) }
         }
         items(sites, key = { it.site.id }) { entry -> PhoneSiteCard(entry, { onOpen(entry.site) }, { onOptions(entry.site) }) }
@@ -303,6 +349,7 @@ private fun HomeTab(
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
+    }
     }
 }
 
@@ -358,36 +405,128 @@ private fun PhoneAddCard(onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("+", fontSize = 34.sp, fontWeight = FontWeight.Light)
+            GlyphIcon(Glyph.Plus, Color.White, 30.dp)
             Text(stringResource(R.string.add_site), color = Palette.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
-/** « En cours sur Salon » : rappel en haut de l'accueil, touché il mène à l'onglet TV. */
+/**
+ * Mini-lecteur au-dessus des onglets : la TV lit une vidéo. Image, titre, « Salon », lecture/pause et
+ * un fin trait d'avancement ; le toucher ouvre l'onglet TV.
+ */
 @Composable
-private fun NowOnTvStrip(now: NowPlaying, tvName: String, onClick: () -> Unit) {
-    val image = rememberThumbnail(now.image)
-    Row(
+private fun MiniPlayer(now: NowPlaying, receivedAt: Long, tvName: String, onToggle: () -> Unit, onOpen: () -> Unit) {
+    var tick by remember { mutableStateOf(System.currentTimeMillis()) }
+    androidx.compose.runtime.LaunchedEffect(now) {
+        while (true) {
+            tick = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1_000)
+        }
+    }
+    val progress = if (now.duration > 0) (now.positionAfter(tick - receivedAt) / now.duration).toFloat().coerceIn(0f, 1f) else 0f
+    Column(
         Modifier
             .fillMaxWidth()
-            .glassPanel(Palette.Glass, RowShape)
-            .clickable(onClick = onClick)
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .glassPanel(Palette.PanelSolid, RowShape, elevation = 10.dp)
+            .clickable(onClick = onOpen),
     ) {
-        VideoArt(image, null, now.url, Modifier.size(72.dp, 42.dp).clip(RoundedCornerShape(8.dp)), badge = 0.dp)
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.now_on_tv, tvName), color = Palette.Ok, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, maxLines = 1)
-            Text(now.title.ifEmpty { now.siteName }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            VideoArt(rememberThumbnail(now.image), null, now.url, Modifier.size(64.dp, 36.dp).clip(RoundedCornerShape(8.dp)), badge = 0.dp)
+            Column(Modifier.weight(1f)) {
+                Text(now.title.ifEmpty { now.siteName.ifEmpty { now.url } }, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    GlyphIcon(Glyph.Tv, Palette.Ok, 13.dp)
+                    Text(tvName, color = Palette.Ok, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                }
+            }
+            Box(Modifier.size(40.dp).clip(CircleShape).background(Color.White).clickable(onClick = onToggle), contentAlignment = Alignment.Center) {
+                GlyphIcon(if (now.playing) Glyph.Pause else Glyph.Play, Palette.Ink, 20.dp)
+            }
         }
-        GlyphIcon(Glyph.Right, Palette.TextSecondary, 22.dp)
+        Box(Modifier.fillMaxWidth().padding(horizontal = 14.dp).height(2.dp).clip(RoundedCornerShape(1.dp)).background(Color.White.copy(alpha = 0.2f))) {
+            Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(Color.White))
+        }
+        Box(Modifier.height(6.dp))
+    }
+}
+
+/** Menu de l'appui long sur une vidéo ou une page épinglée. */
+@Composable
+private fun LongPressMenu(
+    target: LongPressed,
+    siteMap: Map<String, Site>,
+    tvName: String?,
+    onDismiss: () -> Unit,
+    onOpenWatch: (WatchEntry) -> Unit,
+    onOpenPin: (Pin) -> Unit,
+    onOpenSite: (Site) -> Unit,
+    onSendToTv: (HandoffPlay) -> Unit,
+    onRemoveWatch: (WatchEntry) -> Unit,
+    onRemovePin: (Pin) -> Unit,
+) {
+    val title = when (target) {
+        is LongPressed.Watch -> target.entry.title
+        is LongPressed.Pinned -> target.pin.title
+    }
+    DialogFrame(title = title, onDismiss = onDismiss, width = 520.dp) {
+        when (target) {
+            is LongPressed.Watch -> {
+                val e = target.entry
+                ActionButton(stringResource(R.string.action_resume), { onOpenWatch(e) }, Modifier.fillMaxWidth(), glyph = Glyph.Play)
+                if (tvName != null) ActionButton(stringResource(R.string.panel_send_to_tv, tvName), { onSendToTv(HandoffPlay(e.url, e.siteId, e.title, e.position)) }, Modifier.fillMaxWidth(), primary = false, glyph = Glyph.Tv)
+                siteMap[e.siteId]?.let { site -> ActionButton(stringResource(R.string.action_open_site, site.name), { onOpenSite(site) }, Modifier.fillMaxWidth(), primary = false, glyph = Glyph.Globe) }
+                ActionButton(stringResource(R.string.action_remove), { onRemoveWatch(e) }, Modifier.fillMaxWidth(), primary = false, glyph = Glyph.Close)
+            }
+            is LongPressed.Pinned -> {
+                val p = target.pin
+                ActionButton(stringResource(R.string.action_open), { onOpenPin(p) }, Modifier.fillMaxWidth(), glyph = Glyph.Play)
+                if (tvName != null) ActionButton(stringResource(R.string.panel_send_to_tv, tvName), { onSendToTv(HandoffPlay(p.url, p.siteId, p.title)) }, Modifier.fillMaxWidth(), primary = false, glyph = Glyph.Tv)
+                ActionButton(stringResource(R.string.action_remove), { onRemovePin(p) }, Modifier.fillMaxWidth(), primary = false, glyph = Glyph.Close)
+            }
+        }
+    }
+}
+
+/** Pastille avec icône : toucher ouvre, appui long propose les actions. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PressChip(label: String, glyph: Glyph, onClick: () -> Unit, onLongClick: () -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    Row(
+        Modifier
+            .clip(PillShape)
+            .background(Color.White.copy(alpha = 0.10f))
+            .combinedClickable(onClick = onClick, onLongClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onLongClick()
+            })
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        GlyphIcon(glyph, Color.White.copy(alpha = 0.75f), 14.dp)
+        Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Onglets sur le côté (tablette). */
+@Composable
+private fun SideRail(tab: PhoneTab, tvOnline: Boolean, onTab: (PhoneTab) -> Unit) {
+    Column(
+        Modifier.fillMaxHeight().width(92.dp).background(Palette.Background.copy(alpha = 0.6f)).padding(vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("WiDo", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp, modifier = Modifier.padding(bottom = 14.dp))
+        PhoneTab.entries.forEach { t -> TabButton(t, t == tab, tvOnline, Modifier.width(76.dp)) { onTab(t) } }
     }
 }
 
 // --- Reprendre -------------------------------------------------------------------------------
 
+@OptIn(ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun ContinueTab(
     entries: List<WatchEntry>,
@@ -396,6 +535,7 @@ private fun ContinueTab(
     onOpen: (WatchEntry) -> Unit,
     onRemove: (WatchEntry) -> Unit,
     onSendToTv: (WatchEntry) -> Unit,
+    onLongPress: (WatchEntry) -> Unit,
 ) {
     LazyColumn(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
@@ -407,11 +547,32 @@ private fun ContinueTab(
             item { Text(stringResource(R.string.continue_empty), color = Palette.TextSecondary, fontSize = 15.sp) }
         }
         items(entries, key = { it.url }) { entry ->
+            // Glisser vers la gauche retire la vidéo (avec « Annuler »).
+            val dismiss = androidx.compose.material3.rememberSwipeToDismissBoxState(
+                confirmValueChange = { value ->
+                    if (value == androidx.compose.material3.SwipeToDismissBoxValue.EndToStart) onRemove(entry)
+                    value == androidx.compose.material3.SwipeToDismissBoxValue.EndToStart
+                },
+            )
+            val haptic = LocalHapticFeedback.current
+            androidx.compose.material3.SwipeToDismissBox(
+                state = dismiss,
+                enableDismissFromStartToEnd = false,
+                backgroundContent = {
+                    Box(
+                        Modifier.fillMaxSize().clip(RowShape).background(Color(0x66E5484D)).padding(end = 24.dp),
+                        contentAlignment = Alignment.CenterEnd,
+                    ) { GlyphIcon(Glyph.Close, Color.White, 24.dp) }
+                },
+            ) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .glassPanel(Palette.GlassFaint, RowShape)
-                    .clickable { onOpen(entry) }
+                    .glassPanel(Palette.PanelSolid, RowShape)
+                    .combinedClickable(onClick = { onOpen(entry) }, onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onLongPress(entry)
+                    })
                     .padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -430,12 +591,17 @@ private fun ContinueTab(
                         fontSize = 12.sp,
                         maxLines = 1,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
-                        if (tvName != null) SmallPill(stringResource(R.string.action_on_tv_short), primary = true) { onSendToTv(entry) }
-                        SmallPill("✕") { onRemove(entry) }
+                    if (tvName != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+                            SmallPill(stringResource(R.string.action_on_tv_short), primary = true) { onSendToTv(entry) }
+                        }
                     }
                 }
             }
+            }
+        }
+        if (entries.isNotEmpty()) {
+            item { Text(stringResource(R.string.continue_hint), color = Palette.TextMuted, fontSize = 12.sp) }
         }
     }
 }
@@ -525,18 +691,28 @@ internal fun SmallPill(label: String, primary: Boolean = false, onClick: () -> U
 
 /** Message bref en bas de l'écran ; touché, il disparaît (sinon au bout de 3 s). */
 @Composable
-internal fun Snack(text: String, modifier: Modifier = Modifier, onDone: () -> Unit) {
-    androidx.compose.runtime.LaunchedEffect(text) {
-        kotlinx.coroutines.delay(3_000)
+internal fun Snack(text: String, modifier: Modifier = Modifier, actionLabel: String? = null, onAction: (() -> Unit)? = null, onDone: () -> Unit) {
+    androidx.compose.runtime.LaunchedEffect(text, onAction) {
+        kotlinx.coroutines.delay(if (onAction != null) 5_000 else 3_000)
         onDone()
     }
-    Box(
+    Row(
         modifier
             .padding(16.dp)
             .glassPanel(Palette.PanelSolid, RowShape, elevation = 12.dp)
             .clickable(onClick = onDone)
-            .padding(horizontal = 18.dp, vertical = 12.dp),
-    ) { Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+            .padding(start = 18.dp, end = if (actionLabel != null) 8.dp else 18.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 4.dp))
+        if (actionLabel != null && onAction != null) {
+            SmallPill(actionLabel, primary = true) {
+                onAction()
+                onDone()
+            }
+        }
+    }
 }
 
 /** Barre d'onglets du bas : quatre icônes dessinées et leur nom ; l'onglet actif en blanc. */
@@ -547,42 +723,46 @@ private fun BottomBar(tab: PhoneTab, tvOnline: Boolean, onTab: (PhoneTab) -> Uni
             .fillMaxWidth()
             .background(Palette.Background.copy(alpha = 0.92f))
             .border(width = 0.5.dp, color = Palette.GlassBorder, shape = RoundedCornerShape(0.dp))
+            .navigationBarsPadding()
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
-        PhoneTab.entries.forEach { t ->
-            val selected = t == tab
-            val color = if (selected) Color.White else Color.White.copy(alpha = 0.5f)
-            Column(
-                Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable { onTab(t) }
-                    .padding(vertical = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Box {
-                    TabIcon(t, color)
-                    if (t == PhoneTab.Tv && tvOnline) {
-                        Box(Modifier.align(Alignment.TopEnd).size(8.dp).clip(CircleShape).background(Palette.Ok))
-                    }
-                }
-                Text(
-                    stringResource(
-                        when (t) {
-                            PhoneTab.Home -> R.string.tab_home
-                            PhoneTab.Continue -> R.string.continue_title
-                            PhoneTab.Tv -> R.string.tab_tv
-                            PhoneTab.Settings -> R.string.action_settings
-                        },
-                    ),
-                    color = color,
-                    fontSize = 11.sp,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
-                    maxLines = 1,
-                )
+        PhoneTab.entries.forEach { t -> TabButton(t, t == tab, tvOnline, Modifier.weight(1f)) { onTab(t) } }
+    }
+}
+
+/** Un onglet : icône dessinée et nom ; l'onglet actif en blanc, un point vert si la TV répond. */
+@Composable
+private fun TabButton(t: PhoneTab, selected: Boolean, tvOnline: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val color = if (selected) Color.White else Color.White.copy(alpha = 0.5f)
+    Column(
+        modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) Color.White.copy(alpha = 0.08f) else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Box {
+            TabIcon(t, color)
+            if (t == PhoneTab.Tv && tvOnline) {
+                Box(Modifier.align(Alignment.TopEnd).size(8.dp).clip(CircleShape).background(Palette.Ok))
             }
         }
+        Text(
+            stringResource(
+                when (t) {
+                    PhoneTab.Home -> R.string.tab_home
+                    PhoneTab.Continue -> R.string.continue_title
+                    PhoneTab.Tv -> R.string.tab_tv
+                    PhoneTab.Settings -> R.string.action_settings
+                },
+            ),
+            color = color,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+            maxLines = 1,
+        )
     }
 }
 
@@ -632,10 +812,17 @@ private fun TabIcon(tab: PhoneTab, color: Color) {
 }
 
 /** Vignette d'une vidéo en cours (image, titre, site, avancement). */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun WatchTile(entry: WatchEntry, site: Site?, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun WatchTile(entry: WatchEntry, site: Site?, modifier: Modifier = Modifier, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val siteName = site?.name ?: Hosts.of(entry.url)?.removePrefix("www.").orEmpty()
-    Box(modifier.aspectRatio(16f / 9f).clip(CardShape).background(Palette.Glass).clickable(onClick = onClick)) {
+    val haptic = LocalHapticFeedback.current
+    Box(
+        modifier.aspectRatio(16f / 9f).clip(CardShape).background(Palette.Glass).combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongClick?.let { l -> { haptic.performHapticFeedback(HapticFeedbackType.LongPress); l() } },
+        ),
+    ) {
         VideoArt(rememberWatchImage(entry), site, entry.url, Modifier.matchParentSize())
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color(0xE6000000))))
         Column(Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) {

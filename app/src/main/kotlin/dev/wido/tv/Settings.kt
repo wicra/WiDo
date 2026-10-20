@@ -237,6 +237,22 @@ class Settings(private val context: Context) {
             onboardingState.value = v
         }
 
+    // --- Téléphone : notifications de lecture -------------------------------------------------
+    /** Notification qui pilote la TV quand elle lit une vidéo (et volume du téléphone → TV). */
+    var tvNotification: Boolean
+        get() = prefs.getBoolean("tv_notification", true)
+        set(v) = prefs.edit().putBoolean("tv_notification", v).apply()
+
+    /** La vidéo continue (le son) quand on quitte l'appli ou éteint l'écran du téléphone. */
+    var backgroundPlay: Boolean
+        get() = prefs.getBoolean("background_play", true)
+        set(v) = prefs.edit().putBoolean("background_play", v).apply()
+
+    /** La permission des notifications a déjà été demandée une fois. */
+    var notificationsAsked: Boolean
+        get() = state.getBoolean("notif_asked", false)
+        set(v) = state.edit().putBoolean("notif_asked", v).apply()
+
     var helpSeen: Boolean
         get() = prefs.getBoolean("help_seen", false)
         set(v) = prefs.edit().putBoolean("help_seen", v).apply()
