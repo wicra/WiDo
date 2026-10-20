@@ -1,6 +1,6 @@
 # Changelog
 
-## Non publié
+## 0.5.0
 
 ### Nouveau style « Verre »
 - Police **Plus Jakarta Sans** partout, logo en texte « WiDo » extra-gras (accueil et écran de chargement).
