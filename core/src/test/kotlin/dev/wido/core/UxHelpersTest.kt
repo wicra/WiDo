@@ -27,7 +27,7 @@ class OptionsRoundTripTest {
         val options = LocalSites.SiteOptions(
             allowedDomains = listOf("cdn.exemple.org"),
             blockedDomains = listOf("pub.exemple.org"),
-            relaxed = true,
+            navigation = Navigation.MIXED,
             blockAds = false,
             blockPopups = false,
             hideCookieBanners = true,
@@ -44,7 +44,8 @@ class OptionsRoundTripTest {
         val site = assertIs<LocalSites.Built.Ok>(LocalSites.build("S", "exemple.org", emptySet())).site
         val back = LocalSites.optionsOf(site)
         assertTrue(back.blockAds && back.blockPopups)
-        assertFalse(back.relaxed || back.allowLogins || back.hideCookieBanners)
+        assertEquals(Navigation.STRICT, back.navigation)
+        assertFalse(back.allowLogins || back.hideCookieBanners)
     }
 
     @Test fun loginPresetCanBeSwitchedOffWithoutLosingCustomDomains() {

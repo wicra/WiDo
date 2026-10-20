@@ -168,4 +168,8 @@
     <string name="s_resume">Open a site at</string>
     <string name="v_resume_last">Last page</string>
     <string name="v_resume_home">Site home</string>
+    <string name="nav_mixed">Mixed redirects</string>
+    <string name="v_mixed">Mixed</string>
+    <string name="ad_label">Ad</string>
+    <string name="ad_closing">Ad · closing in %1$d s</string>
 </resources>

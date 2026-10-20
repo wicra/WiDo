@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.wido.core.Navigation
 import dev.wido.tv.KeyAction
 import dev.wido.tv.ListStatus
 import dev.wido.tv.R
@@ -44,6 +45,7 @@ private val HIDES = listOf(0, 2, 3, 5, 10)
 private val ZOOMS = (100..200 step 10).toList()
 private val SEEKS = listOf(5, 10, 15, 30)
 private val OSDS = listOf(2, 4, 6, 10)
+private val NAVIGATIONS = listOf(Navigation.STRICT, Navigation.RELAXED, Navigation.MIXED)
 
 /** Couleurs des touches de la télécommande. */
 private val KEY_RED = Color(0xFFE5484D)
@@ -181,9 +183,9 @@ fun SettingsPane(
             }
             SettingRow(stringResource(R.string.s_new_relaxed)) {
                 Segmented(
-                    listOf(stringResource(R.string.v_strict), stringResource(R.string.v_relaxed)),
-                    if (settings.newSitesRelaxed) 1 else 0,
-                ) { changed { settings.newSitesRelaxed = it == 1 } }
+                    listOf(stringResource(R.string.v_strict), stringResource(R.string.v_relaxed), stringResource(R.string.v_mixed)),
+                    NAVIGATIONS.indexOf(settings.newSitesNavigation).coerceAtLeast(0),
+                ) { changed { settings.newSitesNavigation = NAVIGATIONS[it] } }
             }
 
             Spacer(Modifier.height(10.dp))

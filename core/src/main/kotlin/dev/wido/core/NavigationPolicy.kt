@@ -9,9 +9,43 @@ package dev.wido.core
  * - **relaxed** : en plus, toute page web dont le domaine n'est **pas** bloqué par les listes. Pour
  *   les sites qui ont besoin de redirections utiles (connexion, consentement…).
  *
+ * - **mixed** : comme strict, mais la page refusée s'ouvre dans une fenêtre publicitaire à part,
+ *   affichée quelques secondes puis fermée : pour les sites qui exigent que la pub soit vue.
+ *
  * Les sous-requêtes (scripts, images, vidéo) ne passent pas par ici : elles sont jugées par [HostBlocker].
  */
 object NavigationPolicy {
+    enum class Decision {
+        /** La fenêtre ouvre la page. */
+        ALLOW,
+        /** Refusée. */
+        BLOCK,
+        /** Ouverte dans une fenêtre publicitaire, fermée seule une fois affichée (mode mixte). */
+        AD_WINDOW,
+    }
+
+    /**
+     * Décision pour une navigation de la fenêtre principale.
+     *
+     * `hasGesture` : déclenchée par un clic de l'utilisateur ; `isRedirect` : redirection du serveur.
+     * En mode souple, une page d'un autre domaine n'est acceptée que dans ces deux cas : les
+     * redirections lancées seules par un script (minuteur, pub au chargement) sont refusées.
+     */
+    fun decide(url: String, site: Site, blocker: HostBlocker?, hasGesture: Boolean, isRedirect: Boolean): Decision {
+        val scheme = Hosts.schemeOf(url) ?: return Decision.BLOCK
+        val host = Hosts.of(url) ?: return Decision.BLOCK
+        val web = scheme == "https" || scheme == "http"
+        if (!web) return Decision.BLOCK
+        val schemeOk = scheme == "https" || site.allowInsecure
+        if (schemeOk && allowedDomains(site).any { Hosts.matches(host, it) }) return Decision.ALLOW
+        return when (site.navigation) {
+            Navigation.RELAXED ->
+                if (schemeOk && blocker != null && !blocker.isBlocked(host) && (hasGesture || isRedirect)) Decision.ALLOW else Decision.BLOCK
+            Navigation.MIXED -> Decision.AD_WINDOW
+            else -> Decision.BLOCK
+        }
+    }
+
     fun isAllowed(url: String, site: Site, blocker: HostBlocker? = null): Boolean {
         val scheme = Hosts.schemeOf(url) ?: return false
         val host = Hosts.of(url) ?: return false

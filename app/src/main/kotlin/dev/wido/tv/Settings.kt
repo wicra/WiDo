@@ -2,6 +2,7 @@ package dev.wido.tv
 
 import android.content.Context
 import dev.wido.core.Hosts
+import dev.wido.core.Navigation
 import dev.wido.core.Zoom
 
 /** Ce que fait une touche de couleur de la télécommande. */
@@ -104,10 +105,11 @@ class Settings(context: Context) {
         get() = prefs.getString("last_site", null)
         set(v) = prefs.edit().putString("last_site", v).apply()
 
-    /** Mode de redirection proposé par défaut pour un nouveau site perso. */
-    var newSitesRelaxed: Boolean
-        get() = prefs.getBoolean("new_relaxed", false)
-        set(v) = prefs.edit().putBoolean("new_relaxed", v).apply()
+    /** Mode de redirection proposé par défaut pour un nouveau site perso (strict, souple ou mixte). */
+    var newSitesNavigation: String
+        get() = prefs.getString("new_navigation", null)?.takeIf { it in Navigation.ALL }
+            ?: if (prefs.getBoolean("new_relaxed", false)) Navigation.RELAXED else Navigation.STRICT
+        set(v) = prefs.edit().putString("new_navigation", v).apply()
 
     // --- Blocage ----------------------------------------------------------------------------
     /** Ajoute EasyList, la liste française et le filtre DNS d'AdGuard aux listes de la configuration. */

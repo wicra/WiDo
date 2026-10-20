@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import android.webkit.WebView
 import dev.wido.core.CosmeticPlan
+import dev.wido.core.Navigation
 import dev.wido.core.Site
 import org.json.JSONObject
 import java.io.IOException
@@ -14,7 +15,8 @@ import java.io.IOException
  * elle choisit seulement parmi les scripts de `assets/scripts/` (voir docs/SECURITY.md).
  */
 class ScriptInjector(private val context: Context, private val site: Site) {
-    private val source: String by lazy { build() }
+    /** Scripts du site et masquage CSS (`hideSelectors`). */
+    val source: String by lazy { build() }
 
     /** Faux quand les scripts internes sont déjà injectés dans toutes les frames par la passerelle native. */
     @Volatile var includeInternal = true
@@ -31,7 +33,7 @@ class ScriptInjector(private val context: Context, private val site: Site) {
     @Volatile var includeEarly = true
 
     fun inject(view: WebView) {
-        val js = (if (includeInternal) internal + "\n" else "") + (if (includeEarly) early + "\n" else "") + source
+        val js = (if (includeInternal) internal + "\n" else "") + (if (includeEarly) early else "")
         if (js.isNotBlank()) view.evaluateJavascript(js, null)
     }
 
@@ -41,6 +43,10 @@ class ScriptInjector(private val context: Context, private val site: Site) {
      */
     fun earlyScript(cosmetic: CosmeticPlan, youtube: Boolean, sponsorBlock: Boolean): String {
         val parts = mutableListOf<String>()
+        // Scripts du site, avant ceux de la page : une pub ne peut plus garder l'ancien window.open.
+        // Dans la page principale seulement, sauf le blocage des pop-ups, utile aussi dans les iframes.
+        if (source.isNotBlank()) parts += "if (window.top === window) {\n$source\n}"
+        if ("block-popups" in site.scripts && site.navigation != Navigation.MIXED) asset("scripts/block-popups.js")?.let { parts += it }
         if (!cosmetic.isEmpty) parts += call("cosmetic.js", cosmetic.toJson())
         if (youtube) parts += call("youtube.js", JSONObject().put("sponsor", sponsorBlock).toString())
         return parts.joinToString("\n")
@@ -48,10 +54,12 @@ class ScriptInjector(private val context: Context, private val site: Site) {
 
     /** `internal/<name>` définit une fonction `run` : on l'appelle avec ses options, sans rien laisser dans la page. */
     private fun call(name: String, options: String): String {
-        val body = runCatching { context.assets.open("internal/$name").bufferedReader().use { it.readText() } }.getOrDefault("")
-        if (body.isBlank()) return ""
+        val body = asset("internal/$name") ?: return ""
         return "(function(){\n$body\nrun($options);\n})();"
     }
+
+    private fun asset(path: String): String? =
+        runCatching { context.assets.open(path).bufferedReader().use { it.readText() } }.getOrNull()?.takeIf { it.isNotBlank() }
 
     /** Scripts internes de WiDo (curseur aimanté, lecteur vidéo) : jamais choisis par la configuration. */
     fun internalScript(): String = INTERNAL.joinToString("\n") { name ->
@@ -61,6 +69,8 @@ class ScriptInjector(private val context: Context, private val site: Site) {
     private fun build(): String {
         val parts = mutableListOf<String>()
         for (name in site.scripts) {
+            // Mode mixte : les pop-ups doivent pouvoir s'ouvrir (dans la fenêtre publicitaire).
+            if (name == "block-popups" && site.navigation == Navigation.MIXED) continue
             if (!NAME.matches(name)) {
                 Log.w(TAG, "Nom de script invalide ignoré : $name")
                 continue

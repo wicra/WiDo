@@ -18,7 +18,7 @@ object Catalog {
 
         fun options() = LocalSites.SiteOptions(
             allowedDomains = allowedDomains,
-            relaxed = true,
+            navigation = Navigation.RELAXED,
             blockPopups = true,
             hideCookieBanners = true,
             allowLogins = allowLogins,

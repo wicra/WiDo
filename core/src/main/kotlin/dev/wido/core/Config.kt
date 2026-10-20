@@ -47,6 +47,8 @@ data class Site(
     /**
      * `strict` : la fenêtre ne navigue que sur les domaines du site (le plus sûr contre les pubs).
      * `relaxed` : navigation libre, sauf vers les domaines bloqués par les listes (YouTube, connexions).
+     * `mixed` : comme `strict`, mais une redirection ou une pop-up publicitaire s'ouvre dans une fenêtre
+     *  à part, affichée quelques secondes puis fermée (sites qui exigent que la pub soit vue).
      */
     val navigation: String = Navigation.STRICT,
     /** Faux : les listes de blocage et règles globales ne s'appliquent pas à ce site (seules ses propres règles). */
@@ -56,7 +58,8 @@ data class Site(
 object Navigation {
     const val STRICT = "strict"
     const val RELAXED = "relaxed"
-    val ALL = setOf(STRICT, RELAXED)
+    const val MIXED = "mixed"
+    val ALL = setOf(STRICT, RELAXED, MIXED)
 }
 
 class ConfigException(message: String) : Exception(message)

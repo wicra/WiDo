@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.wido.core.LocalSites
+import dev.wido.core.Navigation
 import dev.wido.core.Site
 import dev.wido.tv.R
 
@@ -57,9 +58,9 @@ fun SiteEditorDialog(
     onDismiss: () -> Unit,
     suggestAllow: List<String> = emptyList(),
     suggestBlock: List<String> = emptyList(),
-    defaultRelaxed: Boolean = false,
+    defaultNavigation: String = Navigation.STRICT,
 ) {
-    val start = initial?.let { LocalSites.optionsOf(it) } ?: LocalSites.SiteOptions(relaxed = defaultRelaxed)
+    val start = initial?.let { LocalSites.optionsOf(it) } ?: LocalSites.SiteOptions(navigation = defaultNavigation)
 
     var url by remember { mutableStateOf(initial?.url ?: SCHEME) }
     var name by remember { mutableStateOf(initial?.name.orEmpty()) }
@@ -71,7 +72,7 @@ fun SiteEditorDialog(
     var blockPopups by remember { mutableStateOf(start.blockPopups) }
     var hideCookies by remember { mutableStateOf(start.hideCookieBanners) }
     var allowLogins by remember { mutableStateOf(start.allowLogins) }
-    var relaxed by remember { mutableStateOf(start.relaxed) }
+    var navigation by remember { mutableStateOf(start.navigation) }
     val allowed = remember { mutableStateListOf<String>().apply { addAll(start.allowedDomains) } }
     val blocked = remember { mutableStateListOf<String>().apply { addAll(start.blockedDomains) } }
     val urlFocus = remember { FocusRequester() }
@@ -87,7 +88,7 @@ fun SiteEditorDialog(
         val options = LocalSites.SiteOptions(
             allowedDomains = allowed.toList(),
             blockedDomains = blocked.toList(),
-            relaxed = relaxed,
+            navigation = navigation,
             blockAds = blockAds,
             blockPopups = blockPopups,
             hideCookieBanners = hideCookies,
@@ -153,7 +154,14 @@ fun SiteEditorDialog(
                         ToggleChip(stringResource(R.string.p_popups), blockPopups) { blockPopups = !blockPopups }
                         ToggleChip(stringResource(R.string.p_cookies), hideCookies) { hideCookies = !hideCookies }
                         ToggleChip(stringResource(R.string.p_logins), allowLogins) { allowLogins = !allowLogins }
-                        ToggleChip(stringResource(if (relaxed) R.string.nav_relaxed else R.string.nav_strict), relaxed) { relaxed = !relaxed }
+                        // Redirections : strictes → souples → mixtes → strictes.
+                        ToggleChip(stringResource(navigationLabel(navigation)), navigation != Navigation.STRICT) {
+                            navigation = when (navigation) {
+                                Navigation.STRICT -> Navigation.RELAXED
+                                Navigation.RELAXED -> Navigation.MIXED
+                                else -> Navigation.STRICT
+                            }
+                        }
                     }
 
                     // 4. Les domaines : on choisit, on ne saisit pas.
@@ -181,6 +189,12 @@ fun SiteEditorDialog(
             onDismiss = { showPhone = false },
         )
     }
+}
+
+private fun navigationLabel(navigation: String): Int = when (navigation) {
+    Navigation.RELAXED -> R.string.nav_relaxed
+    Navigation.MIXED -> R.string.nav_mixed
+    else -> R.string.nav_strict
 }
 
 @Composable

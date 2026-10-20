@@ -53,7 +53,8 @@ object LocalSites {
         /** Domaines autorisés saisis ou appris (sans le préréglage de connexion). */
         val allowedDomains: List<String> = emptyList(),
         val blockedDomains: List<String> = emptyList(),
-        val relaxed: Boolean = false,
+        /** [Navigation.STRICT], [Navigation.RELAXED] ou [Navigation.MIXED]. */
+        val navigation: String = Navigation.STRICT,
         val blockAds: Boolean = true,
         val blockPopups: Boolean = true,
         val hideCookieBanners: Boolean = false,
@@ -101,7 +102,7 @@ object LocalSites {
     fun optionsOf(site: Site): SiteOptions = SiteOptions(
         allowedDomains = DomainPresets.custom(site.allowedDomains),
         blockedDomains = blockedDomainsOf(site.rules),
-        relaxed = site.navigation == Navigation.RELAXED,
+        navigation = site.navigation,
         blockAds = site.blockAds,
         blockPopups = "block-popups" in site.scripts,
         hideCookieBanners = "hide-cookie-banners" in site.scripts,
@@ -148,7 +149,7 @@ object LocalSites {
                 "hide-cookie-banners".takeIf { options.hideCookieBanners },
             ),
             allowInsecure = scheme == "http",
-            navigation = if (options.relaxed) Navigation.RELAXED else Navigation.STRICT,
+            navigation = options.navigation.takeIf { it in Navigation.ALL } ?: Navigation.STRICT,
             blockAds = options.blockAds,
             color = color?.takeIf { COLOR.matches(it) },
         )

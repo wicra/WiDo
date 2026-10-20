@@ -23,6 +23,8 @@ class WiDoWebViewClient(
     private val onNavigationBlocked: (String) -> Unit,
     private val onPageVisible: () -> Unit,
     private val onPageStart: () -> Unit = {},
+    /** Mode mixte : la page refusée s'ouvre dans la fenêtre publicitaire. */
+    private val onAdWindow: (String) -> Unit = {},
 ) : WebViewClient() {
     @Volatile private var site = site
     @Volatile private var blocker = blocker
@@ -82,7 +84,14 @@ class WiDoWebViewClient(
             allowOnceUrl = null
             return false
         }
-        if (NavigationPolicy.isAllowed(url, site, blocker)) return false
+        when (NavigationPolicy.decide(url, site, blocker, request.hasGesture(), request.isRedirect)) {
+            NavigationPolicy.Decision.ALLOW -> return false
+            NavigationPolicy.Decision.AD_WINDOW -> {
+                onAdWindow(url)
+                return true
+            }
+            NavigationPolicy.Decision.BLOCK -> Unit
+        }
         blockedNavigations.incrementAndGet()
         Hosts.of(url)?.let { blockedNavigationHosts += it }
         lastBlockedUrl = url

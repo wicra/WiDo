@@ -62,3 +62,32 @@ class RelaxedNavigationTest {
         assertFalse(NavigationPolicy.isAllowed("https://accounts.login.example/signin", relaxed))
     }
 }
+
+class NavigationDecisionTest {
+    private val blocker = HostBlocker(FilterParser.parse("||ads.example.net^"))
+    private val site = Site(id = "s", name = "S", url = "https://site.example/")
+    private val relaxed = site.copy(navigation = Navigation.RELAXED)
+    private val mixed = site.copy(navigation = Navigation.MIXED)
+
+    @Test fun ownDomainIsAlwaysAllowed() {
+        for (s in listOf(site, relaxed, mixed)) {
+            kotlin.test.assertEquals(NavigationPolicy.Decision.ALLOW, NavigationPolicy.decide("https://www.site.example/x", s, blocker, hasGesture = false, isRedirect = false))
+        }
+    }
+
+    @Test fun relaxedNeedsAClickOrServerRedirect() {
+        kotlin.test.assertEquals(NavigationPolicy.Decision.ALLOW, NavigationPolicy.decide("https://login.other/", relaxed, blocker, hasGesture = true, isRedirect = false))
+        kotlin.test.assertEquals(NavigationPolicy.Decision.ALLOW, NavigationPolicy.decide("https://login.other/", relaxed, blocker, hasGesture = false, isRedirect = true))
+        kotlin.test.assertEquals(NavigationPolicy.Decision.BLOCK, NavigationPolicy.decide("https://pub.other/", relaxed, blocker, hasGesture = false, isRedirect = false))
+        kotlin.test.assertEquals(NavigationPolicy.Decision.BLOCK, NavigationPolicy.decide("https://ads.example.net/", relaxed, blocker, hasGesture = true, isRedirect = false))
+    }
+
+    @Test fun mixedOpensForeignPagesInAdWindow() {
+        kotlin.test.assertEquals(NavigationPolicy.Decision.AD_WINDOW, NavigationPolicy.decide("https://ads.example.net/", mixed, blocker, hasGesture = false, isRedirect = false))
+        kotlin.test.assertEquals(NavigationPolicy.Decision.BLOCK, NavigationPolicy.decide("intent://x#Intent;end", mixed, blocker, hasGesture = true, isRedirect = false))
+    }
+
+    @Test fun strictBlocksForeignPages() {
+        kotlin.test.assertEquals(NavigationPolicy.Decision.BLOCK, NavigationPolicy.decide("https://login.other/", site, blocker, hasGesture = true, isRedirect = true))
+    }
+}

@@ -217,7 +217,7 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit, onOpenPin: (Pin) -> Un
             onDismiss = { editor = null },
             suggestAllow = suggestAllow,
             suggestBlock = suggestBlock,
-            defaultRelaxed = settings.newSitesRelaxed,
+            defaultNavigation = settings.newSitesNavigation,
         )
     }
 }

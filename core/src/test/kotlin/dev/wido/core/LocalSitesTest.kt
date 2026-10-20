@@ -89,7 +89,7 @@ class LocalSitesOptionsTest {
     }
 
     @Test fun optionsEndUpInTheSite() {
-        val opts = LocalSites.SiteOptions(listOf("login.example"), listOf("pub.example"), relaxed = true)
+        val opts = LocalSites.SiteOptions(listOf("login.example"), listOf("pub.example"), navigation = Navigation.RELAXED)
         val site = assertIs<LocalSites.Built.Ok>(LocalSites.build("S", "s.example", emptySet(), options = opts)).site
         assertEquals(listOf("login.example"), site.allowedDomains)
         assertEquals(listOf("||pub.example^"), site.rules)

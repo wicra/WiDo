@@ -168,4 +168,8 @@
     <string name="s_resume">Ouvrir un site</string>
     <string name="v_resume_last">Dernière page</string>
     <string name="v_resume_home">Accueil du site</string>
+    <string name="nav_mixed">Redirections mixtes</string>
+    <string name="v_mixed">Mixtes</string>
+    <string name="ad_label">Publicité</string>
+    <string name="ad_closing">Publicité · fermeture dans %1$d s</string>
 </resources>

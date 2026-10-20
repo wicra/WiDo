@@ -40,6 +40,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import dev.wido.core.Hosts
+import dev.wido.core.Navigation
 import dev.wido.core.ResumeUrl
 import dev.wido.core.Site
 import dev.wido.core.Zoom
@@ -84,6 +85,8 @@ class PlayerActivity : ComponentActivity() {
 
     private var helpView: View? = null
     private var panelView: ComposeView? = null
+    /** Fenêtre publicitaire du mode mixte (null pour les autres sites). */
+    private var adWindow: AdWindow? = null
     /** Dernier état connu du lecteur vidéo de la page, affiché dans le menu rapide. */
     private val mediaState = mutableStateOf<MediaState?>(null)
     private var passivePoll = false
@@ -144,6 +147,7 @@ class PlayerActivity : ComponentActivity() {
                         bridge?.reset()
                         mediaState.value = null
                     },
+                    onAdWindow = { url -> runOnUiThread { adWindow?.open(url) } },
                 ),
             )
             // Rafraîchit la configuration pour la prochaine ouverture, sans bloquer la lecture.
@@ -160,8 +164,11 @@ class PlayerActivity : ComponentActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             mediaPlaybackRequiresUserGesture = false
-            javaScriptCanOpenWindowsAutomatically = false
-            setSupportMultipleWindows(false) // window.open charge dans la même vue, jugé par la politique de navigation
+            // Mode mixte : les pop-ups s'ouvrent dans la fenêtre publicitaire, fermée une fois affichée.
+            // Sinon, window.open charge dans la même vue et la politique de navigation tranche.
+            val mixed = site.navigation == Navigation.MIXED
+            javaScriptCanOpenWindowsAutomatically = mixed
+            setSupportMultipleWindows(mixed)
             allowFileAccess = false
             allowContentAccess = false
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
@@ -195,8 +202,12 @@ class PlayerActivity : ComponentActivity() {
             injector?.includeEarly = false
         }
 
+        if (site.navigation == Navigation.MIXED) adWindow = AdWindow(this, root) { webView?.requestFocus() }
         wv.webViewClient = wc
         wv.webChromeClient = object : WebChromeClient() {
+            override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean =
+                adWindow?.adopt(resultMsg) ?: false
+
             override fun onShowCustomView(view: View, callback: CustomViewCallback) {
                 if (customView != null) {
                     callback.onCustomViewHidden()
@@ -271,6 +282,12 @@ class PlayerActivity : ComponentActivity() {
         }
 
         val code = event.keyCode
+
+        // Fenêtre publicitaire (mode mixte) : rien ne la pilote, Retour la ferme tout de suite.
+        adWindow?.takeIf { it.isOpen }?.let { ad ->
+            if (code == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) ad.close()
+            return true
+        }
 
         // Menu rapide ouvert : les flèches et OK le pilotent ; Retour ou Menu le referment.
         if (panelView != null) {
@@ -671,6 +688,7 @@ class PlayerActivity : ComponentActivity() {
         val next = SLEEP_STEPS[(SLEEP_STEPS.indexOf(sleepMinutes) + 1) % SLEEP_STEPS.size]
         root.removeCallbacks(sleepWarning)
         root.removeCallbacks(sleepNow)
+        adWindow?.close()
         sleepMinutes = next
         if (next == 0) {
             sleepAt = 0L
@@ -847,6 +865,7 @@ class PlayerActivity : ComponentActivity() {
         root.removeCallbacks(poll)
         root.removeCallbacks(sleepWarning)
         root.removeCallbacks(sleepNow)
+        adWindow?.close()
         customCallback?.onCustomViewHidden()
         webView?.let {
             root.removeView(it)
