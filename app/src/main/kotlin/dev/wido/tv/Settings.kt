@@ -229,6 +229,36 @@ class Settings(private val context: Context) {
             uiScaleState.floatValue = v
         }
 
+    /** Ambiance de couleur (bleu, violet, ambre, noir). */
+    var ambience: String
+        get() = dev.wido.tv.ui.Ambience.mode
+        set(v) {
+            val mode = v.takeIf { it in dev.wido.tv.ui.Ambience.ALL } ?: dev.wido.tv.ui.Ambience.BLUE
+            prefs.edit().putString("ambience", mode).apply()
+            dev.wido.tv.ui.Ambience.mode = mode
+        }
+
+    init {
+        dev.wido.tv.ui.Ambience.mode = prefs.getString("ambience", null)?.takeIf { it in dev.wido.tv.ui.Ambience.ALL } ?: dev.wido.tv.ui.Ambience.BLUE
+    }
+
+    // --- Pubs bloquées (compteur du mois) -----------------------------------------------------
+    private fun month() = java.text.SimpleDateFormat("yyyyMM", java.util.Locale.ROOT).format(java.util.Date())
+
+    /** Ajoute les requêtes bloquées d'une visite au compteur du mois (par site et au total). */
+    fun addBlocked(siteId: String, count: Int) {
+        if (count <= 0) return
+        val m = month()
+        state.edit()
+            .putInt("blocked_${m}_$siteId", state.getInt("blocked_${m}_$siteId", 0) + count)
+            .putInt("blocked_$m", state.getInt("blocked_$m", 0) + count)
+            .apply()
+    }
+
+    /** Pubs et pisteurs bloqués ce mois-ci, pour un site ou au total. */
+    fun blockedThisMonth(siteId: String? = null): Int =
+        state.getInt(if (siteId == null) "blocked_${month()}" else "blocked_${month()}_$siteId", 0)
+
     private val onboardingState = androidx.compose.runtime.mutableStateOf(
         // Déjà utilisé avant cette version : pas de présentation.
         state.getBoolean("onboarding_done", prefs.contains("last_site") || prefs.contains("help_seen")),
@@ -270,6 +300,7 @@ class Settings(private val context: Context) {
         if (keep != null) prefs.edit().putString(KEY_CONFIG_URL, keep).apply()
         if (last != null) prefs.edit().putString("last_site", last).apply()
         uiScaleState.floatValue = 1f
+        dev.wido.tv.ui.Ambience.mode = dev.wido.tv.ui.Ambience.BLUE
     }
 
     private companion object {

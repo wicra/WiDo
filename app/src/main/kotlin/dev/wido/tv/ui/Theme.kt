@@ -47,11 +47,25 @@ import androidx.compose.ui.unit.dp
 import dev.wido.tv.R
 
 /**
+ * Ambiance choisie dans les réglages : la couleur des halos et de la lumière. « Noir » : fond noir pur
+ * et lumière très discrète (projecteur dans le noir). Observée par Compose : tout se redessine aussitôt.
+ */
+object Ambience {
+    const val BLUE = "blue"
+    const val VIOLET = "violet"
+    const val AMBER = "amber"
+    const val BLACK = "black"
+    val ALL = listOf(BLUE, VIOLET, AMBER, BLACK)
+
+    var mode by mutableStateOf(BLUE)
+}
+
+/**
  * Style « Verre » : un fond presque noir éclairé par des halos de la couleur du site, des panneaux de
  * verre translucides, et un focus franc (pastille blanche pleine, ou carte en couleur soulevée).
  */
 object Palette {
-    val Background = Color(0xFF0B0B12)
+    val Background: Color get() = if (Ambience.mode == Ambience.BLACK) Color.Black else Color(0xFF0B0B12)
     /** Texte posé sur un élément blanc (focus). */
     val Ink = Color(0xFF0B0B12)
     val InkSecondary = Color(0xFF5A5A6A)
@@ -68,11 +82,28 @@ object Palette {
     /** Panneau posé sur une page web ou une fenêtre assombrie : plus opaque, faute de flou d'arrière-plan. */
     val PanelSolid = Color(0xEB1A1A26)
 
-    /** Lumière par défaut (site sans couleur, réglages). */
-    val Accent = Color(0xFF1E5BFF)
-    val Violet = Color(0xFF6E1BD6)
-    val Purple = Color(0xFF7A2BE0)
-    val Navy = Color(0xFF0A1A4A)
+    /** Lumière par défaut (site sans couleur, réglages), selon l'ambiance. */
+    val Accent: Color get() = when (Ambience.mode) {
+        Ambience.VIOLET -> Color(0xFF7A2BE0)
+        Ambience.AMBER -> Color(0xFFE08A2B)
+        Ambience.BLACK -> Color(0xFF2A2A36)
+        else -> Color(0xFF1E5BFF)
+    }
+
+    /** Seconde lumière des halos. */
+    val Violet: Color get() = when (Ambience.mode) {
+        Ambience.VIOLET -> Color(0xFF1E5BFF)
+        Ambience.AMBER -> Color(0xFFB8452B)
+        Ambience.BLACK -> Color(0xFF1C1C26)
+        else -> Color(0xFF6E1BD6)
+    }
+    val Purple: Color get() = when (Ambience.mode) {
+        Ambience.VIOLET -> Color(0xFFB02BE0)
+        Ambience.AMBER -> Color(0xFFF2A93A)
+        Ambience.BLACK -> Color(0xFF22222C)
+        else -> Color(0xFF7A2BE0)
+    }
+    val Navy: Color get() = if (Ambience.mode == Ambience.BLACK) Color(0xFF0E0E14) else Color(0xFF0A1A4A)
     val Amber = Color(0xFFF2A93A)
 
     val Ok = Color(0xFF5BE39A)

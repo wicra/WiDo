@@ -176,12 +176,14 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                     },
                     onPageStart = {
                         cinema = false
+                        runOnUiThread { hidePauseScreen() }
                         bridge?.reset()
                         mediaState.value = null
                         streamHinted = false
                     },
                     onAdWindow = { url -> runOnUiThread { adWindow?.open(url) } },
                     onMediaStream = { runOnUiThread { onStreamFound() } },
+                    onPageError = { code, failed -> runOnUiThread { showPageError(code, failed) } },
                 ),
             )
             // Rafraîchit la configuration pour la prochaine ouverture, sans bloquer la lecture.
@@ -242,6 +244,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 onMedia = { state -> runOnUiThread { onMediaState(state) } },
                 onSkip = { runOnUiThread { osd.showText(getString(R.string.osd_sponsor_skipped), OsdView.Kind.Success) } },
                 onField = { focused -> runOnUiThread { onPageField(focused) } },
+                onMediaEvent = { state ->
+                    runOnUiThread {
+                        passivePoll = true
+                        onMediaState(state)
+                    }
+                },
             )
             bridge = frameBridge
             WebViewCompat.addWebMessageListener(wv, BRIDGE_NAME, setOf("*"), frameBridge)
@@ -348,6 +356,22 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
 
         val code = event.keyCode
+
+        // Écran de pause : n'importe quelle touche le retire ; OK ou lecture relance la vidéo.
+        if (swallowUp == code && event.action == KeyEvent.ACTION_UP) {
+            swallowUp = 0
+            return true
+        }
+        if (pauseView != null && event.action == KeyEvent.ACTION_DOWN) {
+            hidePauseScreen()
+            if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER ||
+                code == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || code == KeyEvent.KEYCODE_MEDIA_PLAY
+            ) {
+                swallowUp = code
+                media("play")
+                return true
+            }
+        }
 
         // « Masquer un élément » : les flèches déplacent le curseur librement, OK masque, Retour annule.
         if (picking && panelView == null) {
@@ -659,6 +683,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         mediaAt = SystemClock.elapsedRealtime()
         if (backgrounded) BackgroundBridge.update(playbackInfo(state))
         applyAutoStart(state)
+        schedulePauseScreen(state)
         publishNowPlaying(state)
         if (!state.paused) captureFrame()
         applyPendingSeek(state)
@@ -706,6 +731,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     private fun buildPanel(hasNext: Boolean) {
         if (panelView != null) return
+        hidePauseScreen()
         val c = client
         val current = site
         fun action(label: String, glyph: Glyph, more: Boolean = false, run: () -> Unit) = QuickAction(label, glyph, more) {
@@ -1322,6 +1348,128 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         root.postDelayed(resumeSeek, RESUME_POLL_MS)
     }
 
+    // --- Page qui ne s'ouvre pas ------------------------------------------------------------
+
+    /** Écran WiDo à la place de la page d'erreur du navigateur : ce qui se passe, et quoi faire. */
+    private fun showPageError(code: Int, failed: String) {
+        hideOverlay()
+        hidePanel()
+        val current = site
+        val host = Hosts.of(failed).orEmpty().removePrefix("www.")
+        val online = runCatching {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        }.getOrDefault(true)
+        val (title, body) = when {
+            !online -> getString(R.string.err_offline_title) to getString(if (tv) R.string.err_offline_body_tv else R.string.err_offline_body)
+            code == android.webkit.WebViewClient.ERROR_HOST_LOOKUP -> getString(R.string.err_dns_title) to getString(R.string.err_dns_body, host)
+            code == android.webkit.WebViewClient.ERROR_TIMEOUT || code == android.webkit.WebViewClient.ERROR_CONNECT ->
+                getString(R.string.err_timeout_title) to getString(R.string.err_timeout_body, host)
+            else -> getString(R.string.err_generic_title) to getString(R.string.err_generic_body, host)
+        }
+        val canEdit = current != null && dev.wido.core.LocalSites.isLocalId(current.id) && online && code == android.webkit.WebViewClient.ERROR_HOST_LOOKUP
+        showOverlay {
+            dev.wido.tv.ui.PageError(
+                title = title,
+                body = body,
+                retry = getString(R.string.err_retry),
+                back = getString(R.string.err_back),
+                edit = if (canEdit) getString(R.string.err_edit) else null,
+                onRetry = {
+                    hidePanel()
+                    webView?.loadUrl(failed)
+                },
+                onBack = {
+                    hidePanel()
+                    val wv = webView
+                    if (wv != null && wv.canGoBackOrForward(-2)) wv.goBackOrForward(-2) else goHome()
+                },
+                onEdit = {
+                    hidePanel()
+                    current?.let { startActivity(MainActivity.editSite(this, it.id)) }
+                    finish()
+                },
+            )
+        }
+    }
+
+    /** Retour à l'accueil de WiDo (sans quitter l'appli si le lecteur a été ouvert d'ailleurs). */
+    private fun goHome() {
+        if (isTaskRoot) startActivity(Intent(this, MainActivity::class.java))
+        finish()
+    }
+
+    // --- Écran de pause (TV) ------------------------------------------------------------------
+
+    private var pauseView: View? = null
+    private var swallowUp = 0
+    private val showPause = Runnable { showPauseScreen() }
+
+    /** Vidéo en pause depuis quelques secondes : la page s'assombrit, titre et temps restant en bas. */
+    private fun schedulePauseScreen(state: MediaState) {
+        root.removeCallbacks(showPause)
+        if (!tv) return
+        if (state.paused && state.duration > 0) root.postDelayed(showPause, PAUSE_SCREEN_MS) else hidePauseScreen()
+    }
+
+    private fun showPauseScreen() {
+        val state = mediaState.value ?: return
+        if (!state.paused || pauseView != null || panelView != null || helpView != null || picking) return
+        val density = resources.displayMetrics.density
+        val scale = settings.uiScale
+        val left = (state.duration - state.time).coerceAtLeast(0.0)
+        val end = android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date(System.currentTimeMillis() + (left * 1000).toLong()))
+        val title = TextView(this).apply {
+            text = webView?.title?.takeIf { it.isNotBlank() && it != webView?.url } ?: site?.name.orEmpty()
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 34f * scale
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            letterSpacing = -0.02f
+            useJakarta(800)
+        }
+        val detail = TextView(this).apply {
+            text = listOfNotNull(site?.name, getString(R.string.osd_remaining, dev.wido.core.PlayerFormat.time(left), end)).joinToString("  ·  ")
+            setTextColor(0xCCFFFFFF.toInt())
+            textSize = 17f * scale
+            useJakarta(600)
+            setPadding(0, (10 * density).toInt(), 0, 0)
+        }
+        val hint = TextView(this).apply {
+            setText(R.string.pause_hint)
+            setTextColor(0x99FFFFFF.toInt())
+            textSize = 14f * scale
+            useJakarta(600)
+            setPadding(0, (18 * density).toInt(), 0, 0)
+        }
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(title)
+            addView(detail)
+            addView(hint)
+        }
+        val view = FrameLayout(this).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x33000000, 0x99000000.toInt(), 0xE6000000.toInt()))
+            val pad = (56 * density).toInt()
+            addView(column, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
+                setMargins(pad, 0, pad, (48 * density).toInt())
+            })
+            alpha = 0f
+            isFocusable = false
+        }
+        pauseView = view
+        root.addView(view, FrameLayout.LayoutParams(MATCH, MATCH))
+        view.bringToFront()
+        view.animate().alpha(1f).setDuration(450).start()
+    }
+
+    private fun hidePauseScreen() {
+        root.removeCallbacks(showPause)
+        val view = pauseView ?: return
+        pauseView = null
+        view.animate().alpha(0f).setDuration(200).withEndAction { root.removeView(view) }.start()
+    }
+
     // --- Lecture et plein écran automatiques (Reprendre, envoyé depuis le téléphone) ---------
 
     /** La vidéo doit démarrer seule, puis passer en plein écran, dès qu'elle est prête. */
@@ -1571,9 +1719,15 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         menuButton = button
     }
 
+    /** Requêtes bloquées déjà comptées dans le total du mois. */
+    private var blockedCounted = 0
+
     /** Garde ce que le site a tenté (redirections refusées, domaines tiers) pour proposer des choix dans les réglages du site. */
     private fun saveSeen() {
         val id = site?.id ?: return
+        val blocked = client?.blockedRequests?.get() ?: 0
+        settings.addBlocked(id, blocked - blockedCounted)
+        blockedCounted = blocked
         val (navigations, requests) = client?.drainSeen() ?: return
         (application as WiDoApp).repository.recordSeen(id, navigations, requests)
     }
@@ -1589,6 +1743,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         root.removeCallbacks(progressPoll)
         root.removeCallbacks(resumeSeek)
         root.removeCallbacks(autoStartPoll)
+        root.removeCallbacks(showPause)
         adWindow?.close()
         customCallback?.onCustomViewHidden()
         webView?.let {
@@ -1657,6 +1812,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val PROGRESS_POLL_MS = 10_000L
         private const val FOLLOW_POLL_MS = 2_000L
         private const val FRAME_EVERY_MS = 45_000L
+        private const val PAUSE_SCREEN_MS = 5_000L
         private const val KEEP_VISIBLE_SCRIPT = """(function () {
   try {
     Object.defineProperty(document, 'hidden', { get: function () { return false; } });

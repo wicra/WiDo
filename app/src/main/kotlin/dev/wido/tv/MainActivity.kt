@@ -30,6 +30,9 @@ class MainActivity : ComponentActivity(), RemoteTarget {
     /** Une vidéo vient de partir sur la TV : l'onglet TV s'affiche, pour la piloter. */
     private val showTvTab = MutableStateFlow(false)
 
+    /** Un site perso à modifier dès l'ouverture (son adresse ne répond plus). */
+    private val editRequest = MutableStateFlow<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val launched = handleIntent(intent)
@@ -48,7 +51,8 @@ class MainActivity : ComponentActivity(), RemoteTarget {
                     // Premier lancement : présentation en trois écrans.
                     Onboarding(vm) { app.settings.onboardingDone = true }
                 } else if (app.isTv) {
-                    MenuScreen(vm, onOpen, onOpenPin, onOpenWatch)
+                    val edit by editRequest.collectAsState()
+                    MenuScreen(vm, onOpen, onOpenPin, onOpenWatch, editSiteId = edit, onEditHandled = { editRequest.value = null })
                     // Un téléphone du réseau demande à se lier : la TV demande confirmation.
                     PairPromptHost(app.link)
                 } else {
@@ -66,6 +70,8 @@ class MainActivity : ComponentActivity(), RemoteTarget {
                         onPairTargetHandled = { pairTarget.value = null },
                         showTv = showTv,
                         onShowTvHandled = { showTvTab.value = false },
+                        editSiteId = editRequest.collectAsState().value,
+                        onEditHandled = { editRequest.value = null },
                     )
                 }
             }
@@ -190,6 +196,11 @@ class MainActivity : ComponentActivity(), RemoteTarget {
      * - `site` : ouvre directement ce site (`last` : le dernier site ouvert).
      */
     private fun handleIntent(intent: Intent): Boolean {
+        intent.getStringExtra(EXTRA_EDIT_SITE)?.let {
+            intent.removeExtra(EXTRA_EDIT_SITE)
+            editRequest.value = it
+            return true
+        }
         if (intent.getBooleanExtra(EXTRA_SHOW_TV, false)) {
             intent.removeExtra(EXTRA_SHOW_TV)
             showTvTab.value = true
@@ -209,6 +220,12 @@ class MainActivity : ComponentActivity(), RemoteTarget {
 
     companion object {
         private const val EXTRA_SHOW_TV = "show_tv"
+
+        private const val EXTRA_EDIT_SITE = "edit_site"
+
+        /** L'accueil, avec le formulaire d'un site perso ouvert (adresse à corriger). */
+        fun editSite(context: android.content.Context, siteId: String): Intent =
+            Intent(context, MainActivity::class.java).putExtra(EXTRA_EDIT_SITE, siteId).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
         /** L'accueil du téléphone, sur l'onglet TV (après « Sur la TV »). */
         fun showTv(context: android.content.Context): Intent =

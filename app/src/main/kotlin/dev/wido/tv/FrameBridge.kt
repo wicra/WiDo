@@ -35,6 +35,8 @@ class FrameBridge(
     private val onSkip: (String) -> Unit = {},
     /** Un champ texte de la page a reçu (vrai) ou perdu (faux) le focus. */
     private val onField: (Boolean) -> Unit = {},
+    /** La page a lancé ou mis en pause sa vidéo d'elle-même (bouton du lecteur). */
+    private val onMediaEvent: (MediaState) -> Unit = {},
 ) : WebViewCompat.WebMessageListener {
     private val proxies = CopyOnWriteArrayList<JavaScriptReplyProxy>()
 
@@ -50,6 +52,7 @@ class FrameBridge(
         val json = runCatching { JSONObject(data) }.getOrNull() ?: return
         when (json.optString("type")) {
             "media" -> parseMediaState(json.optJSONObject("s")?.toString())?.let(onMedia)
+            "event" -> parseMediaState(json.optJSONObject("s")?.toString())?.let(onMediaEvent)
             "skip" -> onSkip(json.optString("what"))
             "field" -> onField(json.optBoolean("on"))
         }

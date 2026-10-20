@@ -337,4 +337,27 @@
     <string name="notif_on_tv">On %1$s</string>
     <string name="s_auto_fullscreen">Automatic fullscreen</string>
     <string name="osd_cinema">Fullscreen · Back to see the page</string>
+    <string name="sec_look">Appearance</string>
+    <string name="s_ambience">Ambience</string>
+    <string name="v_amb_blue">Blue</string>
+    <string name="v_amb_violet">Violet</string>
+    <string name="v_amb_amber">Amber</string>
+    <string name="v_amb_black">Black</string>
+    <string name="stats_site">%1$s ads and trackers blocked this month</string>
+    <string name="stats_total">%1$s ads and trackers blocked this month</string>
+    <string name="pause_hint">OK to resume</string>
+    <string name="err_offline_title">No connection</string>
+    <string name="err_offline_body">This phone isn\'t connected to the Internet. Check Wi-Fi or mobile data, then try again.</string>
+    <string name="err_offline_body_tv">This TV isn\'t connected to the Internet. Check Wi-Fi or the router cable, then try again.</string>
+    <string name="err_dns_title">Site not found</string>
+    <string name="err_dns_body">%1$s doesn\'t answer. The site may have moved to a new address.</string>
+    <string name="err_timeout_title">The site isn\'t responding</string>
+    <string name="err_timeout_body">%1$s is taking too long to answer. It may be overloaded: try again in a moment.</string>
+    <string name="err_generic_title">Page unavailable</string>
+    <string name="err_generic_body">%1$s couldn\'t be opened. Try again, or come back later.</string>
+    <string name="err_retry">Try again</string>
+    <string name="err_back">Back</string>
+    <string name="err_edit">Edit address</string>
+    <string name="remote_gestures">Gestures</string>
+    <string name="remote_gestures_hint">Swipe in a direction to move\nTap for OK · Long press for Back</string>
 </resources>

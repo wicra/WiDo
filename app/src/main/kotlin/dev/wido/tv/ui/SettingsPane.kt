@@ -70,7 +70,7 @@ private fun <T> clampedStep(options: List<T>, current: T, step: Int): T =
     options[((options.indexOf(current).takeIf { it >= 0 } ?: 0) + step).coerceIn(0, options.lastIndex)]
 
 /**
- * Onglet Réglages : une seule liste défilante, rangée par thème, où chaque valeur est visible. Chaque
+ * Onglet Réglages, rangé par thème (TV : thèmes en colonne à gauche ; téléphone : une seule liste). Chaque
  * choix est une pastille : on la sélectionne avec les flèches puis OK. La valeur choisie est en verre
  * clair, la pastille focalisée en blanc. Les changements s'appliquent à l'ouverture du site suivant.
  */
@@ -96,34 +96,83 @@ fun SettingsPane(
     val on = stringResource(R.string.v_on)
     val off = stringResource(R.string.v_off)
 
-    Box(modifier.fillMaxSize()) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(start = if (phone) 18.dp else 52.dp, end = if (phone) 18.dp else 52.dp, top = 20.dp, bottom = 56.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // `refresh` est lu ici pour que tout soit recalculé à chaque changement.
-            if (refresh < 0) return@Column
-
-            SectionLabel(stringResource(R.string.sec_blocking))
-            SettingRow(stringResource(R.string.s_recommended)) {
-                Segmented(listOf(on, off), if (settings.recommendedLists) 0 else 1) {
-                    changed { settings.recommendedLists = it == 0 }
-                    onUpdateLists(false)
-                }
+    // Chaque thème des réglages ; la TV les range en colonne à gauche, le téléphone les enchaîne.
+    val blocking: @Composable () -> Unit = {
+        SettingRow(stringResource(R.string.s_recommended)) {
+            Segmented(listOf(on, off), if (settings.recommendedLists) 0 else 1) {
+                changed { settings.recommendedLists = it == 0 }
+                onUpdateLists(false)
             }
-            SettingRow(stringResource(R.string.s_youtube)) {
-                Segmented(listOf(on, off), if (settings.youtubeAdblock) 0 else 1) { changed { settings.youtubeAdblock = it == 0 } }
+        }
+        SettingRow(stringResource(R.string.s_youtube)) {
+            Segmented(listOf(on, off), if (settings.youtubeAdblock) 0 else 1) { changed { settings.youtubeAdblock = it == 0 } }
+        }
+        SettingRow(stringResource(R.string.s_sponsor)) {
+            Segmented(listOf(on, off), if (settings.sponsorBlock) 0 else 1) { changed { settings.sponsorBlock = it == 0 } }
+        }
+        ListsRow(lists, onUpdate = { onUpdateLists(true) })
+        val blocked = remember(refresh) { settings.blockedThisMonth() }
+        if (blocked > 0) {
+            Text(stringResource(R.string.stats_total, java.text.NumberFormat.getIntegerInstance().format(blocked)), color = Palette.TextSecondary, fontSize = 13.sp)
+        }
+    }
+    val player: @Composable () -> Unit = {
+        SettingRow(stringResource(R.string.s_zoom)) {
+            Stepper(stringResource(R.string.v_percent, settings.defaultZoom)) { step ->
+                changed { settings.defaultZoom = clampedStep(ZOOMS, settings.defaultZoom.coerceIn(ZOOMS.first(), ZOOMS.last()), step) }
             }
-            SettingRow(stringResource(R.string.s_sponsor)) {
-                Segmented(listOf(on, off), if (settings.sponsorBlock) 0 else 1) { changed { settings.sponsorBlock = it == 0 } }
+        }
+        SettingRow(stringResource(R.string.s_seek)) {
+            Segmented(SEEKS.map { stringResource(R.string.v_seconds, it) }, SEEKS.indexOf(settings.seekSeconds).coerceAtLeast(0)) {
+                changed { settings.seekSeconds = SEEKS[it] }
             }
-            ListsRow(lists, onUpdate = { onUpdateLists(true) })
-
-            if (!phone) {
-            SectionLabel(stringResource(R.string.sec_cursor), Modifier.padding(top = 10.dp))
+        }
+        SettingRow(stringResource(R.string.s_osd)) {
+            Segmented(OSDS.map { stringResource(R.string.v_seconds, it) }, OSDS.indexOf(settings.osdSeconds).coerceAtLeast(0)) {
+                changed { settings.osdSeconds = OSDS[it] }
+            }
+        }
+        SettingRow(stringResource(R.string.s_auto_fullscreen)) {
+            Segmented(listOf(on, off), if (settings.autoFullscreen) 0 else 1) { changed { settings.autoFullscreen = it == 0 } }
+        }
+        SettingRow(stringResource(R.string.s_resume)) {
+            Segmented(
+                listOf(stringResource(R.string.v_resume_last), stringResource(R.string.v_resume_home)),
+                if (settings.resumeLastPage) 0 else 1,
+            ) { changed { settings.resumeLastPage = it == 0 } }
+        }
+        if (!phone) {
+            SettingRow(stringResource(R.string.s_volume)) {
+                Segmented(
+                    listOf(stringResource(R.string.v_volume_wido), stringResource(R.string.v_volume_system)),
+                    if (settings.customVolume) 0 else 1,
+                ) { changed { settings.customVolume = it == 0 } }
+            }
+            SettingRow(stringResource(R.string.s_field_qr)) {
+                Segmented(listOf(on, off), if (settings.fieldPhoneQr) 0 else 1) { changed { settings.fieldPhoneQr = it == 0 } }
+            }
+            SettingRow(stringResource(R.string.s_fs_keys)) {
+                Segmented(
+                    listOf(stringResource(R.string.v_fs_player), stringResource(R.string.v_fs_cursor)),
+                    if (settings.fullscreenPlayerKeys) 0 else 1,
+                ) { changed { settings.fullscreenPlayerKeys = it == 0 } }
+            }
+        }
+    }
+    val look: @Composable () -> Unit = {
+        SettingRow(stringResource(R.string.s_ambience)) {
+            Segmented(
+                listOf(R.string.v_amb_blue, R.string.v_amb_violet, R.string.v_amb_amber, R.string.v_amb_black).map { stringResource(it) },
+                Ambience.ALL.indexOf(settings.ambience).coerceAtLeast(0),
+            ) { changed { settings.ambience = Ambience.ALL[it] } }
+        }
+        if (!phone) {
+            SettingRow(stringResource(R.string.s_ui_scale)) {
+                Segmented(
+                    listOf(stringResource(R.string.v_scale_normal), stringResource(R.string.v_scale_large), stringResource(R.string.v_scale_huge)),
+                    nearest(UI_SCALES, settings.uiScale),
+                ) { changed { settings.uiScale = UI_SCALES[it] } }
+            }
             SettingRow(stringResource(R.string.s_cursor_speed)) {
                 Segmented(
                     listOf(R.string.v_speed_slow, R.string.v_speed_normal, R.string.v_speed_fast, R.string.v_speed_very_fast).map { stringResource(it) },
@@ -145,82 +194,19 @@ fun SettingsPane(
             SettingRow(stringResource(R.string.s_snap)) {
                 Segmented(listOf(on, off), if (settings.snapNavigation) 0 else 1) { changed { settings.snapNavigation = it == 0 } }
             }
-            }
-
-            SectionLabel(stringResource(R.string.sec_player), Modifier.padding(top = 10.dp))
-            SettingRow(stringResource(R.string.s_zoom)) {
-                Stepper(stringResource(R.string.v_percent, settings.defaultZoom)) { step ->
-                    changed { settings.defaultZoom = clampedStep(ZOOMS, settings.defaultZoom.coerceIn(ZOOMS.first(), ZOOMS.last()), step) }
-                }
-            }
-            SettingRow(stringResource(R.string.s_seek)) {
-                Segmented(SEEKS.map { stringResource(R.string.v_seconds, it) }, SEEKS.indexOf(settings.seekSeconds).coerceAtLeast(0)) {
-                    changed { settings.seekSeconds = SEEKS[it] }
-                }
-            }
-            SettingRow(stringResource(R.string.s_osd)) {
-                Segmented(OSDS.map { stringResource(R.string.v_seconds, it) }, OSDS.indexOf(settings.osdSeconds).coerceAtLeast(0)) {
-                    changed { settings.osdSeconds = OSDS[it] }
-                }
-            }
-            SettingRow(stringResource(R.string.s_auto_fullscreen)) {
-                Segmented(listOf(on, off), if (settings.autoFullscreen) 0 else 1) { changed { settings.autoFullscreen = it == 0 } }
-            }
-            if (!phone) SettingRow(stringResource(R.string.s_volume)) {
-                Segmented(
-                    listOf(stringResource(R.string.v_volume_wido), stringResource(R.string.v_volume_system)),
-                    if (settings.customVolume) 0 else 1,
-                ) { changed { settings.customVolume = it == 0 } }
-            }
-            if (!phone) SettingRow(stringResource(R.string.s_field_qr)) {
-                Segmented(listOf(on, off), if (settings.fieldPhoneQr) 0 else 1) { changed { settings.fieldPhoneQr = it == 0 } }
-            }
-            if (!phone) SettingRow(stringResource(R.string.s_fs_keys)) {
-                Segmented(
-                    listOf(stringResource(R.string.v_fs_player), stringResource(R.string.v_fs_cursor)),
-                    if (settings.fullscreenPlayerKeys) 0 else 1,
-                ) { changed { settings.fullscreenPlayerKeys = it == 0 } }
-            }
-
-            if (!phone) {
-                SectionLabel(stringResource(R.string.sec_keys), Modifier.padding(top = 10.dp))
-                KeyRow(R.string.s_key_red, KEY_RED, settings.keyRed) { changed { settings.keyRed = it } }
-                KeyRow(R.string.s_key_green, KEY_GREEN, settings.keyGreen) { changed { settings.keyGreen = it } }
-                KeyRow(R.string.s_key_yellow, KEY_YELLOW, settings.keyYellow) { changed { settings.keyYellow = it } }
-                KeyRow(R.string.s_key_blue, KEY_BLUE, settings.keyBlue) { changed { settings.keyBlue = it } }
-            }
-
-            SectionLabel(stringResource(R.string.sec_general), Modifier.padding(top = 10.dp))
-            if (!phone) SettingRow(stringResource(R.string.s_ui_scale)) {
-                Segmented(
-                    listOf(stringResource(R.string.v_scale_normal), stringResource(R.string.v_scale_large), stringResource(R.string.v_scale_huge)),
-                    nearest(UI_SCALES, settings.uiScale),
-                ) { changed { settings.uiScale = UI_SCALES[it] } }
-            }
-            if (!phone) SettingRow(stringResource(R.string.s_onboarding)) {
+            SettingRow(stringResource(R.string.s_onboarding)) {
                 Chip(stringResource(R.string.v_onboarding_show), { settings.onboardingDone = false })
             }
-            if (!phone) SettingRow(stringResource(R.string.s_startup)) {
-                Segmented(
-                    listOf(stringResource(R.string.v_startup_menu), stringResource(R.string.v_startup_last)),
-                    if (settings.startupLastSite) 1 else 0,
-                ) { changed { settings.startupLastSite = it == 1 } }
-            }
-            SettingRow(stringResource(R.string.s_resume)) {
-                Segmented(
-                    listOf(stringResource(R.string.v_resume_last), stringResource(R.string.v_resume_home)),
-                    if (settings.resumeLastPage) 0 else 1,
-                ) { changed { settings.resumeLastPage = it == 0 } }
-            }
-            SettingRow(stringResource(R.string.s_new_relaxed)) {
-                Segmented(
-                    listOf(stringResource(R.string.v_strict), stringResource(R.string.v_relaxed), stringResource(R.string.v_mixed)),
-                    NAVIGATIONS.indexOf(settings.newSitesNavigation).coerceAtLeast(0),
-                ) { changed { settings.newSitesNavigation = NAVIGATIONS[it] } }
-            }
-
-            if (!phone) {
-            SectionLabel(stringResource(R.string.sec_screens), Modifier.padding(top = 10.dp))
+        }
+    }
+    val keys: @Composable () -> Unit = {
+        KeyRow(R.string.s_key_red, KEY_RED, settings.keyRed) { changed { settings.keyRed = it } }
+        KeyRow(R.string.s_key_green, KEY_GREEN, settings.keyGreen) { changed { settings.keyGreen = it } }
+        KeyRow(R.string.s_key_yellow, KEY_YELLOW, settings.keyYellow) { changed { settings.keyYellow = it } }
+        KeyRow(R.string.s_key_blue, KEY_BLUE, settings.keyBlue) { changed { settings.keyBlue = it } }
+    }
+    val screens: @Composable () -> Unit = {
+        if (!phone) {
             SettingRow(stringResource(R.string.s_screen_link)) {
                 Segmented(listOf(on, off), if (settings.screenLink) 0 else 1) {
                     changed { settings.screenLink = it == 0 }
@@ -243,7 +229,6 @@ fun SettingsPane(
             } else {
                 Text(stringResource(R.string.link_off_hint), color = Palette.TextSecondary, fontSize = 13.sp)
             }
-
             SectionLabel(stringResource(R.string.sec_phone), Modifier.padding(top = 10.dp))
             SettingRow(stringResource(R.string.s_phone_remote)) {
                 Segmented(listOf(on, off), if (settings.phoneRemote) 0 else 1) {
@@ -259,31 +244,131 @@ fun SettingsPane(
             } else {
                 Text(stringResource(R.string.remote_off_hint), color = Palette.TextSecondary, fontSize = 13.sp)
             }
-            } else {
-                SectionLabel(stringResource(R.string.sec_device), Modifier.padding(top = 10.dp))
-                SettingRow(stringResource(R.string.s_device_name_phone)) {
-                    DeviceNameField(settings.deviceName) { changed { settings.deviceName = it } }
-                }
-                SettingRow(stringResource(R.string.s_tv_notification)) {
-                    Segmented(listOf(on, off), if (settings.tvNotification) 0 else 1) { changed { settings.tvNotification = it == 0 } }
-                }
-                SettingRow(stringResource(R.string.s_background_play)) {
-                    Segmented(listOf(on, off), if (settings.backgroundPlay) 0 else 1) { changed { settings.backgroundPlay = it == 0 } }
-                }
+        } else {
+            SettingRow(stringResource(R.string.s_device_name_phone)) {
+                DeviceNameField(settings.deviceName) { changed { settings.deviceName = it } }
             }
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                ActionButton(stringResource(R.string.settings_reset), { changed { settings.resetComfort() } }, primary = false, idleText = Color.White.copy(alpha = 0.7f))
-                Text(stringResource(R.string.settings_hint), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+            SettingRow(stringResource(R.string.s_tv_notification)) {
+                Segmented(listOf(on, off), if (settings.tvNotification) 0 else 1) { changed { settings.tvNotification = it == 0 } }
+            }
+            SettingRow(stringResource(R.string.s_background_play)) {
+                Segmented(listOf(on, off), if (settings.backgroundPlay) 0 else 1) { changed { settings.backgroundPlay = it == 0 } }
             }
         }
-        // La liste s'efface sous le bas de l'écran.
-        Box(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(56.dp)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Palette.Background.copy(alpha = 0.9f)))),
+    }
+    val general: @Composable () -> Unit = {
+        if (!phone) SettingRow(stringResource(R.string.s_startup)) {
+            Segmented(
+                listOf(stringResource(R.string.v_startup_menu), stringResource(R.string.v_startup_last)),
+                if (settings.startupLastSite) 1 else 0,
+            ) { changed { settings.startupLastSite = it == 1 } }
+        }
+        SettingRow(stringResource(R.string.s_new_relaxed)) {
+            Segmented(
+                listOf(stringResource(R.string.v_strict), stringResource(R.string.v_relaxed), stringResource(R.string.v_mixed)),
+                NAVIGATIONS.indexOf(settings.newSitesNavigation).coerceAtLeast(0),
+            ) { changed { settings.newSitesNavigation = NAVIGATIONS[it] } }
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            ActionButton(stringResource(R.string.settings_reset), { changed { settings.resetComfort() } }, primary = false, idleText = Color.White.copy(alpha = 0.7f))
+            Text(stringResource(R.string.settings_hint), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+        }
+    }
+
+    val sections = listOfNotNull(
+        SettingsSection(R.string.sec_blocking, Glyph.Blocked, blocking),
+        SettingsSection(R.string.sec_player, Glyph.Play, player),
+        SettingsSection(R.string.sec_look, Glyph.ZoomIn, look),
+        if (phone) null else SettingsSection(R.string.sec_keys, Glyph.Menu, keys),
+        SettingsSection(if (phone) R.string.sec_device else R.string.sec_screens, if (phone) Glyph.Phone else Glyph.Tv, screens),
+        SettingsSection(R.string.sec_general, Glyph.Sites, general),
+    )
+
+    if (phone) {
+        // Téléphone : tous les thèmes à la suite, dans une seule liste.
+        Box(modifier.fillMaxSize()) {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 20.dp, bottom = 56.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (refresh < 0) return@Column
+                sections.forEachIndexed { index, section ->
+                    SectionLabel(stringResource(section.title), if (index > 0) Modifier.padding(top = 10.dp) else Modifier)
+                    section.content()
+                }
+            }
+        }
+        return
+    }
+
+    // TV : les thèmes en colonne à gauche (le thème sélectionné s'affiche dès qu'il a le focus), leurs réglages à droite.
+    var selected by remember { mutableIntStateOf(0) }
+    Row(modifier.fillMaxSize().padding(start = 40.dp, end = 32.dp, top = 12.dp)) {
+        Column(Modifier.width(250.dp).padding(end = 22.dp, top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            sections.forEachIndexed { index, section -> SectionTab(section, index == selected) { selected = index } }
+        }
+        Box(Modifier.weight(1f).fillMaxSize()) {
+            androidx.compose.runtime.key(selected) {
+                Column(
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 6.dp, bottom = 56.dp, end = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (refresh < 0) return@Column
+                    val section = sections[selected.coerceIn(0, sections.lastIndex)]
+                    Text(stringResource(section.title), fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp, modifier = Modifier.padding(bottom = 4.dp))
+                    section.content()
+                }
+            }
+            // La liste s'efface sous le bas de l'écran.
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Palette.Background.copy(alpha = 0.9f)))),
+            )
+        }
+    }
+}
+
+/** Un thème des réglages : titre, icône et contenu. */
+private class SettingsSection(val title: Int, val glyph: Glyph, val content: @Composable () -> Unit)
+
+/** Un thème dans la colonne de gauche (TV) : il s'ouvre dès qu'il reçoit le focus. */
+@Composable
+private fun SectionTab(section: SettingsSection, selected: Boolean, onSelect: () -> Unit) {
+    var focused by remember { androidx.compose.runtime.mutableStateOf(false) }
+    val background = when {
+        focused -> Color.White
+        selected -> Color.White.copy(alpha = 0.14f)
+        else -> Color.Transparent
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .tvFocusable(
+                RowShape,
+                focusScale = 1.03f,
+                lift = 8.dp,
+                onFocusChange = {
+                    focused = it
+                    if (it) onSelect()
+                },
+                onClick = onSelect,
+            )
+            .background(background)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        GlyphIcon(section.glyph, if (focused) Palette.Ink else Color.White.copy(alpha = if (selected) 1f else 0.7f), 20.dp)
+        Text(
+            stringResource(section.title),
+            color = if (focused) Palette.Ink else Color.White.copy(alpha = if (selected) 1f else 0.75f),
+            fontSize = 16.sp,
+            fontWeight = if (selected || focused) FontWeight.Bold else FontWeight.SemiBold,
+            maxLines = 1,
         )
     }
 }

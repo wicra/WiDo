@@ -337,4 +337,27 @@
     <string name="notif_on_tv">Sur %1$s</string>
     <string name="s_auto_fullscreen">Plein écran automatique</string>
     <string name="osd_cinema">Plein écran · Retour pour revoir la page</string>
+    <string name="sec_look">Apparence</string>
+    <string name="s_ambience">Ambiance</string>
+    <string name="v_amb_blue">Bleu</string>
+    <string name="v_amb_violet">Violet</string>
+    <string name="v_amb_amber">Ambre</string>
+    <string name="v_amb_black">Noir</string>
+    <string name="stats_site">%1$s pubs et pisteurs bloqués ce mois-ci</string>
+    <string name="stats_total">%1$s pubs et pisteurs bloqués ce mois-ci</string>
+    <string name="pause_hint">OK pour reprendre</string>
+    <string name="err_offline_title">Pas de connexion</string>
+    <string name="err_offline_body">Le téléphone n\'est pas connecté à Internet. Vérifie le Wi-Fi ou les données mobiles, puis réessaie.</string>
+    <string name="err_offline_body_tv">La TV n\'est pas connectée à Internet. Vérifie le Wi-Fi ou le câble de la box, puis réessaie.</string>
+    <string name="err_dns_title">Site introuvable</string>
+    <string name="err_dns_body">L\'adresse %1$s ne répond pas. Le site a peut-être changé d\'adresse.</string>
+    <string name="err_timeout_title">Le site ne répond pas</string>
+    <string name="err_timeout_body">%1$s met trop de temps à répondre. Il est peut-être surchargé : réessaie dans un instant.</string>
+    <string name="err_generic_title">Page indisponible</string>
+    <string name="err_generic_body">%1$s n\'a pas pu s\'ouvrir. Réessaie, ou reviens plus tard.</string>
+    <string name="err_retry">Réessayer</string>
+    <string name="err_back">Retour</string>
+    <string name="err_edit">Modifier l\'adresse</string>
+    <string name="remote_gestures">Gestes</string>
+    <string name="remote_gestures_hint">Glisse vers une direction pour te déplacer\nTouche pour OK · Appui long pour Retour</string>
 </resources>

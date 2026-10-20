@@ -32,6 +32,8 @@ class WiDoWebViewClient(
     private val onAdWindow: (String) -> Unit = {},
     /** Un flux vidéo lisible par le lecteur natif a été repéré (appelé hors du fil principal). */
     private val onMediaStream: (MediaStream) -> Unit = {},
+    /** La page n'a pas pu s'ouvrir (code d'erreur de la WebView, adresse) : l'app affiche son propre écran. */
+    private val onPageError: (Int, String) -> Unit = { _, _ -> },
 ) : WebViewClient() {
     /** Meilleur flux vidéo repéré sur la page affichée. */
     @Volatile var stream: MediaStream? = null
@@ -151,12 +153,8 @@ class WiDoWebViewClient(
 
     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
         if (!request.isForMainFrame) return
-        val message = android.text.Html.escapeHtml(error.description?.toString().orEmpty())
-        view.loadDataWithBaseURL(
-            null,
-            "<html><body style='background:#0B0D12;color:#fff;font:28px sans-serif;padding:64px'>" +
-                "<h1>${android.text.Html.escapeHtml(site.name)}</h1><p>$message</p></body></html>",
-            "text/html", "utf-8", null,
-        )
+        // Fond sombre à la place de la page d'erreur grise du navigateur ; l'app affiche l'explication.
+        view.loadDataWithBaseURL(null, "<html><body style='background:#0B0B12'></body></html>", "text/html", "utf-8", null)
+        onPageError(error.errorCode, request.url.toString())
     }
 }

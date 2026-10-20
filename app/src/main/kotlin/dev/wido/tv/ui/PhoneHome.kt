@@ -117,6 +117,8 @@ fun PhoneHome(
     /** Une vidéo vient de partir sur la TV (depuis le lecteur) : afficher l'onglet TV. */
     showTv: Boolean = false,
     onShowTvHandled: () -> Unit = {},
+    editSiteId: String? = null,
+    onEditHandled: () -> Unit = {},
 ) {
     val state by vm.config.collectAsState()
     val update by vm.update.collectAsState()
@@ -140,6 +142,13 @@ fun PhoneHome(
 
     // Un QR code d'appairage scanné : direction l'onglet TV, qui s'en occupe.
     androidx.compose.runtime.LaunchedEffect(pairTarget) { if (pairTarget != null) tab = PhoneTab.Tv }
+    androidx.compose.runtime.LaunchedEffect(editSiteId, sites) {
+        val id = editSiteId ?: return@LaunchedEffect
+        val site = sites.firstOrNull { it.site.id == id }?.site ?: return@LaunchedEffect
+        tab = PhoneTab.Home
+        editor = PhoneEditor.Edit(site)
+        onEditHandled()
+    }
     androidx.compose.runtime.LaunchedEffect(showTv) {
         if (showTv) {
             tab = PhoneTab.Tv
@@ -266,6 +275,7 @@ fun PhoneHome(
             hiddenCount = hides[site.id]?.size ?: 0,
             onClearHides = { vm.clearHides(site.id) },
             onDismiss = { actionsFor = null },
+            blockedThisMonth = remember(site.id) { app.settings.blockedThisMonth(site.id) },
             onOpenOnTv = if (tvOnline) ({ actionsFor = null; sendToTv(HandoffPlay(site.url, site.id, site.name)) }) else null,
             tvName = screen?.name,
         )

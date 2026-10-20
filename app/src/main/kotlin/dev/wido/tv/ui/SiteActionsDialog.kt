@@ -38,9 +38,21 @@ fun SiteActionsDialog(
     /** Téléphone lié à une TV : ouvrir le site sur la TV. */
     onOpenOnTv: (() -> Unit)? = null,
     tvName: String? = null,
+    /** Pubs et pisteurs bloqués sur ce site ce mois-ci. */
+    blockedThisMonth: Int = 0,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
     DialogFrame(title = site.name, onDismiss = onDismiss, width = 520.dp) {
+        if (blockedThisMonth > 0) {
+            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlyphIcon(Glyph.Blocked, Palette.Ok, 16.dp)
+                androidx.compose.material3.Text(
+                    stringResource(R.string.stats_site, java.text.NumberFormat.getIntegerInstance().format(blockedThisMonth)),
+                    color = Palette.TextSecondary,
+                    fontSize = androidx.compose.ui.unit.TextUnit(14f, androidx.compose.ui.unit.TextUnitType.Sp),
+                )
+            }
+        }
         ActionButton(stringResource(R.string.action_open), onOpen, Modifier.fillMaxWidth())
         if (onOpenOnTv != null) ActionButton(stringResource(R.string.panel_send_to_tv, tvName.orEmpty()), onOpenOnTv, Modifier.fillMaxWidth(), primary = false)
         if (onMove != null) ActionButton(stringResource(R.string.action_move), onMove, Modifier.fillMaxWidth(), primary = false)

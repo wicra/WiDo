@@ -79,7 +79,7 @@ private sealed interface Pairing {
     data class Done(val result: LinkGuest.PairResult, val name: String) : Pairing
 }
 
-private enum class RemoteMode { Keys, Pad, Keyboard }
+private enum class RemoteMode { Keys, Gestures, Pad, Keyboard }
 
 /**
  * Onglet TV du téléphone : ce qui passe sur la TV choisie (avec « Reprendre sur le téléphone »), la
@@ -315,6 +315,7 @@ internal fun RemotePanel(link: ScreenLink) {
                         stringResource(
                             when (m) {
                                 RemoteMode.Keys -> R.string.remote_keys
+                                RemoteMode.Gestures -> R.string.remote_gestures
                                 RemoteMode.Pad -> R.string.remote_touchpad
                                 RemoteMode.Keyboard -> R.string.remote_keyboard
                             },
@@ -328,6 +329,7 @@ internal fun RemotePanel(link: ScreenLink) {
         }
         when (mode) {
             RemoteMode.Keys -> KeysPad(link)
+            RemoteMode.Gestures -> GesturePad(link)
             RemoteMode.Pad -> TouchPad(link)
             RemoteMode.Keyboard -> LiveKeyboard(link)
         }
@@ -378,6 +380,80 @@ private fun KeyRow(keys: List<Pair<Glyph, RemoteKey>>, onPress: (RemoteKey) -> U
         }
     }
 }
+
+/**
+ * Gestes, sans regarder le téléphone : glisser dans une direction = la flèche, toucher = OK,
+ * appui long = Retour. La flèche jouée s'affiche un instant au centre.
+ */
+@Composable
+private fun GesturePad(link: ScreenLink) {
+    val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current.density
+    var shown by remember { mutableStateOf<Glyph?>(null) }
+    var pulse by remember { mutableLongStateOf(0L) }
+    fun press(key: RemoteKey, glyph: Glyph) {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        link.key(key)
+        shown = glyph
+        pulse = System.nanoTime()
+    }
+    LaunchedEffect(pulse) {
+        if (pulse == 0L) return@LaunchedEffect
+        delay(450)
+        shown = null
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(280.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Palette.Glass)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { press(RemoteKey.OK, Glyph.Dot) },
+                        onLongPress = { press(RemoteKey.BACK, Glyph.Back) },
+                    )
+                }
+                .pointerInput(Unit) {
+                    var dx = 0f
+                    var dy = 0f
+                    detectDragGestures(
+                        onDragStart = { dx = 0f; dy = 0f },
+                        onDrag = { change, drag ->
+                            change.consume()
+                            dx += drag.x
+                            dy += drag.y
+                            // Un glissement assez long joue la flèche ; on peut enchaîner sans lever le doigt.
+                            val step = SWIPE_DP * density
+                            if (kotlin.math.abs(dx) > step || kotlin.math.abs(dy) > step) {
+                                if (kotlin.math.abs(dx) > kotlin.math.abs(dy)) {
+                                    if (dx > 0) press(RemoteKey.RIGHT, Glyph.Right) else press(RemoteKey.LEFT, Glyph.Left)
+                                } else {
+                                    if (dy > 0) press(RemoteKey.DOWN, Glyph.Down) else press(RemoteKey.UP, Glyph.Up)
+                                }
+                                dx = 0f
+                                dy = 0f
+                            }
+                        },
+                    )
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            val glyph = shown
+            if (glyph != null) {
+                Box(Modifier.size(96.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                    if (glyph == Glyph.Dot) Text("OK", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold) else GlyphIcon(glyph, Color.White, 44.dp)
+                }
+            } else {
+                Text(stringResource(R.string.remote_gestures_hint), color = Palette.TextMuted, fontSize = 13.sp, lineHeight = 19.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(24.dp))
+            }
+        }
+        KeyRow(listOf(Glyph.Home to RemoteKey.HOME, Glyph.Menu to RemoteKey.MENU, Glyph.VolumeDown to RemoteKey.VOLUME_DOWN, Glyph.VolumeUp to RemoteKey.VOLUME_UP)) { link.key(it) }
+    }
+}
+
+private const val SWIPE_DP = 56f
 
 /** Pavé tactile : glisser déplace le curseur de la TV, toucher clique ; la bande de droite fait défiler. */
 @Composable

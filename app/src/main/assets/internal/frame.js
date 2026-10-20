@@ -152,5 +152,13 @@
       } catch (e) { /* message illisible : ignoré */ }
     };
     bridge.postMessage(JSON.stringify({ type: 'hello', top: isTop }));
+    // Lecture ou pause décidée par la page (bouton du lecteur) : l'app le sait aussitôt (écran de pause).
+    ['play', 'pause', 'ended'].forEach(function (name) {
+      document.addEventListener(name, function (e) {
+        var v = e.target;
+        if (!v || v.tagName !== 'VIDEO' || v.clientWidth * v.clientHeight < 40000) return;
+        try { bridge.postMessage(JSON.stringify({ type: 'event', s: state(v), top: isTop })); } catch (err) { /* ignoré */ }
+      }, true);
+    });
   }
 })();

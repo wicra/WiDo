@@ -41,6 +41,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -98,6 +101,9 @@ fun MenuScreen(
     onOpen: (Site) -> Unit,
     onOpenPin: (Pin) -> Unit,
     onOpenWatch: (WatchEntry) -> Unit,
+    /** Ouvrir aussitôt le formulaire de ce site perso (adresse qui ne répond plus). */
+    editSiteId: String? = null,
+    onEditHandled: () -> Unit = {},
 ) {
     val state by vm.config.collectAsState()
     val update by vm.update.collectAsState()
@@ -127,6 +133,12 @@ fun MenuScreen(
     // La vidéo de « Reprendre » sélectionnée : la scène la montre à la place du site.
     var focusedWatch by remember { mutableStateOf<WatchEntry?>(null) }
     var initialFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(editSiteId, sites) {
+        val id = editSiteId ?: return@LaunchedEffect
+        val site = sites.firstOrNull { it.site.id == id }?.site ?: return@LaunchedEffect
+        editor = Editor.Edit(site)
+        onEditHandled()
+    }
 
     // Au lancement : sur la dernière vidéo en cours (OK et le film repart), sinon sur le premier site.
     LaunchedEffect(sites.isNotEmpty()) {
@@ -142,6 +154,8 @@ fun MenuScreen(
     }
 
     Box(Modifier.fillMaxSize().halo(glows, if (tab == Tab.Sites) MenuVeil else null)) {
+        // Une vidéo de Reprendre sélectionnée : son image, floutée et assombrie, en fond d'ambiance.
+        Backdrop(if (tab == Tab.Sites) focusedWatch else null)
         Column(Modifier.fillMaxSize()) {
             TopBar(state, tab, onTab = { tab = it }, onRefresh = vm::refresh)
             when (tab) {
@@ -224,7 +238,7 @@ fun MenuScreen(
                             )
                         }
                     }
-                    if (watching.isEmpty()) Footer(update) else Spacer(Modifier.height(14.dp))
+                    if (watching.isEmpty()) Footer(update, remember(state) { settings.blockedThisMonth() }) else Spacer(Modifier.height(14.dp))
                   }
                   }
                 }
@@ -258,6 +272,7 @@ fun MenuScreen(
             hiddenCount = hides[site.id]?.size ?: 0,
             onClearHides = { vm.clearHides(site.id) },
             onDismiss = { actionsFor = null },
+            blockedThisMonth = remember(site.id) { settings.blockedThisMonth(site.id) },
         )
     }
 
@@ -641,9 +656,47 @@ object LaunchOrigin {
     }
 }
 
+/**
+ * Fond d'ambiance : l'image de la vidéo sélectionnée, très adoucie (réduite puis agrandie, ce qui la
+ * floute même sans effet de flou du système) et assombrie pour que le texte reste lisible.
+ */
+@Composable
+private fun Backdrop(entry: WatchEntry?) {
+    val app = LocalContext.current.applicationContext as WiDoApp
+    var soft by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    LaunchedEffect(entry?.url) {
+        soft = entry?.let { e ->
+            app.thumbnails.forVideo(e.url, e.image)?.let { image ->
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    val src = image.asAndroidBitmap()
+                    val w = 28
+                    val h = (src.height * w / src.width.toFloat()).toInt().coerceAtLeast(1)
+                    android.graphics.Bitmap.createScaledBitmap(src, w, h, true).asImageBitmap()
+                }
+            }
+        }
+    }
+    androidx.compose.animation.Crossfade(soft, animationSpec = tween(700), label = "backdrop") { image ->
+        if (image != null) {
+            Box(Modifier.fillMaxSize()) {
+                androidx.compose.foundation.Image(
+                    image,
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    filterQuality = androidx.compose.ui.graphics.FilterQuality.Low,
+                    alpha = 0.6f,
+                    modifier = Modifier.fillMaxSize().then(if (android.os.Build.VERSION.SDK_INT >= 31) Modifier.blur(24.dp) else Modifier),
+                )
+                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Palette.Background.copy(alpha = 0.85f), 0.65f to Palette.Background.copy(alpha = 0.25f))))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Palette.Background.copy(alpha = 0.95f))))
+            }
+        }
+    }
+}
+
 /** Une seule ligne discrète : la version à gauche, l'état de la mise à jour à droite. */
 @Composable
-private fun Footer(update: UpdateUi) {
+private fun Footer(update: UpdateUi, blocked: Int) {
     val (status, color) = when (update) {
         UpdateUi.Checking -> stringResource(R.string.update_checking) to Palette.TextMuted
         UpdateUi.UpToDate -> stringResource(R.string.update_uptodate) to Palette.TextMuted
@@ -652,6 +705,12 @@ private fun Footer(update: UpdateUi) {
     }
     Row(Modifier.fillMaxWidth().padding(start = 52.dp, end = 52.dp, top = 12.dp, bottom = 20.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.version_footer, BuildConfig.VERSION_NAME), color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        if (blocked > 0) {
+            Spacer(Modifier.width(16.dp))
+            GlyphIcon(Glyph.Blocked, Palette.Ok.copy(alpha = 0.8f), 12.dp)
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.stats_total, java.text.NumberFormat.getIntegerInstance().format(blocked)), color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        }
         Spacer(Modifier.weight(1f))
         if (status.isNotEmpty()) Text(status, color = color, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
