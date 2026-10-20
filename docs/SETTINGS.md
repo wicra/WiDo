@@ -19,6 +19,7 @@ Menu principal → onglet **Réglages**, en haut de l'écran. Les réglages form
 | Touches rouge, verte, jaune, bleue | Voir la liste ci-dessous | Menu, Recharger, Texte +, Texte − | Raccourcis des touches de couleur. |
 | Au démarrage | Afficher le menu / Rouvrir le dernier site | Afficher le menu | Au lancement depuis l'accueil de la TV. |
 | Ouvrir un site | Dernière page / Accueil du site | Dernière page | Reprend là où tu en étais (position d'une vidéo YouTube comprise). « Accueil du site » est aussi dans le menu rapide. |
+| Télécommande téléphone | Activé / Désactivé | Désactivé | Serveur local pour piloter WiDo depuis le téléphone ; QR code d'appairage et **Nouveau code** juste en dessous ([REMOTE-CONTROL](REMOTE-CONTROL.md)). |
 | Nouveaux sites : redirections | Strictes / Souples / Mixtes | Strictes | Valeur proposée dans le formulaire d'un nouveau site perso ([BLOCKING](BLOCKING.md)). |
 
 ## Actions des touches de couleur

@@ -14,13 +14,22 @@ Syntaxes comprises (dans `blocklists`, `globalRules`, `rules`) :
 | `@@\|\|cdn.exemple.com^` | Exception : jamais bloqué. L'exception l'emporte toujours. |
 | `0.0.0.0 pub.exemple.com` | Format fichier hosts. |
 | `pub.exemple.com` | Nom seul, une ligne par domaine. |
+| `\|\|site.com/pubs/`, `/banner/*$image`, `-ad-banner.` | Règle d'**adresse** : chemin, jokers `*`, séparateur `^`, ancres `\|`. |
+| `$domain=a.com\|~b.com`, `$third-party`, `$script`, `$important` | Options des règles d'adresse : sites concernés, requêtes tierces, type de requête, priorité sur les exceptions. |
+| `site.com##+js(set-constant, adBlock, false)` | **Scriptlet** uBlock (voir plus bas). |
 | `\|\|pub.exemple.com^$third-party,script` | Options de type ou de tiers acceptées : l'hôte est bloqué entièrement. |
 | `##.bandeau`, `site.com##.bandeau` | Masquage cosmétique (voir n° 2). |
 | `site.com#@#.bandeau` | Exception de masquage. |
 | `@@\|\|site.com^$generichide` / `$elemhide` | Pas de masquage générique / aucun masquage sur ce site. |
 | `! commentaire`, `# commentaire` | Ignoré. |
 
-**Non géré**, compté comme « ignoré » : les règles avec chemin (`\|\|a.com/pub/*`) ou joker, les options limitées à des domaines (`$domain=`) ou qui modifient la réponse (`$csp`, `$redirect`…), et les règles cosmétiques procédurales d'uBlock (`:has-text()`, `+js()`…).
+**Non géré**, compté comme « ignoré » : les expressions régulières (`/…/`), les options qui modifient la réponse (`$csp`, `$redirect`, `$removeparam`…) ou visent une page entière (`$document`, `$popup` sur une adresse), les règles cosmétiques procédurales (`:has-text()`…) et les scriptlets non implémentés.
+
+Les règles d'adresse sont indexées par mot : chaque requête ne teste que les quelques règles qui peuvent la concerner (environ 0,05 ms par requête). Elles ne s'appliquent jamais à la page principale elle-même.
+
+### Scriptlets uBlock
+
+Certaines pubs et « désactivez votre bloqueur » ne passent pas par une requête bloquable : ce sont les scripts du site qui les affichent. Les listes d'uBlock Origin y répondent par des **scriptlets**, de petits correctifs lancés avant les scripts de la page. WiDo implémente les plus utilisés : `set-constant`, `abort-on-property-read/write`, `abort-current-script`, `no-setTimeout-if`, `no-setInterval-if`, `nano-setTimeout/Interval-booster`, `json-prune`, `addEventListener-defuser`, `window.open-defuser`, `no-fetch-if`, `no-xhr-if`, `remove-attr`, `remove-class`, `remove-node-text`, `noeval(-if)`, `nowebrtc` (et leurs abréviations). Les directives `!#if`/`!#include` des listes sont prises en charge.
 
 Ordre de décision pour un hôte :
 1. dans `whitelist`, ou domaine du site, ou `allowedDomains` ? → **jamais bloqué** ;
@@ -32,7 +41,7 @@ Les listes de `blocklists` sont téléchargées (8 Mo max chacune), analysées u
 
 ### Listes recommandées
 
-Réglage **Listes recommandées** (activé par défaut) : WiDo ajoute aux listes de la configuration [EasyList](https://easylist.to/), sa variante française [Liste FR](https://easylist-downloads.adblockplus.org/liste_fr.txt) et le [filtre DNS d'AdGuard](https://adguardteam.github.io/AdGuardSDNSFilter/). L'état (nombre de listes, de domaines, de règles de masquage, date de mise à jour) et un bouton **Mettre à jour** sont dans Réglages → Blocage.
+Réglage **Listes recommandées** (activé par défaut) : WiDo ajoute aux listes de la configuration [EasyList](https://easylist.to/), sa variante française [Liste FR](https://easylist-downloads.adblockplus.org/liste_fr.txt), le [filtre DNS d'AdGuard](https://adguardteam.github.io/AdGuardSDNSFilter/) et les listes d'[uBlock Origin](https://github.com/uBlockOrigin/uAssets) (filtres, correctifs rapides, exceptions qui réparent les sites). Ces listes sont mises à jour par leurs communautés plusieurs fois par jour : quand un site trouve une parade, la correction arrive toute seule, sans nouvelle version de WiDo. L'état (nombre de listes, de domaines, de règles de masquage, date de mise à jour) et un bouton **Mettre à jour** sont dans Réglages → Blocage.
 
 ## 2. Masquage cosmétique
 

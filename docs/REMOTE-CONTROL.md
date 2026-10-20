@@ -55,6 +55,32 @@ Un plateau en bas de l'écran ; la page reste visible au-dessus. ◀ ▶ pour ch
 - Compteurs : requêtes bloquées et navigations refusées pendant cette session
 - Après une redirection refusée, elle s'affiche en tête du plateau avec **Ouvrir une fois**, **Toujours autoriser** et **Ignorer** (voir [BLOCKING](BLOCKING.md))
 
+## Lire dans WiDo (lecteur natif)
+
+Quand WiDo repère dans la page un flux vidéo qu'il sait lire (HLS `.m3u8`, DASH `.mpd`, fichier `.mp4`/`.webm`), il l'annonce (« Vidéo détectée »). Menu rapide → **▶ Lire dans WiDo** (ou une touche de couleur réglée sur « Lire dans WiDo ») : la vidéo s'ouvre dans le lecteur natif d'Android.
+
+- Décodage matériel, avance instantanée, **vitesse** et **sous-titres** dans les réglages du lecteur (roue dentée), sous-titres grands sur fond noir.
+- **Menu** : cadrage de l'image (adaptée, zoomée pour remplir l'écran, étirée).
+- Reprise à la seconde près, et la vidéo apparaît dans « Reprendre ».
+- **Retour** revient à la page.
+
+Limites : les vidéos protégées (DRM) et les flux assemblés par script (YouTube, Netflix…) ne sont pas lisibles ainsi ; WiDo ne les propose pas, ou revient à la page avec un message.
+
+## Reprendre
+
+À l'accueil, la rangée **Reprendre** montre les dernières vidéos regardées, tous sites confondus, avec leur image et leur progression. **OK** rouvre la page et reprend la vidéo là où elle en était ; **appui long** retire la carte. Une vidéo à peine commencée (moins de 10 s) n'y entre pas, une vidéo terminée en sort.
+
+## Télécommande sur téléphone
+
+Réglages → **Téléphone** → active **Télécommande téléphone**, puis scanne le QR code avec ton téléphone (même réseau) et garde la page ouverte (ou ajoute-la à l'écran d'accueil du téléphone).
+
+- **Pavé** : glisse pour déplacer le curseur, touche pour cliquer, bande de droite pour faire défiler. Sur l'accueil de WiDo, le pavé se comporte comme les flèches.
+- **Touches** : flèches, OK, retour, menu, lecture/pause, avance/recul, volume.
+- **Texte** : écrit dans le champ sélectionné de la page.
+- **Lien** : colle une adresse (vidéo, page) : elle s'ouvre sur la TV, dans le site du menu qui la connaît ou dans une fenêtre à part.
+
+Le serveur de la TV n'est ouvert que lorsque WiDo est à l'écran et que le réglage est actif. L'adresse contient un code secret : **Nouveau code** l'oublie, et les téléphones doivent rescanner. Le partage direct depuis le menu « Partager » d'Android demanderait une application sur le téléphone : pour l'instant, copie le lien et colle-le dans l'onglet **Lien**.
+
 ## Saisie de texte et voix
 
 - Le **clavier de la TV** s'ouvre sur un champ de saisie touché avec le curseur. La dictée du clavier Google peut s'y trouver : **à confirmer sur appareil réel**.

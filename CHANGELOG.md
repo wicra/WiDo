@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.7.0
+
+### 🚫 Plus de pub, sur tous les sites
+- **Règles d'adresse** EasyList/uBlock : chemins, jokers, `$domain=`, tiers, types, exceptions. Indexées : environ 0,05 ms par requête.
+- **Scriptlets uBlock** (18 parmi les plus utilisés) contre les pubs et les « désactivez votre bloqueur », lancés avant les scripts de la page.
+- Listes **uBlock Origin** (filtres, correctifs rapides, exceptions) ajoutées aux listes recommandées, avec leurs fichiers inclus et directives `!#if` : les corrections arrivent toutes seules.
+
+### 🎬 Lire dans WiDo
+- Les flux vidéo d'une page (HLS, DASH, MP4) s'ouvrent dans le **lecteur natif** : fluidité, vitesse, grands sous-titres, cadrage, reprise exacte.
+
+### ▶️ Reprendre
+- Rangée **Reprendre** à l'accueil : les vidéos en cours avec image et progression, reprises à la seconde près.
+
+### 📱 Le téléphone comme télécommande
+- **Pavé tactile, touches, texte et liens** depuis le téléphone, appairé une fois par QR code.
+
 ## 0.6.1
 
 ### Corrigé
