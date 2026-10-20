@@ -9,6 +9,10 @@
 - **Accueil TV** : le titre n'est plus coupé sous l'en-tête en descendant vers les sites (la scène et les rangées tiennent dans l'écran).
 
 ### Nouveau
+- **Onglet Reprendre (TV)** à côté de Sites et Réglages : toutes les vidéos en cours en grandes vignettes, la sélectionnée en grand avec Reprendre / Retirer, son image floutée en fond. L'accueil Sites ne montre plus que les sites.
+- **Les sites en vinyles** : chaque site est un disque (sillons, anneau à sa couleur, logo sur l'étiquette). Le disque choisi sort du bac, grandit et tourne ; ses voisins s'inclinent en vague, comme quand on feuillette des disques. À l'ouverture, c'est ce disque qui s'agrandit jusqu'à remplir l'écran.
+- **Sons de l'interface (TV)** : tic au passage, « toc » à la validation, disque posé à l'ouverture, souffle au retour. Réglages → Apparence : Désactivé, Doux ou Normal.
+- **Retour deux fois vite** dans une page : retour direct aux sites. Retour depuis Reprendre ou Réglages ramène aussi aux sites.
 - **Écran de pause (TV)** : après 5 s en pause, la page s'assombrit avec le titre, le site, le temps restant et l'heure de fin. OK relance la vidéo, n'importe quelle autre touche retire l'écran.
 - **Fond d'ambiance** : à l'accueil TV, la vidéo de Reprendre sélectionnée s'affiche floutée en fond.
 - **Page d'erreur WiDo** : à la place de la page grise du navigateur, un écran clair : pas de connexion, site introuvable, site qui ne répond pas… avec **Réessayer**, **Retour** et, pour un site perso introuvable, **Modifier l'adresse**.
@@ -17,6 +21,7 @@
 - **Télécommande par gestes** (téléphone, onglet TV) : glisser = flèches, toucher = OK, appui long = Retour.
 
 ### Amélioré
+- **Plus de barre de lecture de WiDo** par-dessus celle du site : seul le saut s'affiche (« +30 s »). Le temps restant et l'heure de fin sont sur l'écran de pause.
 - **Réglages rangés par thème** : sur la TV, une colonne de thèmes à gauche et leurs réglages à droite.
 - **Téléphone : après « Sur la TV », l'onglet TV s'ouvre** (depuis le lecteur, Reprendre, un appui long ou le partage) : la vidéo se pilote tout de suite.
 - **Sur la TV et Reprendre : lecture et plein écran automatiques.** La vidéo démarre seule ; le plein écran du site est ouvert pour de vrai, sinon la vidéo remplit l'écran (Retour pour revoir la page). Réglage « Plein écran automatique ».

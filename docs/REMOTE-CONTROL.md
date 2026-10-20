@@ -14,8 +14,9 @@ En haut, les onglets **Sites** et **Réglages** ([SETTINGS](SETTINGS.md)) : un o
 | Flèches (maintenues) | Déplacement **libre** du curseur, de plus en plus rapide. Au bord de l'écran, la page défile. |
 | **OK** | Clic à la position du curseur. Sur un champ de saisie, le clavier de la TV s'ouvre. |
 | **Retour** | Plein écran vidéo → quitte le plein écran ; sinon page précédente ; sinon retour au menu. |
+| **Retour, deux fois vite** | Retour direct aux sites, d'où qu'on soit dans la page. |
 | **Retour** (appui long) ou **Menu** | **Menu rapide**. |
-| Lecture/pause, ▶, ❚❚ | Agit sur la vidéo de la page et affiche la **barre de lecture**. |
+| Lecture/pause, ▶, ❚❚ | Agit sur la vidéo de la page (le lecteur du site montre sa propre barre). |
 | Avance / recul rapide | Saute de 10 s (réglable) ; plus loin si la touche est maintenue. |
 | **Volume + / − / muet** | Règle le volume du système avec l'indicateur de WiDo ([SETTINGS](SETTINGS.md)). |
 | **CH + / CH −** (ou Page +/−) | Fait défiler la page d'un écran. |
@@ -25,12 +26,12 @@ En haut, les onglets **Sites** et **Réglages** ([SETTINGS](SETTINGS.md)) : un o
 
 Le curseur est une flèche de souris (la pointe est le point de clic) ; il devient bleu pendant l'appui sur OK et se masque après quelques secondes d'inactivité.
 
-## Barre de lecture et indicateurs
+## Indicateurs
 
-La barre montre l'image et le titre de la vidéo, le site, le temps écoulé, le **temps restant et l'heure de fin** (« −32 min · finit à 22 h 41 »), et le saut quand tu avances ou recules (« +30 s »). Tous les messages du lecteur (page épinglée, redirection bloquée, envoyé sur la TV…) s'affichent dans la même pastille, avec une icône : ✓ réussi, ⚠ attention, ⛔ bloqué.
+WiDo n'ajoute pas de barre de lecture par-dessus celle du site : quand tu avances ou recules, seul le saut s'affiche (« +30 s »). Le **temps restant et l'heure de fin** sont sur l'écran de pause (ci-dessous). Tous les messages du lecteur (page épinglée, redirection bloquée, envoyé sur la TV…) s'affichent dans la même pastille, avec une icône : ✓ réussi, ⚠ attention, ⛔ bloqué.
 
 
-En bas de l'écran : état (lecture ou pause), temps écoulé et durée, volume de la vidéo et barre de progression. Elle s'affiche à chaque touche média et disparaît seule. Le volume et le zoom ont leur propre indicateur.
+Le volume et le zoom ont leur propre indicateur, qui disparaît seul.
 
 **Écran de pause** : une vidéo en pause depuis 5 secondes assombrit la page et affiche son titre, le site, le temps restant et l'heure de fin. **OK** (ou lecture) relance la vidéo ; toute autre touche retire simplement l'écran.
 
@@ -52,7 +53,6 @@ Un plateau en bas de l'écran ; la page reste visible au-dessus. Une rangée de 
 
 Sur une **vidéo**, le menu commence par ses commandes : Lecture/Pause, **Suivant** (si la page a un bouton « épisode suivant », WiDo le clique pour toi), **Lecteur** (lecteur natif), **Début** (reprendre au début), Veille. Sur une **page**, il commence par Épingler, A− / A+, Masquer, Accueil du site, Recharger.
 
-- La barre de lecture, si une vidéo a été pilotée sur la page
 - Recharger la page, **Accueil du site**, activer/désactiver le curseur
 - **A− / A+** : texte plus petit / plus grand (mémorisé par site)
 - **Téléphone** : un QR code s'affiche ; scanne-le avec ton téléphone (même réseau), tape ton texte, il arrive dans le champ sélectionné de la page (ou le premier champ de recherche). « Envoyer + Entrée » valide aussi la recherche.

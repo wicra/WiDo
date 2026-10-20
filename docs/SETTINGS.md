@@ -13,12 +13,13 @@ Menu principal → onglet **Réglages**, en haut de l'écran. Les réglages sont
 | Curseur aimanté | Activé / Désactivé | Activé | Un appui bref sur une flèche saute au prochain lien ou bouton dans cette direction. |
 | Zoom du texte par défaut | 100 % à 200 % | 100 % | Taille du texte des pages. Peut être ajusté site par site (voir ci-dessous). |
 | Saut avance / recul | 5, 10, 15, 30 s | 10 s | Durée des sauts du lecteur. |
-| Durée d'affichage de la barre | 2, 4, 6, 10 s | 4 s | Barre de lecture, volume, zoom. |
+| Durée d'affichage des messages | 2, 4, 6, 10 s | 4 s | Saut (« +30 s »), volume, zoom, messages du lecteur. |
 | Volume | Indicateur WiDo / du système | WiDo | Voir ci-dessous. |
 | Plein écran : flèches | Pilotent le lecteur / Déplacent le curseur | Pilotent le lecteur | Comportement des flèches en plein écran vidéo. |
 | Touches rouge, verte, jaune, bleue | Voir la liste ci-dessous | Menu, Recharger, Texte +, Texte − | Raccourcis des touches de couleur. |
 | Ambiance | Bleu / Violet / Ambre / Noir | Bleu | Couleur des halos et de la lumière de l'appli. « Noir » : fond noir pur et lumière très discrète, pour un projecteur dans une pièce sombre. Les sites gardent leur couleur. |
-| Taille de l'interface | Normale / Grande / Très grande | Normale | Tout l'accueil, les menus et la barre de lecture grandissent (projecteur regardé de loin). Le zoom du texte des pages reste à part. |
+| Sons de l'interface | Désactivé / Doux / Normal | Normal | TV : un tic au passage du focus, un « toc » à la validation, le disque posé à l'ouverture d'un site, un souffle au retour. Sons système : ils ne coupent jamais la vidéo. |
+| Taille de l'interface | Normale / Grande / Très grande | Normale | Tout l'accueil, les menus et les messages du lecteur grandissent (projecteur regardé de loin). Le zoom du texte des pages reste à part. |
 | Présentation | Revoir | — | Rejoue les trois écrans du premier lancement (sites, téléphone, gestes). |
 | Au démarrage | Afficher le menu / Rouvrir le dernier site | Afficher le menu | Au lancement depuis l'accueil de la TV. |
 | Ouvrir un site | Dernière page / Accueil du site | Dernière page | Reprend là où tu en étais (position d'une vidéo YouTube comprise). « Accueil du site » est aussi dans le menu rapide. |
