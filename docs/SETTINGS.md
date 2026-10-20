@@ -1,6 +1,6 @@
 # Réglages
 
-Menu principal → onglet **Réglages**, en haut de l'écran. Les réglages forment une seule liste qui défile, rangée par thème (Blocage, Curseur, Lecture, Touches de couleur, Général). Chaque choix est un **bouton visible** : déplace le focus dessus et appuie sur **OK** ; la valeur choisie est en verre clair. Les réglages à nombreuses valeurs (zoom, touches de couleur) ont deux boutons **◀ ▶** autour de la valeur. Les changements s'appliquent à l'ouverture du site suivant. **Réinitialiser** remet les réglages de confort à leur valeur d'origine, sans toucher à l'URL de configuration ni aux sites.
+Menu principal → onglet **Réglages**, en haut de l'écran. Les réglages sont rangés par thème : **Blocage, Lecture, Apparence, Touches de couleur, Écrans liés, Général**. Sur la TV, les thèmes forment une colonne à gauche : le thème qui reçoit le focus s'affiche aussitôt à droite (flèche droite pour entrer dans ses réglages). Sur le téléphone, tout tient dans une seule liste. Le thème Blocage affiche aussi le nombre de **pubs et pisteurs bloqués ce mois-ci** (le détail par site est dans l'appui long sur sa carte). Chaque choix est un **bouton visible** : déplace le focus dessus et appuie sur **OK** ; la valeur choisie est en verre clair. Les réglages à nombreuses valeurs (zoom, touches de couleur) ont deux boutons **◀ ▶** autour de la valeur. Les changements s'appliquent à l'ouverture du site suivant. **Réinitialiser** remet les réglages de confort à leur valeur d'origine, sans toucher à l'URL de configuration ni aux sites.
 
 | Réglage | Valeurs | Défaut | Effet |
 |---|---|---|---|
@@ -17,6 +17,7 @@ Menu principal → onglet **Réglages**, en haut de l'écran. Les réglages form
 | Volume | Indicateur WiDo / du système | WiDo | Voir ci-dessous. |
 | Plein écran : flèches | Pilotent le lecteur / Déplacent le curseur | Pilotent le lecteur | Comportement des flèches en plein écran vidéo. |
 | Touches rouge, verte, jaune, bleue | Voir la liste ci-dessous | Menu, Recharger, Texte +, Texte − | Raccourcis des touches de couleur. |
+| Ambiance | Bleu / Violet / Ambre / Noir | Bleu | Couleur des halos et de la lumière de l'appli. « Noir » : fond noir pur et lumière très discrète, pour un projecteur dans une pièce sombre. Les sites gardent leur couleur. |
 | Taille de l'interface | Normale / Grande / Très grande | Normale | Tout l'accueil, les menus et la barre de lecture grandissent (projecteur regardé de loin). Le zoom du texte des pages reste à part. |
 | Présentation | Revoir | — | Rejoue les trois écrans du premier lancement (sites, téléphone, gestes). |
 | Au démarrage | Afficher le menu / Rouvrir le dernier site | Afficher le menu | Au lancement depuis l'accueil de la TV. |

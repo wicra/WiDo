@@ -8,7 +8,16 @@
 - **Retour ne quitte plus WiDo** après une vidéo envoyée depuis le téléphone : il ramène à l'accueil.
 - **Accueil TV** : le titre n'est plus coupé sous l'en-tête en descendant vers les sites (la scène et les rangées tiennent dans l'écran).
 
+### Nouveau
+- **Écran de pause (TV)** : après 5 s en pause, la page s'assombrit avec le titre, le site, le temps restant et l'heure de fin. OK relance la vidéo, n'importe quelle autre touche retire l'écran.
+- **Fond d'ambiance** : à l'accueil TV, la vidéo de Reprendre sélectionnée s'affiche floutée en fond.
+- **Page d'erreur WiDo** : à la place de la page grise du navigateur, un écran clair : pas de connexion, site introuvable, site qui ne répond pas… avec **Réessayer**, **Retour** et, pour un site perso introuvable, **Modifier l'adresse**.
+- **Ambiances de couleur** : Bleu, Violet, Ambre ou Noir (Réglages → Apparence).
+- **Compteur de pubs** : pubs et pisteurs bloqués ce mois-ci, au total (accueil, réglages) et par site (appui long sur la carte).
+- **Télécommande par gestes** (téléphone, onglet TV) : glisser = flèches, toucher = OK, appui long = Retour.
+
 ### Amélioré
+- **Réglages rangés par thème** : sur la TV, une colonne de thèmes à gauche et leurs réglages à droite.
 - **Téléphone : après « Sur la TV », l'onglet TV s'ouvre** (depuis le lecteur, Reprendre, un appui long ou le partage) : la vidéo se pilote tout de suite.
 - **Sur la TV et Reprendre : lecture et plein écran automatiques.** La vidéo démarre seule ; le plein écran du site est ouvert pour de vrai, sinon la vidéo remplit l'écran (Retour pour revoir la page). Réglage « Plein écran automatique ».
 - **Menu rapide** : retour à une rangée de pastilles, plus petites, avec une icône et un libellé clair, toutes visibles (plus de « Plus… »).

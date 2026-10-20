@@ -32,6 +32,10 @@ La barre montre l'image et le titre de la vidéo, le site, le temps écoulé, le
 
 En bas de l'écran : état (lecture ou pause), temps écoulé et durée, volume de la vidéo et barre de progression. Elle s'affiche à chaque touche média et disparaît seule. Le volume et le zoom ont leur propre indicateur.
 
+**Écran de pause** : une vidéo en pause depuis 5 secondes assombrit la page et affiche son titre, le site, le temps restant et l'heure de fin. **OK** (ou lecture) relance la vidéo ; toute autre touche retire simplement l'écran.
+
+**Page qui ne s'ouvre pas** : WiDo affiche son propre écran (pas de connexion, site introuvable, site qui ne répond pas) avec **Réessayer**, **Retour** et, pour un site perso dont l'adresse ne répond plus, **Modifier l'adresse**.
+
 Le lecteur est piloté **dans toutes les frames de la page**, y compris les iframes d'un autre domaine où se trouve souvent la vidéo. Ce mécanisme dépend de la version de la WebView de l'appareil ; s'il n'est pas disponible, seules les vidéos de la page principale répondent aux touches.
 
 ## Écran de chargement
@@ -44,7 +48,7 @@ L'aide des commandes s'affiche à la **première ouverture** d'un site, puis à 
 
 ## Menu rapide
 
-Un plateau en bas de l'écran ; la page reste visible au-dessus. Des **tuiles à icône**, les plus utiles d'abord ; les flèches pour choisir, **OK** pour valider, **Retour** pour le fermer. **Plus…** affiche le reste (Enregistrer, Curseur, Téléphone, Aide).
+Un plateau en bas de l'écran ; la page reste visible au-dessus. Une rangée de **pastilles** (icône et libellé), les plus utiles d'abord ; les flèches pour choisir, **OK** pour valider, **Retour** pour le fermer.
 
 Sur une **vidéo**, le menu commence par ses commandes : Lecture/Pause, **Suivant** (si la page a un bouton « épisode suivant », WiDo le clique pour toi), **Lecteur** (lecteur natif), **Début** (reprendre au début), Veille. Sur une **page**, il commence par Épingler, A− / A+, Masquer, Accueil du site, Recharger.
 

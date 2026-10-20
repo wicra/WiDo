@@ -56,6 +56,7 @@ La position est celle du lecteur de la page (ou du lecteur natif « Lire dans Wi
 Onglet TV, sous « En cours » :
 
 - **Touches** : croix directionnelle et OK, Retour, Accueil, Menu, volume.
+- **Gestes** : sans regarder l'écran, glisser vers une direction = la flèche (on peut enchaîner sans lever le doigt), toucher = OK, appui long = Retour ; Accueil, Menu et volume en dessous.
 - **Pavé** : glisser déplace le curseur de la TV, toucher clique ; la bande de droite fait défiler.
 - **Clavier** : chaque lettre s'écrit aussitôt dans le champ sélectionné sur la TV, effacer efface aussi là-bas ; **Entrée** valide.
 
