@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wido.core.DeviceRole
 import dev.wido.core.LinkLevel
+import dev.wido.core.LinkGuest
 import dev.wido.core.LinkProtocol
 import dev.wido.core.NowPlaying
 import dev.wido.core.Peer
@@ -75,7 +76,7 @@ import org.json.JSONObject
 
 private sealed interface Pairing {
     data class Waiting(val name: String) : Pairing
-    data class Done(val result: ScreenLink.PairResult, val name: String) : Pairing
+    data class Done(val result: LinkGuest.PairResult, val name: String) : Pairing
 }
 
 private enum class RemoteMode { Keys, Pad, Keyboard }
@@ -540,10 +541,10 @@ private fun PairingDialog(pairing: Pairing, onCancel: () -> Unit) {
         }
         is Pairing.Done -> {
             val (title, body) = when (pairing.result) {
-                is ScreenLink.PairResult.Approved -> stringResource(R.string.pairing_ok_title) to stringResource(R.string.pairing_ok, pairing.name)
-                ScreenLink.PairResult.Denied -> stringResource(R.string.pairing_failed_title) to stringResource(R.string.pairing_denied)
-                ScreenLink.PairResult.Unreachable -> stringResource(R.string.pairing_failed_title) to stringResource(R.string.pairing_unreachable)
-                ScreenLink.PairResult.TimedOut -> stringResource(R.string.pairing_failed_title) to stringResource(R.string.pairing_timeout)
+                is LinkGuest.PairResult.Approved -> stringResource(R.string.pairing_ok_title) to stringResource(R.string.pairing_ok, pairing.name)
+                LinkGuest.PairResult.Denied -> stringResource(R.string.pairing_failed_title) to stringResource(R.string.pairing_denied)
+                LinkGuest.PairResult.Unreachable -> stringResource(R.string.pairing_failed_title) to stringResource(R.string.pairing_unreachable)
+                LinkGuest.PairResult.TimedOut -> stringResource(R.string.pairing_failed_title) to stringResource(R.string.pairing_timeout)
             }
             DialogFrame(title = title, onDismiss = onCancel, buttons = { ActionButton(stringResource(R.string.action_ok), onCancel) }) {
                 Text(body, fontSize = 15.sp, lineHeight = 21.sp)

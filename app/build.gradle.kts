@@ -55,6 +55,22 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+
+    // Tests sur JVM avec Robolectric : captures d'écran (Roborazzi) et stockage.
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all { it.systemProperty("roborazzi.test.record", "true") }
+        }
+    }
+
+    lint {
+        abortOnError = true
+        checkReleaseBuilds = false
+        htmlReport = true
+        // Appli installée hors Play Store : pas d'exigence de version cible du Store ni de traductions complètes imposées.
+        disable += setOf("ExpiredTargetSdkVersion", "OldTargetApi", "GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion", "MissingTranslation")
+    }
 }
 
 dependencies {
@@ -80,4 +96,11 @@ dependencies {
     // QR code de la saisie depuis un téléphone (génération seulement).
     implementation("com.google.zxing:core:3.5.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.39.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.39.0")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

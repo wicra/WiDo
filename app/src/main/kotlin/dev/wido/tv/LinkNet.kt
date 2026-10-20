@@ -10,15 +10,10 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import dev.wido.core.LinkProtocol
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
-import java.net.HttpURLConnection
 import java.net.Inet4Address
-import java.net.URL
 
 /** TV (télécommande, écran de salon) ou téléphone / tablette (écran tactile). */
 object DeviceKind {
@@ -30,53 +25,6 @@ object DeviceKind {
     }
 }
 
-/** Requêtes vers l'appli WiDo d'un autre écran du réseau local (http, réponses bornées). */
-object LinkClient {
-    /** Le corps de la réponse 200, ou null (injoignable, refusé, trop long). */
-    suspend fun call(
-        host: String,
-        port: Int,
-        method: String,
-        path: String,
-        token: String? = null,
-        body: String? = null,
-        timeoutMs: Int = 4_000,
-    ): String? = withContext(Dispatchers.IO) {
-        if (!LinkProtocol.isLanHost(host)) return@withContext null
-        runCatching {
-            val query = if (token != null) (if ('?' in path) "&" else "?") + "t=" + token else ""
-            val conn = URL("http://$host:$port$path$query").openConnection() as HttpURLConnection
-            try {
-                conn.connectTimeout = timeoutMs
-                conn.readTimeout = timeoutMs
-                conn.requestMethod = method
-                conn.useCaches = false
-                if (body != null) {
-                    val bytes = body.toByteArray(Charsets.UTF_8)
-                    conn.doOutput = true
-                    conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                    conn.setFixedLengthStreamingMode(bytes.size)
-                    conn.outputStream.use { it.write(bytes) }
-                }
-                if (conn.responseCode != 200) return@runCatching null
-                conn.inputStream.use { input ->
-                    val out = ByteArrayOutputStream()
-                    val buf = ByteArray(8 * 1024)
-                    while (true) {
-                        val n = input.read(buf)
-                        if (n < 0) break
-                        if (out.size() + n > LinkProtocol.MAX_BODY) return@runCatching null
-                        out.write(buf, 0, n)
-                    }
-                    out.toString("UTF-8")
-                }
-            } finally {
-                conn.disconnect()
-            }
-        }.getOrNull()
-    }
-}
-
 /**
  * Découverte des applis WiDo du réseau (mDNS / DNS-SD, `_wido._tcp`) : la TV s'annonce tant que son
  * serveur est ouvert ; le téléphone (et les TV d'un même groupe) cherchent les autres.
@@ -84,7 +32,8 @@ object LinkClient {
 class LinkDiscovery(context: Context, private val selfId: () -> String) {
     data class Found(val advert: LinkProtocol.Advert, val host: String, val port: Int, val serviceName: String)
 
-    private val nsd = context.applicationContext.getSystemService(Context.NSD_SERVICE) as NsdManager
+    private val app = context.applicationContext
+    private val nsd by lazy { app.getSystemService(Context.NSD_SERVICE) as NsdManager }
     private val main = Handler(Looper.getMainLooper())
 
     private val _found = MutableStateFlow<List<Found>>(emptyList())

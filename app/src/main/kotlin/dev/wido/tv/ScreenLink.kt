@@ -7,20 +7,22 @@ import dev.wido.core.DeviceInfo
 import dev.wido.core.DeviceRole
 import dev.wido.core.GroupKey
 import dev.wido.core.HandoffPlay
-import dev.wido.core.Hosts
 import dev.wido.core.LinkLevel
 import dev.wido.core.LinkProtocol
-import dev.wido.core.LinkStatus
 import dev.wido.core.NowPlaying
-import dev.wido.core.PairReply
-import dev.wido.core.PairRequest
 import dev.wido.core.PairingDesk
 import dev.wido.core.Peer
 import dev.wido.core.PhoneProtocol
 import dev.wido.core.RemoteCommand
 import dev.wido.core.RemoteKey
-import dev.wido.core.SyncEnvelope
-import dev.wido.core.SyncReply
+import dev.wido.core.LinkGuest
+import dev.wido.core.LinkHost
+import dev.wido.core.LinkHostEvents
+import dev.wido.core.LinkStore
+import dev.wido.core.MiniHttpServer
+import dev.wido.core.SyncCursor
+import dev.wido.core.SyncRecord
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -108,110 +110,68 @@ class ScreenLink(private val app: WiDoApp) {
     /** Ce que la TV affiche en ce moment (mis à jour par les lecteurs). */
     val nowPlaying = MutableStateFlow<NowPlaying?>(null)
 
-    private val desk = PairingDesk()
-
     /** Demandes d'appairage à valider à l'écran (la plus ancienne en tête). */
     val pairRequests = MutableStateFlow<List<PairingDesk.Pending>>(emptyList())
 
-    @Volatile private var lastStatusAt = 0L
+    /** L'écran actif (accueil, lecteur), qui reçoit les ordres des téléphones. */
+    @Volatile private var target: () -> RemoteTarget? = { null }
+
+    /** Bibliothèque et réglages du lien, vus par la logique commune (module core). */
+    private val store = object : LinkStore {
+        override var peers: List<Peer>
+            get() = _peers.value
+            set(value) = updatePeers { value }
+        override var group: GroupKey?
+            get() = this@ScreenLink.group
+            set(value) {
+                this@ScreenLink.group = value
+            }
+        override val pairKey: String get() = settings.pairKey
+        override fun rotatePairKey() {
+            settings.newPairKey()
+        }
+        override fun outgoing(since: Long, epoch: String) = app.repository.syncOutgoing(since, epoch)
+        override fun apply(records: List<SyncRecord>) {
+            app.repository.applySync(records)
+        }
+        override fun exchange(incoming: List<SyncRecord>, since: Long, epoch: String) = app.repository.syncExchange(incoming, since, epoch)
+    }
+
+    private val host = LinkHost({ device }, store, object : LinkHostEvents {
+        override fun onPairRequests(pending: List<PairingDesk.Pending>) {
+            pairRequests.value = pending
+        }
+        override fun onPlay(play: HandoffPlay) {
+            main.post { openOnTv(play, target()) }
+        }
+        override fun onTake() {
+            main.post { target()?.onRemote(RemoteCommand.Key(RemoteKey.PAUSE)) }
+        }
+        override fun onCommand(command: RemoteCommand) {
+            main.post { target()?.onRemote(command) }
+        }
+        override fun onGroupChanged() {
+            main.post { app.remote.readvertise() }
+        }
+        override fun nowPlaying(): NowPlaying? = this@ScreenLink.nowPlaying.value
+    })
 
     /** Un téléphone suit la lecture : les lecteurs relèvent la position plus souvent. */
-    val followed: Boolean get() = System.currentTimeMillis() - lastStatusAt < FOLLOW_MS
+    val followed: Boolean get() = System.currentTimeMillis() - host.lastStatusAt < FOLLOW_MS
 
-    fun decidePair(pending: PairingDesk.Pending, approved: Boolean, level: String) {
-        desk.decide(pending.request, approved, level)
-        pairRequests.value = desk.pendingRequests()
-    }
+    fun decidePair(pending: PairingDesk.Pending, approved: Boolean, level: String) = host.decide(pending, approved, level)
 
     /** Retire les demandes expirées (le téléphone a cessé d'attendre) : la fenêtre se ferme. */
     fun refreshPairRequests() {
-        pairRequests.value = desk.pendingRequests()
+        pairRequests.value = host.pending()
     }
 
-    fun peerForToken(token: String?): Peer? = LinkProtocol.peerForToken(_peers.value, token)
+    fun peerForToken(token: String?): Peer? = host.peerForToken(token)
 
     /** Les routes du lien ; null si la requête n'en est pas une. Appelé hors du fil principal. */
     fun handle(request: PhoneProtocol.Request, body: String, target: () -> RemoteTarget?): MiniHttpServer.Response? {
-        val token = request.query["t"]
-        val post = request.method == "POST"
-        return when (request.path) {
-            "/hello" -> MiniHttpServer.json(LinkProtocol.encode(DeviceInfo.serializer(), device))
-            "/pair" -> if (post) pair(body) else MiniHttpServer.BAD_REQUEST
-            "/status" -> {
-                val peer = peerForToken(token) ?: return MiniHttpServer.FORBIDDEN
-                lastStatusAt = System.currentTimeMillis()
-                touch(peer)
-                MiniHttpServer.json(LinkProtocol.encode(LinkStatus.serializer(), statusFor(peer)))
-            }
-            "/play" -> {
-                val peer = peerForToken(token) ?: return MiniHttpServer.FORBIDDEN
-                val play = LinkProtocol.decode(HandoffPlay.serializer(), body)?.takeIf { validUrl(it.url) }
-                    ?: return MiniHttpServer.BAD_REQUEST
-                touch(peer)
-                main.post { openOnTv(play, target()) }
-                MiniHttpServer.json("{}")
-            }
-            "/take" -> {
-                val peer = peerForToken(token) ?: return MiniHttpServer.FORBIDDEN
-                val status = statusFor(peer)
-                if (status.playing != null) main.post { target()?.onRemote(RemoteCommand.Key(RemoteKey.PAUSE)) }
-                MiniHttpServer.json(LinkProtocol.encode(LinkStatus.serializer(), status))
-            }
-            "/sync" -> if (post) receiveSync(token, body) else MiniHttpServer.BAD_REQUEST
-            else -> null
-        }
-    }
-
-    private fun statusFor(peer: Peer): LinkStatus {
-        val now = System.currentTimeMillis()
-        val playing = nowPlaying.value?.let { it.copy(position = it.positionAfter(now - it.at), at = now) }
-        return LinkStatus(device, peer.level, playing, now)
-    }
-
-    private fun touch(peer: Peer) {
-        val now = System.currentTimeMillis()
-        if (now - peer.lastSeen > 60_000) updatePeers { list -> list.map { if (it.id == peer.id) it.copy(lastSeen = now) else it } }
-    }
-
-    private fun pair(body: String): MiniHttpServer.Response {
-        val request = LinkProtocol.decode(PairRequest.serializer(), body)
-            ?.takeIf { it.device.id.isNotBlank() && it.device.id.length <= 64 && it.nonce.length in 8..64 }
-            ?: return MiniHttpServer.BAD_REQUEST
-        val keyValid = request.key != null && PhoneProtocol.tokenMatches(settings.pairKey, request.key)
-        val reply = when (val outcome = desk.submit(request, keyValid)) {
-            is PairingDesk.Outcome.AskUser -> {
-                pairRequests.value = desk.pendingRequests()
-                PairReply(PairReply.PENDING)
-            }
-            PairingDesk.Outcome.Waiting -> PairReply(PairReply.PENDING)
-            PairingDesk.Outcome.Denied -> PairReply(PairReply.DENIED)
-            is PairingDesk.Outcome.Approved -> {
-                if (keyValid) settings.newPairKey() // un QR code ne sert qu'une fois
-                val d = request.device
-                updatePeers { list ->
-                    LinkProtocol.upsert(list, Peer(d.id, d.name.take(40), d.role, token = outcome.token, level = outcome.level, lastSeen = System.currentTimeMillis()))
-                }
-                PairReply(PairReply.APPROVED, outcome.token, outcome.level, device)
-            }
-        }
-        return MiniHttpServer.json(LinkProtocol.encode(PairReply.serializer(), reply))
-    }
-
-    private fun receiveSync(token: String?, body: String): MiniHttpServer.Response {
-        val envelope = LinkProtocol.decode(SyncEnvelope.serializer(), body) ?: return MiniHttpServer.BAD_REQUEST
-        val peer = peerForToken(token)
-        val g = group
-        val fromGroup = g != null && token != null && PhoneProtocol.tokenMatches(LinkProtocol.groupToken(g.secret), token)
-        val allowed = (peer != null && peer.level == LinkLevel.MINE) || fromGroup
-        if (!allowed) return MiniHttpServer.json(LinkProtocol.encode(SyncReply.serializer(), SyncReply(false)))
-        if (peer != null) {
-            touch(peer)
-            // Un téléphone « à moi » apporte la clé du groupe (ou en reçoit une) : mes TV se trouveront entre elles.
-            adoptGroup(envelope.group ?: group ?: GroupKey(LinkProtocol.randomToken(8), LinkProtocol.randomToken(16)))
-        }
-        app.repository.applySync(envelope.records)
-        val reply = SyncReply(true, app.repository.syncRecords(), if (peer != null) group else null)
-        return MiniHttpServer.json(LinkProtocol.encode(SyncReply.serializer(), reply))
+        this.target = target
+        return host.handle(request, body)
     }
 
     /** « Sur la TV » : la page s'ouvre (le site du menu qui la connaît, sinon un site éphémère), à la position donnée. */
@@ -220,11 +180,6 @@ class ScreenLink(private val app: WiDoApp) {
         val intent = PlayerActivity.intent(app, ConfigRepository.LINK_SITE_ID, play.url, play.position)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         app.startActivity(intent)
-    }
-
-    private fun validUrl(url: String): Boolean {
-        val scheme = Hosts.schemeOf(url)
-        return url.length <= 2000 && (scheme == "https" || scheme == "http") && Hosts.of(url) != null
     }
 
     // =============================================================================================
@@ -260,42 +215,24 @@ class ScreenLink(private val app: WiDoApp) {
         _states.value = map + (id to transform(map[id] ?: ScreenState()))
     }
 
-    sealed interface PairResult {
-        data class Approved(val peer: Peer) : PairResult
-        data object Denied : PairResult
-        data object Unreachable : PairResult
-        data object TimedOut : PairResult
-    }
+    private val guest = LinkGuest({ device })
 
     /**
      * Se lie à la TV `host:port`. Sans `key` (QR code), la TV demande confirmation à l'écran : on
      * redemande jusqu'à la réponse (2 minutes au plus).
      */
-    suspend fun pair(host: String, port: Int, key: String?): PairResult {
-        val hello = LinkClient.call(host, port, "GET", "/hello")?.let { LinkProtocol.decode(DeviceInfo.serializer(), it) }
-            ?: return PairResult.Unreachable
-        val request = PairRequest(device, LinkProtocol.randomToken(8), key)
-        val body = LinkProtocol.encode(PairRequest.serializer(), request)
-        val deadline = System.currentTimeMillis() + PairingDesk.EXPIRY_MS
-        while (System.currentTimeMillis() < deadline) {
-            val reply = LinkClient.call(host, port, "POST", "/pair", body = body)?.let { LinkProtocol.decode(PairReply.serializer(), it) }
-            when (reply?.status) {
-                PairReply.APPROVED -> {
-                    val token = reply.token ?: return PairResult.Denied
-                    val tv = reply.tv ?: hello
-                    val peer = Peer(tv.id, tv.name, tv.role, host, port, token, LinkLevel.of(reply.level), System.currentTimeMillis())
-                    updatePeers { LinkProtocol.upsert(it, peer) }
-                    selectScreen(peer.id)
-                    refresh(peer)
-                    syncSoon(immediate = true)
-                    return PairResult.Approved(peer)
-                }
-                PairReply.DENIED -> return PairResult.Denied
-                null -> return PairResult.Unreachable
-            }
-            delay(PAIR_POLL_MS)
+    suspend fun pair(host: String, port: Int, key: String?): LinkGuest.PairResult {
+        val result = withContext(Dispatchers.IO) {
+            val job = coroutineContext[Job]
+            guest.pair(host, port, key, PAIR_POLL_MS) { job?.isActive == false }
         }
-        return PairResult.TimedOut
+        if (result is LinkGuest.PairResult.Approved) {
+            updatePeers { LinkProtocol.upsert(it, result.peer) }
+            selectScreen(result.peer.id)
+            refresh(result.peer)
+            syncSoon(immediate = true)
+        }
+        return result
     }
 
     /** L'adresse d'un écran lié a pu changer (box redémarrée) : la découverte la remet à jour. */
@@ -312,8 +249,7 @@ class ScreenLink(private val app: WiDoApp) {
 
     /** Demande son statut à un écran lié. */
     suspend fun refresh(peer: Peer): ScreenState {
-        val raw = LinkClient.call(peer.host, peer.port, "GET", "/status", peer.token, timeoutMs = 2_500)
-        val status = raw?.let { LinkProtocol.decode(LinkStatus.serializer(), it) }
+        val status = withContext(Dispatchers.IO) { guest.status(peer) }
         setState(peer.id) { it.copy(online = status != null, status = status ?: it.status, receivedAt = if (status != null) System.currentTimeMillis() else it.receivedAt) }
         if (status != null && status.tv.name != peer.name) updatePeers { list -> list.map { if (it.id == peer.id) it.copy(name = status.tv.name) else it } }
         return _states.value[peer.id] ?: ScreenState()
@@ -349,7 +285,7 @@ class ScreenLink(private val app: WiDoApp) {
 
     /** « Sur la TV » : ouvre cette page sur l'écran choisi. */
     suspend fun play(peer: Peer, play: HandoffPlay): Boolean {
-        val ok = LinkClient.call(peer.host, peer.port, "POST", "/play", peer.token, LinkProtocol.encode(HandoffPlay.serializer(), play)) != null
+        val ok = withContext(Dispatchers.IO) { guest.play(peer, play) }
         if (ok) {
             delay(1_500)
             refresh(peer)
@@ -359,8 +295,7 @@ class ScreenLink(private val app: WiDoApp) {
 
     /** « Reprendre sur le téléphone » : la TV se met en pause et dit où elle en était. */
     suspend fun take(peer: Peer): NowPlaying? {
-        val raw = LinkClient.call(peer.host, peer.port, "POST", "/take", peer.token) ?: return null
-        val status = LinkProtocol.decode(LinkStatus.serializer(), raw) ?: return null
+        val status = withContext(Dispatchers.IO) { guest.take(peer) } ?: return null
         setState(peer.id) { it.copy(online = true, status = status, receivedAt = System.currentTimeMillis()) }
         return status.playing
     }
@@ -405,35 +340,36 @@ class ScreenLink(private val app: WiDoApp) {
         return discovery.found.value.filter { it.advert.role == DeviceRole.TV && it.advert.groupHash == hash }
     }
 
+    /** TV → TV : où en est la synchro avec chaque TV du groupe (en mémoire : au redémarrage, une synchro complète). */
+    private val groupCursors = HashMap<String, SyncCursor>()
+
     suspend fun syncNow() = syncMutex.withLock {
         lastSync = System.currentTimeMillis()
-        if (isTv) {
-            val g = group ?: return@withLock
-            val token = LinkProtocol.groupToken(g.secret)
-            for (tv in groupPeers()) exchange(tv.host, tv.port, token, null)
-        } else {
-            for (peer in _peers.value.filter { it.level == LinkLevel.MINE && it.role == DeviceRole.TV }) {
-                val reply = exchange(peer.host, peer.port, peer.token, group)
-                if (reply != null) {
-                    setState(peer.id) { it.copy(online = true, syncRefused = !reply.accepted) }
-                    if (reply.accepted) adoptGroup(reply.group)
+        withContext(Dispatchers.IO) {
+            if (isTv) {
+                val g = group ?: return@withContext
+                val token = LinkProtocol.groupToken(g.secret)
+                for (tv in groupPeers()) {
+                    val result = guest.sync(tv.host, tv.port, token, store, groupCursors[tv.advert.id] ?: SyncCursor())
+                    if (result != null && result.reply.accepted) groupCursors[tv.advert.id] = result.cursor
+                }
+            } else {
+                for (peer in _peers.value.filter { it.level == LinkLevel.MINE && it.role == DeviceRole.TV }) {
+                    val result = guest.sync(peer.host, peer.port, peer.token, store, peer.cursor, group) ?: continue
+                    setState(peer.id) { it.copy(online = true, syncRefused = !result.reply.accepted) }
+                    if (result.reply.accepted) {
+                        updatePeers { list -> list.map { if (it.id == peer.id) it.copy(cursor = result.cursor) else it } }
+                        adoptGroup(result.reply.group)
+                    }
                 }
             }
         }
     }
 
-    private suspend fun exchange(host: String, port: Int, token: String, group: GroupKey?): SyncReply? {
-        val envelope = SyncEnvelope(device, app.repository.syncRecords(), group)
-        val raw = LinkClient.call(host, port, "POST", "/sync", token, LinkProtocol.encode(SyncEnvelope.serializer(), envelope), timeoutMs = 8_000)
-        val reply = raw?.let { LinkProtocol.decode(SyncReply.serializer(), it) } ?: return null
-        if (reply.accepted) app.repository.applySync(reply.records)
-        return reply
-    }
-
     init {
         // Les commandes partent dans l'ordre, une à une (touches, texte, déplacements du pavé).
         scope.launch {
-            for ((peer, json) in commands) LinkClient.call(peer.host, peer.port, "POST", "/cmd", peer.token, json, timeoutMs = 2_000)
+            for ((peer, json) in commands) guest.command(peer, json)
         }
         // Toute modification de la bibliothèque part vers mes écrans (regroupée, au plus toutes les 30 s).
         scope.launch { app.repository.syncVersion.drop(1).collect { syncSoon() } }

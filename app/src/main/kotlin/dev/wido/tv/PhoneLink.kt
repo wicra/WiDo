@@ -1,5 +1,7 @@
 package dev.wido.tv
 
+import dev.wido.core.MiniHttpServer
+
 import android.os.Handler
 import android.os.Looper
 import dev.wido.core.PhoneProtocol
@@ -16,7 +18,7 @@ class PhoneLink(
 ) {
     private val token = ByteArray(16).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
     private val main = Handler(Looper.getMainLooper())
-    private val server = MiniHttpServer("WiDoPhoneLink") { request, body ->
+    private val server = MiniHttpServer("WiDoPhoneLink", log = { m, e -> android.util.Log.w("WiDoHttp", m, e) }) { request, body ->
         val method = request.method
         val path = request.path
         when {

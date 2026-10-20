@@ -11,18 +11,34 @@ import kotlinx.serialization.json.encodeToJsonElement
 /**
  * Une valeur synchronisée : sa clé, sa valeur (null = supprimée) et l'heure de sa dernière modification.
  * Une suppression est gardée (« pierre tombale ») pour qu'un autre écran ne fasse pas revenir l'élément.
+ * `s` : numéro d'arrivée dans le registre de cet écran (synchro incrémentale), propre à chaque écran.
  */
 @Serializable
-data class SyncRecord(val k: String, val v: JsonElement? = null, val t: Long) {
+data class SyncRecord(val k: String, val v: JsonElement? = null, val t: Long, val s: Long = 0) {
     val deleted: Boolean get() = v == null || v is JsonNull
+
+    /** Même contenu (le numéro d'arrivée n'en fait pas partie). */
+    fun sameAs(other: SyncRecord) = k == other.k && t == other.t && v == other.v
 }
+
+/** Ce qu'un écran envoie : les valeurs arrivées après un numéro, son numéro actuel et son identité. */
+data class SyncDelta(val records: List<SyncRecord>, val seq: Long, val epoch: String)
 
 /**
  * Registre de synchronisation : chaque clé garde sa version la plus récente (« le dernier qui écrit
  * gagne »). Fusionner deux registres donne le même résultat dans n'importe quel ordre, sur n'importe
  * quel écran : pas de serveur, pas de conflit à trancher à la main.
+ *
+ * Chaque valeur qui entre (modifiée ici ou reçue d'un autre écran) reçoit un numéro croissant : un autre
+ * écran qui connaît le dernier numéro vu ne reçoit que la suite. `epoch` identifie le registre : s'il
+ * change (appli réinstallée), les autres écrans renvoient tout.
  */
-class SyncLedger(val records: Map<String, SyncRecord> = emptyMap()) {
+class SyncLedger(
+    val records: Map<String, SyncRecord> = emptyMap(),
+    val epoch: String = newEpoch(),
+) {
+    /** Dernier numéro d'arrivée. */
+    val seq: Long = records.values.maxOfOrNull { it.s } ?: 0
 
     /** Les valeurs vivantes (sans les suppressions). */
     val live: Map<String, JsonElement>
@@ -34,12 +50,17 @@ class SyncLedger(val records: Map<String, SyncRecord> = emptyMap()) {
     fun merge(incoming: Collection<SyncRecord>): SyncLedger {
         if (incoming.isEmpty()) return this
         val out = records.toMutableMap()
+        var next = seq
+        var changed = false
         for (r in incoming) {
             if (r.k.isEmpty() || r.k.length > MAX_KEY) continue
             val mine = out[r.k]
-            if (mine == null || wins(r, mine)) out[r.k] = r
+            if (mine == null || wins(r, mine)) {
+                out[r.k] = r.copy(s = ++next)
+                changed = true
+            }
         }
-        return SyncLedger(out)
+        return if (changed) SyncLedger(out, epoch) else this
     }
 
     /**
@@ -48,38 +69,51 @@ class SyncLedger(val records: Map<String, SyncRecord> = emptyMap()) {
      */
     fun stamp(current: Map<String, JsonElement>, now: Long, scope: (String) -> Boolean = { true }): SyncLedger {
         val out = records.toMutableMap()
+        var next = seq
         var changed = false
         for ((k, v) in current) {
             val mine = out[k]
             if (mine == null || mine.deleted || mine.v != v) {
-                out[k] = SyncRecord(k, v, maxOf(now, (mine?.t ?: 0) + 1))
+                out[k] = SyncRecord(k, v, maxOf(now, (mine?.t ?: 0) + 1), ++next)
                 changed = true
             }
         }
         for (mine in records.values) {
             if (!mine.deleted && mine.k !in current && scope(mine.k)) {
-                out[mine.k] = SyncRecord(mine.k, null, maxOf(now, mine.t + 1))
+                out[mine.k] = SyncRecord(mine.k, null, maxOf(now, mine.t + 1), ++next)
                 changed = true
             }
         }
-        return if (changed) SyncLedger(out) else this
+        return if (changed) SyncLedger(out, epoch) else this
     }
 
     /** Oublie les suppressions plus vieilles que `maxAgeMs` (tous les écrans les ont vues depuis). */
     fun prune(now: Long, maxAgeMs: Long = TOMBSTONE_MS): SyncLedger {
         val kept = records.filterValues { !it.deleted || now - it.t < maxAgeMs }
-        return if (kept.size == records.size) this else SyncLedger(kept)
+        return if (kept.size == records.size) this else SyncLedger(kept, epoch)
     }
 
-    /** Ce qui a changé depuis `since` (synchro incrémentale). */
-    fun since(since: Long): List<SyncRecord> = records.values.filter { it.t > since }
+    /**
+     * Ce qu'un autre écran n'a pas encore : tout ce qui est arrivé après `seq` dans ce registre-ci. Si
+     * `knownEpoch` n'est pas le nôtre (registre inconnu ou recréé), tout.
+     */
+    fun delta(since: Long, knownEpoch: String): SyncDelta {
+        val all = knownEpoch != epoch || since < 0
+        return SyncDelta(records.values.filter { all || it.s > since }, seq, epoch)
+    }
 
     val latest: Long get() = records.values.maxOfOrNull { it.t } ?: 0
 
-    fun encode(): String = json.encodeToString(ListSerializer(SyncRecord.serializer()), records.values.sortedBy { it.k })
+    fun encode(): String = json.encodeToString(FileModel.serializer(), FileModel(epoch, records.values.sortedBy { it.s }))
 
-    override fun equals(other: Any?) = other is SyncLedger && other.records == records
-    override fun hashCode() = records.hashCode()
+    /** Même contenu (les numéros d'arrivée et l'identité du registre n'en font pas partie). */
+    override fun equals(other: Any?) =
+        other is SyncLedger && other.records.size == records.size && records.all { (k, r) -> other.records[k]?.sameAs(r) == true }
+
+    override fun hashCode() = records.values.sumOf { it.k.hashCode() * 31 + it.t.hashCode() }
+
+    @Serializable
+    private data class FileModel(val e: String, val r: List<SyncRecord>)
 
     companion object {
         const val MAX_KEY = 2100
@@ -87,9 +121,18 @@ class SyncLedger(val records: Map<String, SyncRecord> = emptyMap()) {
 
         private val json = Json { ignoreUnknownKeys = true }
 
-        fun decode(text: String): SyncLedger = runCatching {
-            SyncLedger(json.decodeFromString(ListSerializer(SyncRecord.serializer()), text).associateBy { it.k })
-        }.getOrDefault(SyncLedger())
+        fun newEpoch(): String = java.util.UUID.randomUUID().toString().take(8)
+
+        /** Relit le fichier (ancien format sans numéros compris : ils sont attribués à la lecture). */
+        fun decode(text: String): SyncLedger {
+            runCatching { json.decodeFromString(FileModel.serializer(), text) }.getOrNull()?.let { file ->
+                return SyncLedger(file.r.associateBy { it.k }, file.e)
+            }
+            return runCatching {
+                val old = json.decodeFromString(ListSerializer(SyncRecord.serializer()), text)
+                SyncLedger(old.mapIndexed { i, r -> r.copy(s = i + 1L) }.associateBy { it.k })
+            }.getOrDefault(SyncLedger())
+        }
 
         private fun wins(a: SyncRecord, b: SyncRecord): Boolean =
             a.t > b.t || (a.t == b.t && (a.v?.toString() ?: "") > (b.v?.toString() ?: ""))

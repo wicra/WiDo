@@ -73,13 +73,37 @@ class SyncLedgerTest {
     @Test fun encodeDecodeRoundTrip() {
         val a = SyncLedger().stamp(mapOf("x" to v("1"), "y" to v("2")), now = 7).stamp(mapOf("x" to v("1")), now = 9)
         assertEquals(a, SyncLedger.decode(a.encode()))
+        assertEquals(a.epoch, SyncLedger.decode(a.encode()).epoch)
+        assertEquals(a.seq, SyncLedger.decode(a.encode()).seq)
         assertEquals(SyncLedger(), SyncLedger.decode("pas du json"))
     }
 
-    @Test fun sinceReturnsNewerRecords() {
-        val a = SyncLedger().stamp(mapOf("x" to v("1")), now = 10).stamp(mapOf("x" to v("1"), "y" to v("2")), now = 20)
-        assertEquals(listOf("y"), a.since(10).map { it.k })
-        assertEquals(20, a.latest)
+    @Test fun deltaSendsOnlyWhatArrivedAfterASequence() {
+        val a = SyncLedger().stamp(mapOf("x" to v("1")), now = 10)
+        val seenUpTo = a.seq
+        val b = a.stamp(mapOf("x" to v("1"), "y" to v("2")), now = 20)
+        assertEquals(listOf("y"), b.delta(seenUpTo, b.epoch).records.map { it.k })
+        assertEquals(20, b.latest)
+        // Registre inconnu (autre epoch) : tout.
+        assertEquals(setOf("x", "y"), b.delta(seenUpTo, "autre").records.map { it.k }.toSet())
+    }
+
+    @Test fun mergedRecordsGetNewSequenceNumbersForThirdScreens() {
+        val tv1 = SyncLedger().stamp(mapOf("x" to v("1")), now = 10)
+        val phone = SyncLedger().stamp(mapOf("y" to v("2")), now = 5)
+        val seen = tv1.seq
+        // Le téléphone apporte « y » à la TV 1 : une autre TV qui avait tout vu jusque-là doit le recevoir.
+        val merged = tv1.merge(phone.records.values)
+        assertEquals(listOf("y"), merged.delta(seen, merged.epoch).records.map { it.k })
+        // Rien de neuf : pas de nouveau numéro.
+        assertTrue(merged.merge(phone.records.values) === merged)
+    }
+
+    @Test fun legacyFileIsRead() {
+        val legacy = "[{\"k\":\"x\",\"v\":\"1\",\"t\":3}]"
+        val ledger = SyncLedger.decode(legacy)
+        assertEquals(setOf("x"), ledger.live.keys)
+        assertEquals(1, ledger.seq)
     }
 }
 

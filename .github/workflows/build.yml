@@ -40,7 +40,33 @@ jobs:
             echo "::error title=Release build failed::$MSG"
             exit 1
           fi
+      - name: Tests Android (Robolectric) et captures d'écran
+        run: |
+          if ! ./gradlew :app:testDebugUnitTest --console=plain > tests.log 2>&1; then
+            MSG=$({ grep -E '^e: |FAILED|Exception' tests.log; grep -A25 'What went wrong' tests.log; } | head -80 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=Android tests failed::$MSG"
+            exit 1
+          fi
+      - name: Analyse Android (lint)
+        run: |
+          if ! ./gradlew :app:lintDebug --console=plain > lint.log 2>&1; then
+            MSG=$({ grep -E 'Error:|error:' app/build/reports/lint-results-debug.txt 2>/dev/null; grep -E ': Error: ' lint.log; grep -A25 'What went wrong' lint.log; } | head -80 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=Lint failed::$MSG"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: wido-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wido-captures-ecran
+          path: app/build/outputs/screens/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wido-lint
+          path: app/build/reports/lint-results-debug.*
+          if-no-files-found: ignore

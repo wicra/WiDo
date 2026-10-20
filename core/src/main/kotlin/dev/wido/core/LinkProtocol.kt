@@ -98,10 +98,32 @@ data class HandoffPlay(val url: String, val siteId: String? = null, val title: S
 data class GroupKey(val id: String, val secret: String)
 
 @Serializable
-data class SyncEnvelope(val from: DeviceInfo, val records: List<SyncRecord> = emptyList(), val group: GroupKey? = null)
+data class SyncEnvelope(
+    val from: DeviceInfo,
+    /** Ce que l'autre écran n'a pas encore de moi. */
+    val records: List<SyncRecord> = emptyList(),
+    val group: GroupKey? = null,
+    /** Ce que j'ai déjà reçu de lui : son dernier numéro vu (-1 : rien) et l'identité de son registre. */
+    val since: Long = -1,
+    val epoch: String = "",
+)
 
 @Serializable
-data class SyncReply(val accepted: Boolean, val records: List<SyncRecord> = emptyList(), val group: GroupKey? = null)
+data class SyncReply(
+    val accepted: Boolean,
+    val records: List<SyncRecord> = emptyList(),
+    val group: GroupKey? = null,
+    /** Numéro actuel et identité du registre qui répond : à renvoyer la fois suivante. */
+    val seq: Long = 0,
+    val epoch: String = "",
+)
+
+/**
+ * Où en est la synchro avec un autre écran : ce que j'ai reçu de lui (`theirEpoch`, `theirSeq`) et ce que
+ * je lui ai envoyé de mon registre (`myEpoch`, `sentSeq`). Seule la différence voyage.
+ */
+@Serializable
+data class SyncCursor(val theirEpoch: String = "", val theirSeq: Long = -1, val myEpoch: String = "", val sentSeq: Long = 0)
 
 /** Un appareil appairé, vu depuis l'autre. */
 @Serializable
@@ -115,6 +137,8 @@ data class Peer(
     val token: String,
     val level: String = LinkLevel.GUEST,
     val lastSeen: Long = 0,
+    /** Synchro incrémentale avec cet écran (côté téléphone). */
+    val cursor: SyncCursor = SyncCursor(),
 )
 
 /**

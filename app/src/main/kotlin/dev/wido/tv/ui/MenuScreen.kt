@@ -384,7 +384,7 @@ internal fun UpdateBanner(update: UpdateUi, onInstall: (ReleaseInfo) -> Unit, ho
 
 /** La scène : le site sélectionné en grand titre, son adresse, et ses actions. */
 @Composable
-private fun Hero(
+internal fun Hero(
     current: MenuSite?,
     /** Vidéo de Reprendre sélectionnée : son titre, son site et « Reprendre ». */
     watch: WatchEntry?,
@@ -485,7 +485,7 @@ private fun rememberEntrance(index: Int): Modifier {
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SiteCard(
+internal fun SiteCard(
     entry: MenuSite,
     index: Int,
     onClick: () -> Unit,
@@ -589,7 +589,7 @@ private fun CircleLogo(icon: SiteIcon?, name: String, focused: Boolean) {
 
 /** « Ajouter » : un cercle en pointillé discret, blanc plein au focus. */
 @Composable
-private fun AddCard(index: Int, onClick: () -> Unit, onFocus: () -> Unit) {
+internal fun AddCard(index: Int, onClick: () -> Unit, onFocus: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Column(rememberEntrance(index).width(CIRCLE_SLOT), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(CIRCLE_SLOT), contentAlignment = Alignment.Center) {

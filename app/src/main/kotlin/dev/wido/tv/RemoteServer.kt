@@ -1,5 +1,7 @@
 package dev.wido.tv
 
+import dev.wido.core.MiniHttpServer
+
 import android.os.Handler
 import android.os.Looper
 import dev.wido.core.LinkProtocol
@@ -87,7 +89,7 @@ class RemoteServer(
 
     private fun start() {
         if (server?.isRunning == true) return
-        val http = MiniHttpServer("WiDoRemote", LinkProtocol.MAX_BODY) { request, body -> route(request, body) }
+        val http = MiniHttpServer("WiDoRemote", LinkProtocol.MAX_BODY, log = { m, e -> android.util.Log.w("WiDoHttp", m, e) }) { request, body -> route(request, body) }
         val p = http.start(LinkProtocol.PORT) ?: return
         port = p
         server = http
@@ -111,8 +113,8 @@ class RemoteServer(
         return when {
             request.method == "GET" && request.path == "/" ->
                 if (browser) MiniHttpServer.Response(200, "text/html; charset=utf-8", RemoteProtocol.page(settings.remoteToken, labels())) else MiniHttpServer.FORBIDDEN
-            request.path == "/cmd" -> {
-                if (!browser && !(settings.screenLink && link().peerForToken(token) != null)) return MiniHttpServer.FORBIDDEN
+            // Télécommande du navigateur ; les appareils liés passent par le lien (même route, leur jeton).
+            request.path == "/cmd" && browser -> {
                 if (request.method != "POST") return MiniHttpServer.BAD_REQUEST
                 val command = RemoteProtocol.parse(body) ?: return MiniHttpServer.Response(400, body = "Bad command")
                 main.post { target?.onRemote(command) }

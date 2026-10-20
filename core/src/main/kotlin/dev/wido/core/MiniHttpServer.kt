@@ -1,7 +1,5 @@
-package dev.wido.tv
+package dev.wido.core
 
-import android.util.Log
-import dev.wido.core.PhoneProtocol
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -10,20 +8,26 @@ import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * Petit serveur HTTP pour le réseau local (saisie, télécommande, lien entre écrans). Le gestionnaire
- * vérifie lui-même le jeton (`t` dans l'adresse). Les requêtes sont traitées une par une, sur un fil à part.
+ * vérifie lui-même le jeton (`t` dans l'adresse). Jusqu'à 4 requêtes sont traitées en même temps : une
+ * synchro lente ne retarde jamais une touche de la télécommande.
  */
 class MiniHttpServer(
     private val name: String,
     private val maxBody: Int = PhoneProtocol.MAX_BODY,
-    /** (requête, corps) → réponse. Appelé hors du fil principal. */
+    /** Journal des erreurs (Android : Log.w). */
+    private val log: (String, Throwable?) -> Unit = { _, _ -> },
+    /** (requête, corps) → réponse. Appelé hors du fil principal, éventuellement sur plusieurs fils. */
     private val handler: (request: PhoneProtocol.Request, body: String) -> Response,
 ) {
     data class Response(val status: Int, val type: String = "text/plain", val body: String = "")
 
     @Volatile private var server: ServerSocket? = null
+    @Volatile private var workers: ExecutorService? = null
 
     val isRunning: Boolean get() = server?.isClosed == false
 
@@ -31,6 +35,7 @@ class MiniHttpServer(
     fun start(port: Int): Int? {
         val socket = runCatching { ServerSocket(port) }.recoverCatching { ServerSocket(0) }.getOrNull() ?: return null
         server = socket
+        workers = Executors.newFixedThreadPool(WORKERS) { r -> Thread(r, "$name-worker").apply { isDaemon = true } }
         Thread({ serve(socket) }, name).apply { isDaemon = true }.start()
         return socket.localPort
     }
@@ -38,6 +43,8 @@ class MiniHttpServer(
     fun stop() {
         runCatching { server?.close() }
         server = null
+        workers?.shutdownNow()
+        workers = null
     }
 
     private fun serve(socket: ServerSocket) {
@@ -47,10 +54,16 @@ class MiniHttpServer(
             } catch (_: SocketException) {
                 return // fermé par stop()
             } catch (e: Exception) {
-                Log.w(TAG, "Connexion refusée", e)
+                log("Connexion refusée", e)
                 continue
             }
-            runCatching { client.use { handle(it) } }.onFailure { Log.w(TAG, "Requête illisible", it) }
+            val pool = workers
+            if (pool == null) {
+                runCatching { client.close() }
+                return
+            }
+            runCatching { pool.execute { runCatching { client.use { handle(it) } }.onFailure { log("Requête illisible", it) } } }
+                .onFailure { runCatching { client.close() } }
         }
     }
 
@@ -107,7 +120,7 @@ class MiniHttpServer(
     }
 
     companion object {
-        private const val TAG = "WiDoHttp"
+        private const val WORKERS = 4
 
         fun json(body: String) = Response(200, "application/json; charset=utf-8", body)
         val FORBIDDEN = Response(403, body = "Forbidden")

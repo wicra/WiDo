@@ -88,7 +88,7 @@ private enum class PhoneTab { Home, Continue, Tv, Settings }
 private data class PhoneMessage(val text: String, val undo: (() -> Unit)? = null)
 
 /** Ce qu'un appui long a désigné : une vidéo de Reprendre ou une page épinglée. */
-private sealed interface LongPressed {
+internal sealed interface LongPressed {
     data class Watch(val entry: WatchEntry) : LongPressed
     data class Pinned(val pin: Pin) : LongPressed
 }
@@ -282,7 +282,7 @@ fun PhoneHome(
 
 @OptIn(ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun HomeTab(
+internal fun HomeTab(
     sites: List<MenuSite>,
     watching: List<WatchEntry>,
     pins: List<Pin>,
@@ -416,7 +416,7 @@ private fun PhoneAddCard(onClick: () -> Unit) {
  * un fin trait d'avancement ; le toucher ouvre l'onglet TV.
  */
 @Composable
-private fun MiniPlayer(now: NowPlaying, receivedAt: Long, tvName: String, onToggle: () -> Unit, onOpen: () -> Unit) {
+internal fun MiniPlayer(now: NowPlaying, receivedAt: Long, tvName: String, onToggle: () -> Unit, onOpen: () -> Unit) {
     var tick by remember { mutableStateOf(System.currentTimeMillis()) }
     androidx.compose.runtime.LaunchedEffect(now) {
         while (true) {
@@ -528,7 +528,7 @@ private fun SideRail(tab: PhoneTab, tvOnline: Boolean, onTab: (PhoneTab) -> Unit
 
 @OptIn(ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun ContinueTab(
+internal fun ContinueTab(
     entries: List<WatchEntry>,
     siteMap: Map<String, Site>,
     tvName: String?,

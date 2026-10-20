@@ -22,6 +22,7 @@ import dev.wido.core.UserHides
 import dev.wido.core.SeenDomains
 import dev.wido.core.SiteOverrides
 import dev.wido.core.SyncData
+import dev.wido.core.SyncDelta
 import dev.wido.core.SyncLedger
 import dev.wido.core.SyncRecord
 import dev.wido.core.Site
@@ -347,13 +348,22 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         _syncVersion.value = _syncVersion.value + 1
     }
 
-    /** Le registre à envoyer à un autre écran. */
+    /** Ce qu'un autre écran n'a pas encore de moi (tout si `epoch` n'est pas celui de mon registre). */
     @Synchronized
-    fun syncRecords(): List<SyncRecord> {
+    fun syncOutgoing(since: Long, epoch: String): SyncDelta {
         stamp()
         val pruned = currentLedger().prune(System.currentTimeMillis())
         ledger = pruned
-        return pruned.records.values.toList()
+        return pruned.delta(since, epoch)
+    }
+
+    /** TV qui reçoit une synchro : ce que l'autre n'a pas encore (avant fusion), puis la fusion. */
+    @Synchronized
+    fun syncExchange(incoming: List<SyncRecord>, since: Long, epoch: String): SyncDelta {
+        stamp()
+        val out = currentLedger().prune(System.currentTimeMillis()).also { ledger = it }.delta(since, epoch)
+        applySync(incoming)
+        return out.copy(seq = currentLedger().seq)
     }
 
     /** Fusionne ce qu'envoie un autre écran ; renvoie vrai si la bibliothèque locale a changé. */
