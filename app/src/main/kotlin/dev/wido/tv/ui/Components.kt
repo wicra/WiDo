@@ -1,6 +1,18 @@
 package dev.wido.tv.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -106,8 +118,9 @@ fun Modifier.glassPanel(color: Color = Palette.Panel, shape: Shape = PanelShape,
     .border(1.dp, Palette.GlassBorder, shape)
 
 /**
- * Champ de saisie en verre : le libellé au-dessus de la valeur. Avec le focus, il devient blanc,
- * le texte passe en encre et le curseur en bleu.
+ * Champ de saisie en verre, pensé pour la télécommande : le focus ne fait que le sélectionner (il
+ * s'éclaire), **OK** entre dans la saisie et ouvre le clavier. Valider au clavier, ou quitter le champ
+ * avec les flèches, termine la saisie. `onPhone` ajoute à droite un bouton « saisir au téléphone ».
  */
 @Composable
 fun GlassTextField(
@@ -116,44 +129,109 @@ fun GlassTextField(
     label: String,
     modifier: Modifier = Modifier,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
-    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    focusRequester: FocusRequester? = null,
+    onPhone: (() -> Unit)? = null,
 ) {
-    var focused by remember { mutableStateOf(false) }
-    val background by animateColorAsState(if (focused) Color.White else Color.White.copy(alpha = 0.10f), label = "fieldFill")
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        singleLine = true,
-        textStyle = TextStyle(
-            fontFamily = Jakarta,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (focused) Palette.Ink else Palette.TextPrimary,
-        ),
-        cursorBrush = SolidColor(Palette.Accent),
-        keyboardOptions = keyboardOptions,
-        keyboardActions = keyboardActions,
-        modifier = modifier
-            .onFocusChanged { focused = it.isFocused }
-            .liftEffect(focused, RowShape, focusScale = 1.01f),
-        decorationBox = { inner ->
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RowShape)
-                    .background(background)
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-            ) {
-                Text(
-                    label,
-                    color = if (focused) Palette.InkSecondary else Color.White.copy(alpha = 0.55f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
+    var editing by remember { mutableStateOf(false) }
+    // Après une saisie, le focus revient sur le champ affiché (et non au début de la fenêtre).
+    var refocus by remember { mutableStateOf(false) }
+    val display = focusRequester ?: remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    fun finish() {
+        keyboard?.hide()
+        editing = false
+        refocus = true
+    }
+
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.weight(1f)) {
+            if (editing) {
+                val input = remember { FocusRequester() }
+                var hadFocus by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    runCatching { input.requestFocus() }
+                    keyboard?.show()
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    singleLine = true,
+                    textStyle = TextStyle(fontFamily = Jakarta, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink),
+                    cursorBrush = SolidColor(Palette.Accent),
+                    keyboardOptions = keyboardOptions,
+                    keyboardActions = KeyboardActions(onDone = { finish() }, onNext = { finish() }, onGo = { finish() }, onSearch = { finish() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(input)
+                        .onFocusChanged {
+                            if (it.isFocused) hadFocus = true else if (hadFocus) editing = false
+                        },
+                    decorationBox = { inner -> FieldBox(label, focused = true) { inner() } },
                 )
-                inner()
+            } else {
+                LaunchedEffect(refocus) {
+                    if (refocus) {
+                        refocus = false
+                        runCatching { display.requestFocus() }
+                    }
+                }
+                FocusSurface(
+                    onClick = { editing = true },
+                    modifier = Modifier.fillMaxWidth().focusRequester(display),
+                    shape = RowShape,
+                    idle = Color.White.copy(alpha = 0.10f),
+                    focusScale = 1.01f,
+                    contentAlignment = Alignment.CenterStart,
+                ) { focused ->
+                    FieldBox(label, focused) {
+                        Text(
+                            value.ifEmpty { " " },
+                            color = onSurface(focused),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
-        },
-    )
+        }
+        if (onPhone != null) {
+            FocusSurface(onPhone, Modifier.size(58.dp), shape = RowShape, idle = Color.White.copy(alpha = 0.10f)) { focused ->
+                PhoneIcon(onSurface(focused))
+            }
+        }
+    }
+}
+
+/** Libellé au-dessus de la valeur, sur fond blanc (sélectionné ou en saisie) ou verre. */
+@Composable
+private fun FieldBox(label: String, focused: Boolean, value: @Composable () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RowShape)
+            .background(if (focused) Color.White else Color.Transparent)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
+        Text(label, color = if (focused) Palette.InkSecondary else Color.White.copy(alpha = 0.55f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        value()
+    }
+}
+
+/** Petit téléphone dessiné : contour arrondi et bouton. */
+@Composable
+fun PhoneIcon(color: Color, size: Dp = 24.dp) {
+    Canvas(Modifier.size(size)) {
+        val w = this.size.width * 0.52f
+        val h = this.size.height * 0.88f
+        val left = (this.size.width - w) / 2
+        val top = (this.size.height - h) / 2
+        val stroke = this.size.width * 0.09f
+        drawRoundRect(color, Offset(left, top), Size(w, h), CornerRadius(w * 0.22f), style = Stroke(stroke))
+        drawCircle(color, radius = stroke * 0.7f, center = Offset(this.size.width / 2, top + h - stroke * 2.2f))
+    }
 }
 
 /**

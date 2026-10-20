@@ -34,7 +34,7 @@ Fichiers fournis :
 | `userAgent` | texte | `default` | `default` (WebView), `desktop` (Chrome Linux) ou une chaîne complète. |
 | `color` | texte | **automatique** | Optionnel. Sans lui, la couleur de la carte et de l'ambiance du menu est tirée de l'icône du site. Renseigne `#RRGGBB` seulement pour l'imposer. |
 | `icon` | texte | détecté | URL `https` d'une icône. Sans elle, WiDo cherche le favicon du site (voir plus bas). |
-| `navigation` | texte | `strict` | `strict` : la fenêtre ne navigue que sur le domaine du site et `allowedDomains` (le plus sûr contre les pubs). `relaxed` : navigation libre après un clic ou une redirection du serveur, **sauf** vers les domaines bloqués par les listes. À réserver aux sites qui ont besoin de redirections utiles (YouTube, connexions). `mixed` : comme `strict`, mais la pub refusée s'ouvre dans une fenêtre affichée 5 s puis fermée, pour les sites qui exigent qu'elle soit vue. Voir [BLOCKING](BLOCKING.md). |
+| `navigation` | texte | `strict` | `strict` : la fenêtre ne navigue que sur le domaine du site et `allowedDomains` (le plus sûr contre les pubs). `relaxed` : navigation libre, **sauf** vers les domaines bloqués par les listes. À réserver aux sites qui ont besoin de redirections utiles (YouTube, connexions). `mixed` : comme `strict`, mais la pub refusée s'ouvre dans une fenêtre affichée 5 s puis fermée, pour les sites qui exigent qu'elle soit vue. Voir [BLOCKING](BLOCKING.md). |
 | `blockAds` | booléen | `true` | `false` : les listes de blocage et les règles globales ne s'appliquent pas à ce site (seules ses propres `rules`). |
 | `allowInsecure` | booléen | `false` | Autorise `http` pour **ce site seulement** (serveur local type `http://192.168.1.20:8096`). |
 

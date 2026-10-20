@@ -20,7 +20,7 @@ Chaque bouton s'allume (✓) quand il est actif :
 | **Bloquer les pop-ups** | Empêche les pages d'ouvrir des fenêtres. | Activé |
 | **Masquer les cookies** | Cache les bandeaux de consentement courants. | Désactivé |
 | **Connexions (Google, Microsoft…)** | Autorise les pages de connexion Google, YouTube, Microsoft, Apple et Facebook. | Désactivé |
-| **Redirections strictes / souples / mixtes** | Chaque appui passe au mode suivant. Strictes : le site ne peut aller que sur son propre domaine. Souples : ailleurs aussi après un clic, sauf vers les pubs connues des listes. Mixtes : la pub s'ouvre dans une fenêtre fermée seule une fois affichée. Voir [BLOCKING](BLOCKING.md). | Strictes |
+| **Redirections strictes / souples / mixtes** | Chaque appui passe au mode suivant. Strictes : le site ne peut aller que sur son propre domaine. Souples : partout, sauf vers les pubs connues des listes. Mixtes : la pub s'ouvre dans une fenêtre fermée seule une fois affichée. Voir [BLOCKING](BLOCKING.md). | Strictes |
 
 ## Domaines autorisés et bloqués : on choisit, on ne saisit pas
 

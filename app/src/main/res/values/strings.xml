@@ -172,4 +172,6 @@
     <string name="v_mixed">Mixtes</string>
     <string name="ad_label">Publicité</string>
     <string name="ad_closing">Publicité · fermeture dans %1$d s</string>
+    <string name="editor_leave_hint">Retour encore pour quitter sans enregistrer.</string>
+    <string name="phone_hint_name">Scanne ce code avec ton téléphone, puis tape le nom du site.</string>
 </resources>

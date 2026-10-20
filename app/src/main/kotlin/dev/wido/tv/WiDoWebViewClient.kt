@@ -84,7 +84,7 @@ class WiDoWebViewClient(
             allowOnceUrl = null
             return false
         }
-        when (NavigationPolicy.decide(url, site, blocker, request.hasGesture(), request.isRedirect)) {
+        when (NavigationPolicy.decide(url, site, blocker)) {
             NavigationPolicy.Decision.ALLOW -> return false
             NavigationPolicy.Decision.AD_WINDOW -> {
                 onAdWindow(url)

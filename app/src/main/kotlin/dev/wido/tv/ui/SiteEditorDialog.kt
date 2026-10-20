@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -36,6 +37,8 @@ import dev.wido.core.Site
 import dev.wido.tv.R
 
 private const val SCHEME = "https://"
+
+private enum class PhoneTarget { Url, Name }
 
 /** Suffixes proposés en un bouton : taper une adresse à la télécommande est pénible. */
 private val URL_HELPERS = listOf("www.", ".com", ".fr", ".org", ".net", ".tv", "/")
@@ -60,6 +63,7 @@ fun SiteEditorDialog(
     suggestBlock: List<String> = emptyList(),
     defaultNavigation: String = Navigation.STRICT,
 ) {
+    val context = LocalContext.current
     val start = initial?.let { LocalSites.optionsOf(it) } ?: LocalSites.SiteOptions(navigation = defaultNavigation)
 
     var url by remember { mutableStateOf(initial?.url ?: SCHEME) }
@@ -76,7 +80,10 @@ fun SiteEditorDialog(
     val allowed = remember { mutableStateListOf<String>().apply { addAll(start.allowedDomains) } }
     val blocked = remember { mutableStateListOf<String>().apply { addAll(start.blockedDomains) } }
     val urlFocus = remember { FocusRequester() }
-    var showPhone by remember { mutableStateOf(false) }
+    // Champ rempli depuis le téléphone (null : pas de QR code affiché).
+    var phoneTarget by remember { mutableStateOf<PhoneTarget?>(null) }
+    // Premier Retour sur un formulaire invalide : on prévient ; le second ferme sans enregistrer.
+    var leaveWarned by remember { mutableStateOf(false) }
 
     fun setUrl(next: String) {
         url = next
@@ -97,10 +104,26 @@ fun SiteEditorDialog(
         error = onSave(name, url, options)
     }
 
+    /** Rien n'a été saisi pour un nouveau site : quitter ne crée rien. */
+    fun pristine() = initial == null && (url.isBlank() || url == SCHEME) && name.isBlank()
+
+    /**
+     * Retour : on enregistre, même si l'on quitte sans le vouloir. Un formulaire invalide affiche
+     * d'abord l'erreur ; un second Retour ferme alors sans enregistrer.
+     */
+    fun leave() {
+        if (pristine() || leaveWarned) return onDismiss()
+        submit()
+        error?.let {
+            error = "$it " + context.getString(R.string.editor_leave_hint)
+            leaveWarned = true
+        }
+    }
+
     LaunchedEffect(Unit) { if (initial == null) runCatching { urlFocus.requestFocus() } }
 
     // Plein écran : le formulaire est un panneau de verre posé sur des halos ambre et bleu.
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    Dialog(onDismissRequest = { leave() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(
             Modifier
                 .fillMaxSize()
@@ -126,14 +149,15 @@ fun SiteEditorDialog(
                         value = url,
                         onValueChange = { setUrl(it) },
                         label = stringResource(R.string.field_url),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
-                        modifier = Modifier.fillMaxWidth().focusRequester(urlFocus),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+                        modifier = Modifier.fillMaxWidth(),
+                        focusRequester = urlFocus,
+                        onPhone = { phoneTarget = PhoneTarget.Url },
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Chip(SCHEME, { setUrl(SCHEME + url.removePrefix("https://").removePrefix("http://")) })
                         URL_HELPERS.forEach { helper -> Chip(helper, { setUrl(url + helper) }) }
                         Chip("⌫", { setUrl(url.dropLast(1)) })
-                        Chip(stringResource(R.string.editor_phone), { showPhone = true })
                     }
 
                     // 2. Le nom, déduit de l'adresse, modifiable.
@@ -142,8 +166,8 @@ fun SiteEditorDialog(
                         onValueChange = { name = it; nameEdited = true; error = null },
                         label = stringResource(R.string.field_name),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { submit() }),
                         modifier = Modifier.fillMaxWidth(),
+                        onPhone = { phoneTarget = PhoneTarget.Name },
                     )
                     error?.let { Text(it, color = Palette.Warning, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
 
@@ -179,14 +203,20 @@ fun SiteEditorDialog(
             }
         }
     }
-    if (showPhone) {
+    phoneTarget?.let { target ->
         PhoneDialog(
-            stringResource(R.string.phone_hint_url),
+            stringResource(if (target == PhoneTarget.Url) R.string.phone_hint_url else R.string.phone_hint_name),
             onMessage = {
-                setUrl(it.text.trim())
-                showPhone = false
+                val text = it.text.trim()
+                if (target == PhoneTarget.Url) {
+                    setUrl(text)
+                } else {
+                    name = text
+                    nameEdited = true
+                }
+                phoneTarget = null
             },
-            onDismiss = { showPhone = false },
+            onDismiss = { phoneTarget = null },
         )
     }
 }

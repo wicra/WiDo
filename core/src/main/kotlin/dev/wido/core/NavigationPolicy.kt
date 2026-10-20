@@ -25,13 +25,10 @@ object NavigationPolicy {
     }
 
     /**
-     * Décision pour une navigation de la fenêtre principale.
-     *
-     * `hasGesture` : déclenchée par un clic de l'utilisateur ; `isRedirect` : redirection du serveur.
-     * En mode souple, une page d'un autre domaine n'est acceptée que dans ces deux cas : les
-     * redirections lancées seules par un script (minuteur, pub au chargement) sont refusées.
+     * Décision pour une navigation de la fenêtre principale. En mode souple, toute page d'un domaine
+     * que les listes ne bloquent pas est acceptée, qu'elle vienne d'un clic, d'un script ou du serveur.
      */
-    fun decide(url: String, site: Site, blocker: HostBlocker?, hasGesture: Boolean, isRedirect: Boolean): Decision {
+    fun decide(url: String, site: Site, blocker: HostBlocker?): Decision {
         val scheme = Hosts.schemeOf(url) ?: return Decision.BLOCK
         val host = Hosts.of(url) ?: return Decision.BLOCK
         val web = scheme == "https" || scheme == "http"
@@ -40,7 +37,7 @@ object NavigationPolicy {
         if (schemeOk && allowedDomains(site).any { Hosts.matches(host, it) }) return Decision.ALLOW
         return when (site.navigation) {
             Navigation.RELAXED ->
-                if (schemeOk && blocker != null && !blocker.isBlocked(host) && (hasGesture || isRedirect)) Decision.ALLOW else Decision.BLOCK
+                if (schemeOk && blocker != null && !blocker.isBlocked(host)) Decision.ALLOW else Decision.BLOCK
             Navigation.MIXED -> Decision.AD_WINDOW
             else -> Decision.BLOCK
         }

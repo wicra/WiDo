@@ -71,23 +71,22 @@ class NavigationDecisionTest {
 
     @Test fun ownDomainIsAlwaysAllowed() {
         for (s in listOf(site, relaxed, mixed)) {
-            kotlin.test.assertEquals(NavigationPolicy.Decision.ALLOW, NavigationPolicy.decide("https://www.site.example/x", s, blocker, hasGesture = false, isRedirect = false))
+            kotlin.test.assertEquals(NavigationPolicy.Decision.ALLOW, NavigationPolicy.decide("https://www.site.example/x", s, blocker))
         }
     }
 
-    @Test fun relaxedNeedsAClickOrServerRedirect() {
-        kotlin.test.assertEquals(NavigationPolicy.Decision.ALLOW, NavigationPolicy.decide("https://login.other/", relaxed, blocker, hasGesture = true, isRedirect = false))
-        kotlin.test.assertEquals(NavigationPolicy.Decision.ALLOW, NavigationPolicy.decide("https://login.other/", relaxed, blocker, hasGesture = false, isRedirect = true))
-        kotlin.test.assertEquals(NavigationPolicy.Decision.BLOCK, NavigationPolicy.decide("https://pub.other/", relaxed, blocker, hasGesture = false, isRedirect = false))
-        kotlin.test.assertEquals(NavigationPolicy.Decision.BLOCK, NavigationPolicy.decide("https://ads.example.net/", relaxed, blocker, hasGesture = true, isRedirect = false))
+    @Test fun relaxedAllowsAnyUnlistedDomain() {
+        kotlin.test.assertEquals(NavigationPolicy.Decision.ALLOW, NavigationPolicy.decide("https://login.other/", relaxed, blocker))
+        kotlin.test.assertEquals(NavigationPolicy.Decision.ALLOW, NavigationPolicy.decide("https://redirige.ailleurs.net/page", relaxed, blocker))
+        kotlin.test.assertEquals(NavigationPolicy.Decision.BLOCK, NavigationPolicy.decide("https://ads.example.net/", relaxed, blocker))
     }
 
     @Test fun mixedOpensForeignPagesInAdWindow() {
-        kotlin.test.assertEquals(NavigationPolicy.Decision.AD_WINDOW, NavigationPolicy.decide("https://ads.example.net/", mixed, blocker, hasGesture = false, isRedirect = false))
-        kotlin.test.assertEquals(NavigationPolicy.Decision.BLOCK, NavigationPolicy.decide("intent://x#Intent;end", mixed, blocker, hasGesture = true, isRedirect = false))
+        kotlin.test.assertEquals(NavigationPolicy.Decision.AD_WINDOW, NavigationPolicy.decide("https://ads.example.net/", mixed, blocker))
+        kotlin.test.assertEquals(NavigationPolicy.Decision.BLOCK, NavigationPolicy.decide("intent://x#Intent;end", mixed, blocker))
     }
 
     @Test fun strictBlocksForeignPages() {
-        kotlin.test.assertEquals(NavigationPolicy.Decision.BLOCK, NavigationPolicy.decide("https://login.other/", site, blocker, hasGesture = true, isRedirect = true))
+        kotlin.test.assertEquals(NavigationPolicy.Decision.BLOCK, NavigationPolicy.decide("https://login.other/", site, blocker))
     }
 }

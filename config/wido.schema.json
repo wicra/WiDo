@@ -37,7 +37,7 @@
         "userAgent": { "type": "string", "default": "default", "description": "default, desktop ou une chaîne complète." },
         "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
         "icon": { "type": "string", "pattern": "^https://", "description": "Icône de la carte (sinon le favicon du site est détecté)." },
-        "navigation": { "enum": ["strict", "relaxed", "mixed"], "default": "strict", "description": "strict : seulement le domaine du site ; relaxed : tout sauf les domaines bloqués (après un clic ou une redirection serveur) ; mixed : comme strict, mais la pub s'ouvre dans une fenêtre fermée automatiquement une fois affichée." },
+        "navigation": { "enum": ["strict", "relaxed", "mixed"], "default": "strict", "description": "strict : seulement le domaine du site ; relaxed : tout sauf les domaines bloqués ; mixed : comme strict, mais la pub s'ouvre dans une fenêtre fermée automatiquement une fois affichée." },
         "blockAds": { "type": "boolean", "default": true, "description": "false : ni listes ni règles globales pour ce site." },
         "allowInsecure": { "type": "boolean", "default": false, "description": "Autorise http (serveur local)." }
       }
