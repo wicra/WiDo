@@ -42,6 +42,10 @@ class WiDoApp : Application() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
+        // Android manque de mémoire alors que l'appli est à l'écran : souvent juste avant qu'il ne la ferme.
+        if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
+            CrashLog.event("Mémoire faible signalée par Android (niveau $level)")
+        }
         if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) WebViewPool.clear()
     }
 }

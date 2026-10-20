@@ -138,10 +138,11 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             this@PlayerActivity.site = site
             if (site == null) {
                 Toast.makeText(this@PlayerActivity, getString(R.string.player_unknown_site, siteId), Toast.LENGTH_LONG).show()
-                finish()
+                close("site inconnu")
                 return@launch
             }
             if (site.id != ConfigRepository.LINK_SITE_ID) settings.lastSiteId = site.id
+            CrashLog.event("Lecteur ouvert : ${site.name}" + (intent.getStringExtra(EXTRA_URL)?.let { " (${Hosts.of(it).orEmpty()})" } ?: ""))
             loadingLabel.text = getString(R.string.loading_site, site.name)
             val blocker = app.repository.blockerFor(site)
             val scripts = ScriptInjector(this@PlayerActivity, site)
@@ -513,7 +514,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private fun backToSites() {
         if (tv) UiSound.back()
         startActivity(MainActivity.showSites(this))
-        finish()
+        close("double Retour")
     }
 
     private fun goBackOrExit() {
@@ -526,7 +527,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 // Ouvert depuis le téléphone ou Home Assistant sans l'accueil derrière : on y revient au lieu de quitter.
                 if (tv) UiSound.back()
                 if (isTaskRoot) startActivity(Intent(this, MainActivity::class.java))
-                finish()
+                close("Retour (plus de page précédente)")
             }
         }
     }
@@ -539,7 +540,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private fun runKeyAction(action: KeyAction) {
         when (action) {
             KeyAction.NONE -> Unit
-            KeyAction.MENU -> finish()
+            KeyAction.MENU -> close("touche de couleur Menu")
             KeyAction.RELOAD -> webView?.reload()
             KeyAction.TOGGLE_CURSOR -> toggleCursor()
             KeyAction.ZOOM_IN -> changeZoom(1)
@@ -815,7 +816,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val zoomOut = action(getString(R.string.panel_zoom_out_short), Glyph.ZoomOut, stay = true) { changeZoom(-1) }
         val zoomIn = action(getString(R.string.panel_zoom_in_short), Glyph.ZoomIn, stay = true) { changeZoom(1) }
         val sleep = action(sleepLabel(), Glyph.Sleep, more = media == null, stay = true) { cycleSleep() }
-        val sites = action(getString(R.string.panel_sites), Glyph.Sites) { finish() }
+        val sites = action(getString(R.string.panel_sites), Glyph.Sites) { close("menu rapide : Sites") }
         val hide = if (tv) action(getString(R.string.tile_hide), Glyph.Hide, more = media != null) { startPicking() } else null
         val siteHome = action(getString(R.string.tile_site_home), Glyph.Globe, more = media != null) { current?.let { webView?.loadUrl(it.url) } }
         val reload = action(getString(R.string.panel_reload), Glyph.Refresh, more = media != null) { webView?.reload() }
@@ -1027,7 +1028,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         media("pause")
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         Toast.makeText(this, R.string.toast_sleep, Toast.LENGTH_LONG).show()
-        finish()
+        close("minuteur de veille")
     }
 
     /** Autorise `host` pour ce site (gardé localement), recharge les règles puis ouvre la page refusée. */
@@ -1295,6 +1296,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
     }
 
+    /** Ferme le lecteur en notant pourquoi (fil d'événements du rapport de plantage). */
+    private fun close(why: String) {
+        CrashLog.event("Lecteur fermé : $why")
+        finish()
+    }
+
     override fun finish() {
         super.finish()
         @Suppress("DEPRECATION")
@@ -1391,7 +1398,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     override fun onRemote(command: RemoteCommand) {
         when (command) {
             is RemoteCommand.Key -> when (command.key) {
-                RemoteKey.HOME -> finish()
+                RemoteKey.HOME -> close("télécommande du téléphone : Accueil")
                 else -> pressKey(keyCodeOf(command.key))
             }
             is RemoteCommand.Move -> {
@@ -1426,7 +1433,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                     webView?.loadUrl(own)
                 } else {
                     startActivity(intent(this, ConfigRepository.LINK_SITE_ID, command.url))
-                    finish()
+                    close("lien du téléphone vers un autre site")
                 }
                 osd.showText(getString(R.string.osd_link_opened))
             }
@@ -1524,7 +1531,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 onEdit = {
                     hidePanel()
                     current?.let { startActivity(MainActivity.editSite(this, it.id)) }
-                    finish()
+                    close("page d'erreur : Modifier l'adresse")
                 },
             )
         }
@@ -1573,7 +1580,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 onRetry = {
                     // Une page toute neuve, à la même seconde, lecture lancée à la main (OK).
                     if (current != null) startActivity(intent(this, current.id, url, position))
-                    finish()
+                    close("page arrêtée : Réessayer")
                 },
                 onBack = { goHome() },
                 onEdit = {},
@@ -1584,7 +1591,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     /** Retour à l'accueil de WiDo (sans quitter l'appli si le lecteur a été ouvert d'ailleurs). */
     private fun goHome() {
         if (isTaskRoot) startActivity(Intent(this, MainActivity::class.java))
-        finish()
+        close("retour à l'accueil (page d'erreur ou arrêtée)")
     }
 
     // --- Écran de pause (TV) ------------------------------------------------------------------
@@ -1908,7 +1915,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 media("pause")
                 // La vidéo est sur la TV : le téléphone passe à son onglet TV, pour la piloter.
                 startActivity(MainActivity.showTv(this@PlayerActivity))
-                finish()
+                close("envoyé sur la TV")
             } else {
                 osd.showText(getString(R.string.toast_tv_unreachable, peer.name), OsdView.Kind.Warning)
             }
@@ -1978,7 +1985,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
         webView = null
         // Fermeture normale : la page n'a pas fait tomber l'appli.
-        if (isFinishing) settings.openPage = null
+        if (isFinishing) settings.openPage = null else CrashLog.event("Lecteur détruit par Android (sans fermeture demandée)")
         super.onDestroy()
     }
 
