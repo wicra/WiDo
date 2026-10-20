@@ -5,7 +5,20 @@ function run(P) {
   if (window.top !== window || window.__widoCosmetic) return;
   window.__widoCosmetic = true;
   var host = location.hostname.toLowerCase();
-  function matches(d) { return d === '' || host === d || host.slice(-d.length - 1) === '.' + d; }
+  function matches(d) {
+    if (d === '') return true;
+    if (d.slice(-2) === '.*') {
+      // Domaine entité (`site.*`) : toutes les extensions de site.
+      var base = d.slice(0, -2), labels = host.split('.');
+      for (var cut = 1; cut <= 2; cut++) {
+        if (labels.length <= cut) continue;
+        var rest = labels.slice(0, labels.length - cut).join('.');
+        if (rest === base || rest.slice(-base.length - 1) === '.' + base) return true;
+      }
+      return false;
+    }
+    return host === d || host.slice(-d.length - 1) === '.' + d;
+  }
   function any(list) { for (var i = 0; i < list.length; i++) if (matches(list[i])) return true; return false; }
   var off = P.off || [], ng = P.ng || [], g = P.g || [], d = P.d || {}, u = P.u || {};
   if (any(off)) return;

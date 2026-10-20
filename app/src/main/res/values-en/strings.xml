@@ -131,7 +131,7 @@
     <string name="s_recommended">Recommended lists</string>
     <string name="s_youtube">YouTube without ads</string>
     <string name="s_sponsor">Skip sponsors</string>
-    <string name="lists_status">%1$d lists · %2$s domains · %3$s hiding rules</string>
+    <string name="lists_status">%1$d lists · %2$s domains · %3$s hiding rules · %4$s advanced rules</string>
     <string name="lists_updated">Updated %1$s</string>
     <string name="lists_never">Lists not downloaded yet</string>
     <string name="lists_update">Update</string>

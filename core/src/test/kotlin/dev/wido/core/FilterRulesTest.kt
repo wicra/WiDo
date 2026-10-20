@@ -34,11 +34,12 @@ class FilterRulesTest {
         val r = FilterParser.parse(
             sequenceOf(
                 "! titre", "# note", "[Adblock Plus 2.0]", "", "||ok.com^", "||a.com/path^",
-                "||c.com^\$domain=x.com", "/banner/*", "site.com#?#div:has-text(Pub)", "site.com##+js(nowebrtc)",
+                "/ads[0-9]+/", "||c.com^\$redirect=noopjs", "site.com#?#div:has-text(Pub)", "##+js(nowebrtc)",
             ),
         )
         assertEquals(setOf("ok.com"), r.blocked)
-        assertEquals(5, r.skipped)
+        assertEquals(listOf("||a.com/path^"), r.urls)
+        assertEquals(4, r.skipped)
     }
 
     @Test fun harmlessOptionsStillBlockTheHost() {

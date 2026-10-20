@@ -138,6 +138,7 @@ class PlayerActivity : ComponentActivity() {
                 WiDoWebViewClient(
                     site,
                     blocker,
+                    app.repository.urlMatcherFor(site),
                     scripts,
                     onNavigationBlocked = { url ->
                         runOnUiThread {
@@ -819,7 +820,7 @@ class PlayerActivity : ComponentActivity() {
         lifecycleScope.launch {
             val updated = repository.findSite(current.id) ?: return@launch
             site = updated
-            client?.update(updated, repository.blockerFor(updated))
+            client?.update(updated, repository.blockerFor(updated), repository.urlMatcherFor(updated))
             webView?.loadUrl(thenOpen)
         }
     }

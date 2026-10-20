@@ -47,6 +47,8 @@ class ScriptInjector(private val context: Context, private val site: Site) {
         // Dans la page principale seulement, sauf le blocage des pop-ups, utile aussi dans les iframes.
         if (source.isNotBlank()) parts += "if (window.top === window) {\n$source\n}"
         if ("block-popups" in site.scripts && site.navigation != Navigation.MIXED) asset("scripts/block-popups.js")?.let { parts += it }
+        // Les scriptlets d'abord : ils doivent piéger les variables avant le moindre script de la page.
+        if (cosmetic.hasScripts) parts += call("scriptlets.js", cosmetic.scriptsJson())
         if (!cosmetic.isEmpty) parts += call("cosmetic.js", cosmetic.toJson())
         if (youtube) parts += call("youtube.js", JSONObject().put("sponsor", sponsorBlock).toString())
         return parts.joinToString("\n")

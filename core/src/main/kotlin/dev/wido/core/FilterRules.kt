@@ -1,24 +1,34 @@
 package dev.wido.core
 
 /**
- * Résultat de l'analyse de règles : des hôtes à bloquer, des exceptions, et des règles cosmétiques.
+ * Résultat de l'analyse de règles : des hôtes à bloquer, des exceptions, des règles d'URL, des
+ * règles cosmétiques et des scriptlets.
  *
- * Règles cosmétiques : `hide` et `unhide` associent un domaine (`""` = tous les sites) à des
- * sélecteurs CSS à masquer, ou à ne pas masquer. `noGenericHide` (`$generichide`) coupe les
- * sélecteurs génériques sur un domaine, `noHide` (`$elemhide`) coupe tout le masquage.
+ * - `hide` / `unhide` : domaine (`""` = tous les sites, `site.*` = toutes ses extensions) → sélecteurs
+ *   CSS à masquer, ou à ne pas masquer. `noGenericHide` (`$generichide`) coupe les sélecteurs génériques
+ *   sur un domaine, `noHide` (`$elemhide`) coupe tout le masquage.
+ * - `urls` : règles réseau sur l'adresse complète (chemin, joker, `domain=`…), gardées telles quelles et
+ *   appliquées par [UrlFilter].
+ * - `scripts` / `unscripts` : domaine → scriptlets (`##+js(...)`), voir `internal/scriptlets.js`.
  */
 data class HostRules(
     val blocked: Set<String> = emptySet(),
     val allowed: Set<String> = emptySet(),
-    /** Lignes comprises mais non gérées (chemins, options, règles procédurales). */
+    /** Lignes comprises mais non gérées (expressions régulières, options qui modifient la réponse…). */
     val skipped: Int = 0,
     val hide: Map<String, Set<String>> = emptyMap(),
     val unhide: Map<String, Set<String>> = emptyMap(),
     val noGenericHide: Set<String> = emptySet(),
     val noHide: Set<String> = emptySet(),
+    val urls: List<String> = emptyList(),
+    val scripts: Map<String, Set<String>> = emptyMap(),
+    val unscripts: Map<String, Set<String>> = emptyMap(),
 ) {
     /** Nombre de sélecteurs cosmétiques (génériques et par domaine). */
     val selectorCount: Int get() = hide.values.sumOf { it.size }
+
+    /** Nombre de règles d'URL et de scriptlets. */
+    val advancedCount: Int get() = urls.size + scripts.values.sumOf { it.size }
 
     companion object {
         fun merge(parts: List<HostRules>): HostRules {
@@ -26,8 +36,11 @@ data class HostRules(
             val allowed = HashSet<String>()
             val hide = HashMap<String, MutableSet<String>>()
             val unhide = HashMap<String, MutableSet<String>>()
+            val scripts = HashMap<String, MutableSet<String>>()
+            val unscripts = HashMap<String, MutableSet<String>>()
             val noGeneric = HashSet<String>()
             val noHide = HashSet<String>()
+            val urls = ArrayList<String>()
             var skipped = 0
             for (p in parts) {
                 blocked += p.blocked
@@ -35,31 +48,38 @@ data class HostRules(
                 skipped += p.skipped
                 p.hide.forEach { (d, s) -> hide.getOrPut(d) { LinkedHashSet() } += s }
                 p.unhide.forEach { (d, s) -> unhide.getOrPut(d) { LinkedHashSet() } += s }
+                p.scripts.forEach { (d, s) -> scripts.getOrPut(d) { LinkedHashSet() } += s }
+                p.unscripts.forEach { (d, s) -> unscripts.getOrPut(d) { LinkedHashSet() } += s }
                 noGeneric += p.noGenericHide
                 noHide += p.noHide
+                urls += p.urls
             }
-            return HostRules(blocked, allowed, skipped, hide, unhide, noGeneric, noHide)
+            return HostRules(blocked, allowed, skipped, hide, unhide, noGeneric, noHide, urls, scripts, unscripts)
         }
     }
 }
 
 /**
- * Lit un sous-ensemble du format AdBlock (EasyList, uBlock) et le format hosts.
+ * Lit le format AdBlock (EasyList, uBlock Origin) et le format hosts.
  *
- * Réseau, au niveau du nom d'hôte uniquement (comme un DNS), jamais sur le chemin d'une URL :
- * - `||pub.exemple.com^`   bloque pub.exemple.com et ses sous-domaines
- * - `||pub.exemple.com^$third-party,script` : les options de type ou de tiers sont acceptées
- *   (l'hôte est alors bloqué entièrement, ce qui est le cas des régies publicitaires)
- * - `@@||cdn.exemple.com^` exception
- * - `0.0.0.0 pub.exemple.com`, ou `pub.exemple.com` seul
+ * Réseau :
+ * - `||pub.exemple.com^` bloque l'hôte et ses sous-domaines ; avec des options de type ou de tiers
+ *   (`$third-party,script`), l'hôte est bloqué entièrement (cas des régies publicitaires) ;
+ * - `@@||cdn.exemple.com^` exception d'hôte ;
+ * - `0.0.0.0 pub.exemple.com`, ou `pub.exemple.com` seul ;
+ * - règles d'adresse : `||site.com/pubs/`, `/banner/$image`, `-ad-banner.`, `$domain=`,
+ *   `$third-party`, `$important`, et leurs exceptions `@@` ([UrlFilter]).
  *
- * Cosmétique :
- * - `##.banniere` masque partout, `exemple.com,autre.fr##.banniere` sur ces sites
- * - `exemple.com#@#.banniere` exception
- * - `@@||exemple.com^$generichide` / `$elemhide` : coupe le masquage générique / tout le masquage
+ * Cosmétique : `##.banniere`, `site.com,autre.*##.banniere`, `site.com#@#.banniere`,
+ * `@@||site.com^$generichide` / `$elemhide`.
  *
- * Sont comptées dans `skipped` : règles à chemin ou joker, options restreintes à des domaines
- * (`domain=`) ou qui modifient la réponse, et règles cosmétiques procédurales (`:has-text`…).
+ * Scriptlets uBlock : `site.com##+js(set-constant, adBlockDetected, false)` et `#@#+js(...)`.
+ *
+ * Directives des listes uBlock : `!#if env_mobile` … `!#else` … `!#endif`.
+ *
+ * Sont comptées dans `skipped` : expressions régulières, options qui modifient la réponse
+ * (`$redirect`, `$removeparam`, `$csp`…), règles cosmétiques procédurales (`:has-text()`…),
+ * scriptlets génériques (sans domaine) et domaines exclus (`~site`).
  */
 object FilterParser {
     private val hostsLine = Regex("^(?:0\\.0\\.0\\.0|127\\.0\\.0\\.1|::1?)\\s+(\\S+)")
@@ -81,49 +101,92 @@ object FilterParser {
         ":remove-class(", ":matches-media(", ":matches-prop(", ":nth-ancestor(", ":if(", ":if-not(",
     )
 
+    /** Ce que les directives `!#if` des listes uBlock savent de WiDo : un moteur Chromium sur appareil Android. */
+    private val ENV_TRUE = setOf("env_chromium", "env_mobile", "ext_ublock", "cap_user_stylesheet")
+
     const val MAX_SELECTOR = 400
+    private val ADGUARD_COSMETIC = Regex("#@?[?$%]#")
 
     fun parse(lines: Sequence<String>): HostRules {
         val blocked = HashSet<String>()
         val allowed = HashSet<String>()
         val hide = HashMap<String, MutableSet<String>>()
         val unhide = HashMap<String, MutableSet<String>>()
+        val scripts = HashMap<String, MutableSet<String>>()
+        val unscripts = HashMap<String, MutableSet<String>>()
         val noGeneric = HashSet<String>()
         val noHide = HashSet<String>()
+        val urls = ArrayList<String>()
         var skipped = 0
+        // Pile des blocs `!#if` : vrai si le bloc est actif.
+        val conditions = ArrayDeque<Boolean>()
         for (raw in lines) {
             val line = raw.trim()
+            if (line.startsWith("!#if ")) {
+                conditions.addLast(evaluate(line.substring(5)))
+                continue
+            }
+            if (line.startsWith("!#else")) {
+                if (conditions.isNotEmpty()) conditions.addLast(!conditions.removeLast())
+                continue
+            }
+            if (line.startsWith("!#endif")) {
+                conditions.removeLastOrNull()
+                continue
+            }
+            if (conditions.any { !it }) continue
             if (line.isEmpty() || line[0] == '!' || line[0] == '[') continue
             if (line[0] == '#' && !line.startsWith("##") && !line.startsWith("#@#")) continue // commentaire hosts
             val ok = if (line.contains("#@#") || line.contains("##")) {
-                cosmetic(line, hide, unhide)
+                cosmetic(line, hide, unhide, scripts, unscripts)
             } else {
                 val hostsMatch = hostsLine.find(line)
                 when {
+                    // Règles procédurales ou scripts AdGuard (`#?#`, `#$#`, `#%#`) : hors de portée.
+                    ADGUARD_COSMETIC.containsMatchIn(line) -> false
                     hostsMatch != null -> {
                         val h = Hosts.normalize(hostsMatch.groupValues[1])
                         (h != "localhost" && Hosts.isValidHostname(h)).also { if (it) blocked += h }
                     }
-                    line.startsWith("@@||") -> exception(line.substring(4), allowed, noGeneric, noHide)
-                    line.startsWith("||") -> {
-                        val parsed = adblockHost(line.substring(2))
-                        (parsed != null && parsed.second.all { it in BLOCK_OPTIONS }).also { if (it) blocked += parsed!!.first }
-                    }
-                    line.any { it == '#' || it == '$' || it == '/' || it == '*' || it == '|' || it == '@' } -> false
+                    line.startsWith("@@||") && hostException(line.substring(4), allowed, noGeneric, noHide) -> true
+                    line.startsWith("||") && hostBlock(line.substring(2), blocked) -> true
+                    line.startsWith("||") || line.startsWith("|") || line.startsWith("@@") ||
+                        line.any { it == '/' || it == '*' || it == '$' || it == '^' } ->
+                        (UrlRule.parse(line) != null).also { if (it) urls += line }
                     else -> {
                         val h = Hosts.normalize(line)
-                        Hosts.isValidHostname(h).also { if (it) blocked += h }
+                        when {
+                            Hosts.isValidHostname(h) -> { blocked += h; true }
+                            // Fragment d'adresse (`-ad-banner.`, `_pub_`) : règle d'adresse sans joker.
+                            else -> (UrlRule.parse(line) != null).also { if (it) urls += line }
+                        }
                     }
                 }
             }
             if (!ok) skipped++
         }
-        return HostRules(blocked, allowed, skipped, hide, unhide, noGeneric, noHide)
+        return HostRules(blocked, allowed, skipped, hide, unhide, noGeneric, noHide, urls, scripts, unscripts)
     }
 
     fun parse(text: String): HostRules = parse(text.lineSequence())
 
-    private fun exception(body: String, allowed: MutableSet<String>, noGeneric: MutableSet<String>, noHide: MutableSet<String>): Boolean {
+    /** `env_mobile`, `!env_firefox`, `env_chromium && !env_mobile`, `(a || b)`… */
+    private fun evaluate(expression: String): Boolean =
+        expression.split("||").any { alternative ->
+            alternative.split("&&").all { term ->
+                val t = term.trim().trim('(', ')').trim()
+                if (t.startsWith("!")) t.substring(1).trim() !in ENV_TRUE else t in ENV_TRUE
+            }
+        }
+
+    private fun hostBlock(body: String, blocked: MutableSet<String>): Boolean {
+        val (host, options) = adblockHost(body) ?: return false
+        if (!options.all { it in BLOCK_OPTIONS }) return false
+        blocked += host
+        return true
+    }
+
+    private fun hostException(body: String, allowed: MutableSet<String>, noGeneric: MutableSet<String>, noHide: MutableSet<String>): Boolean {
         val (host, options) = adblockHost(body) ?: return false
         return when {
             options.isEmpty() || options.all { it in ALLOW_OPTIONS } -> { allowed += host; true }
@@ -153,25 +216,40 @@ object FilterParser {
         return normalized to options
     }
 
-    private fun cosmetic(line: String, hide: MutableMap<String, MutableSet<String>>, unhide: MutableMap<String, MutableSet<String>>): Boolean {
+    private fun cosmetic(
+        line: String,
+        hide: MutableMap<String, MutableSet<String>>,
+        unhide: MutableMap<String, MutableSet<String>>,
+        scripts: MutableMap<String, MutableSet<String>>,
+        unscripts: MutableMap<String, MutableSet<String>>,
+    ): Boolean {
         val isException = line.contains("#@#")
         val marker = if (isException) "#@#" else "##"
         val at = line.indexOf(marker)
         val domainsPart = line.substring(0, at)
-        val selector = line.substring(at + marker.length).trim()
-        // `#?#`, `#$#`, `#%#` et `#@?#` : règles procédurales ou scripts, hors de portée.
+        val body = line.substring(at + marker.length).trim()
+        // `#?#`, `#$#`, `#%#` et `#@?#` : règles procédurales ou scripts AdGuard, hors de portée.
         if (domainsPart.isNotEmpty() && domainsPart.last() in "#?$%@") return false
-        if (!validSelector(selector)) return false
         val domains = if (domainsPart.isBlank()) {
             listOf("")
         } else {
             val parts = domainsPart.split(',').map { Hosts.normalize(it) }
-            // Domaines exclus (`~site`) ou génériques (`site.*`) : on ne sait pas les appliquer exactement.
-            if (parts.any { it.startsWith("~") || !Hosts.isValidHostname(it) }) return false
+            // Domaines exclus (`~site`) : on ne sait pas les appliquer exactement.
+            if (parts.any { it.startsWith("~") || !(Hosts.isValidHostname(it) || Hosts.isEntity(it)) }) return false
             parts
         }
+        if (body.startsWith("+js(") && body.endsWith(")")) {
+            val call = body.substring(4, body.length - 1).trim()
+            // Les scriptlets génériques (sans domaine) sont réservés aux exceptions : `#@#+js()` coupe tout.
+            if (call.isEmpty() && !isException) return false
+            if (domains == listOf("") && !isException) return false
+            val target = if (isException) unscripts else scripts
+            for (d in domains) target.getOrPut(d) { LinkedHashSet() } += call
+            return true
+        }
+        if (!validSelector(body)) return false
         val target = if (isException) unhide else hide
-        for (d in domains) target.getOrPut(d) { LinkedHashSet() } += selector
+        for (d in domains) target.getOrPut(d) { LinkedHashSet() } += body
         return true
     }
 

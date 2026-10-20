@@ -215,7 +215,7 @@ private fun ListsRow(lists: ListStatus, onUpdate: () -> Unit) {
     val summary = if (lists.lists == 0 && !lists.updating) {
         ""
     } else {
-        stringResource(R.string.lists_status, lists.lists, numbers.format(lists.hosts), numbers.format(lists.selectors))
+        stringResource(R.string.lists_status, lists.lists, numbers.format(lists.hosts), numbers.format(lists.selectors), numbers.format(lists.advanced))
     }
     val date = lists.updatedAt?.let {
         stringResource(R.string.lists_updated, android.text.format.DateUtils.getRelativeTimeSpanString(it).toString())

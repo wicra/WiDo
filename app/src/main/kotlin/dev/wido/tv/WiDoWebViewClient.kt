@@ -11,6 +11,8 @@ import dev.wido.core.NavigationPolicy
 import dev.wido.core.Site
 import java.io.ByteArrayInputStream
 import dev.wido.core.Hosts
+import dev.wido.core.RequestType
+import dev.wido.core.UrlMatcher
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
@@ -19,6 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class WiDoWebViewClient(
     site: Site,
     blocker: HostBlocker,
+    urls: UrlMatcher,
     private val injector: ScriptInjector,
     private val onNavigationBlocked: (String) -> Unit,
     private val onPageVisible: () -> Unit,
@@ -28,6 +31,9 @@ class WiDoWebViewClient(
 ) : WebViewClient() {
     @Volatile private var site = site
     @Volatile private var blocker = blocker
+    @Volatile private var urls = urls
+    /** Hôte de la page affichée : décide des règles `domain=` et de ce qui est « tiers ». */
+    @Volatile private var pageHost: String = Hosts.of(site.url).orEmpty()
     @Volatile private var allowOnceUrl: String? = null
 
     /** Dernière navigation refusée : proposée dans le menu rapide pour être autorisée. */
@@ -50,9 +56,10 @@ class WiDoWebViewClient(
     }
 
     /** Nouvelles règles (après avoir autorisé un domaine) sans recréer la page. */
-    fun update(site: Site, blocker: HostBlocker) {
+    fun update(site: Site, blocker: HostBlocker, urls: UrlMatcher = this.urls) {
         this.site = site
         this.blocker = blocker
+        this.urls = urls
     }
 
     /** Laisse passer cette navigation, une seule fois. */
@@ -65,7 +72,7 @@ class WiDoWebViewClient(
 
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
         val host = request.url.host ?: return null
-        if (!blocker.isBlocked(host)) {
+        if (!blocker.isBlocked(host) && !blockedByAddress(request, host)) {
             // Domaine tiers non bloqué : retenu pour proposer de le bloquer.
             if (NavigationPolicy.allowedDomains(site).none { Hosts.matches(host, it) }) {
                 requestCounts.getOrPut(host.lowercase()) { AtomicInteger() }.incrementAndGet()
@@ -76,6 +83,15 @@ class WiDoWebViewClient(
         return WebResourceResponse(
             "text/plain", "utf-8", 403, "Blocked by WiDo", emptyMap(), ByteArrayInputStream(ByteArray(0)),
         )
+    }
+
+    /** Règles d'adresse (chemin, `domain=`, type) ; jamais sur la page principale elle-même. */
+    private fun blockedByAddress(request: WebResourceRequest, host: String): Boolean {
+        if (request.isForMainFrame) return false
+        val url = request.url.toString()
+        val page = pageHost
+        val type = RequestType.guess(url, request.requestHeaders["Accept"] ?: request.requestHeaders["accept"], false)
+        return urls.shouldBlock(url, page, type, Hosts.site(host) != Hosts.site(page))
     }
 
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -100,6 +116,7 @@ class WiDoWebViewClient(
     }
 
     override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+        url?.let { Hosts.of(it) }?.let { pageHost = it }
         onPageStart()
         injector.inject(view)
     }

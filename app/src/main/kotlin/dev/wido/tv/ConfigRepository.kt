@@ -10,6 +10,9 @@ import dev.wido.core.HostBlocker
 import dev.wido.core.HostRules
 import dev.wido.core.LocalSites
 import dev.wido.core.Hosts
+import dev.wido.core.ListIncludes
+import dev.wido.core.UrlFilter
+import dev.wido.core.UrlMatcher
 import dev.wido.core.NavigationPolicy
 import dev.wido.core.Pin
 import dev.wido.core.Pins
@@ -45,6 +48,8 @@ data class ListStatus(
     val lists: Int = 0,
     val hosts: Int = 0,
     val selectors: Int = 0,
+    /** Règles d'adresse et scriptlets. */
+    val advanced: Int = 0,
     /** Date de la plus ancienne liste en cache, ou null si aucune n'est encore téléchargée. */
     val updatedAt: Long? = null,
     val updating: Boolean = false,
@@ -129,6 +134,8 @@ class ConfigRepository(private val context: Context, private val settings: Setti
 
     private val mutex = Mutex()
     private val parsedLists = ConcurrentHashMap<String, HostRules>()
+    /** Règles d'adresse indexées, par liste ; reconstruites quand la liste change. */
+    private val urlFilters = ConcurrentHashMap<String, Pair<HostRules, UrlFilter>>()
     private val listsMutex = Mutex()
 
     private val _lists = MutableStateFlow(ListStatus())
@@ -284,6 +291,29 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         return HostBlocker(layers + HostRules(allowed = allowed))
     }
 
+    /**
+     * Les règles d'adresse d'un site (chemins, `domain=`…) : celles des listes, indexées une fois et
+     * gardées en mémoire, plus les règles globales et celles du site. Les domaines de `whitelist` y
+     * restent intouchables.
+     */
+    suspend fun urlMatcherFor(site: Site): UrlMatcher {
+        val config = ensureLoaded()
+        val lists = if (site.blockAds) {
+            coroutineScope { effectiveLists(config).map { url -> async { url to loadList(url) } }.awaitAll() }
+        } else {
+            emptyList()
+        }
+        return withContext(Dispatchers.Default) {
+            val filters = lists.map { (url, rules) ->
+                val cached = urlFilters[url]
+                if (cached != null && cached.first === rules) cached.second else UrlFilter(rules.urls).also { urlFilters[url] = rules to it }
+            }
+            val inlineRules = FilterParser.parse(((if (site.blockAds) config.globalRules else emptyList()) + site.rules).asSequence())
+            val whitelist = config.whitelist.map { "@@||${Hosts.normalize(it)}^" }
+            UrlMatcher(filters + UrlFilter(inlineRules.urls + whitelist))
+        }
+    }
+
     /** Ce qu'il faut masquer dans les pages du site (règles `##` des listes et du site). */
     suspend fun cosmeticFor(site: Site): CosmeticPlan {
         val layers = layersFor(site)
@@ -305,6 +335,7 @@ class ConfigRepository(private val context: Context, private val settings: Setti
                 lists = urls.size,
                 hosts = rules.sumOf { it.blocked.size },
                 selectors = rules.sumOf { it.selectorCount },
+                advanced = rules.sumOf { it.advancedCount },
                 updatedAt = dates.minOrNull(),
             )
         } finally {
@@ -336,7 +367,12 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         if (!fresh || force) {
             try {
                 val bytes = Http.get(url, MAX_LIST_BYTES, timeoutMs = 10_000)
-                val parsed = withContext(Dispatchers.Default) { FilterParser.parse(String(bytes, Charsets.UTF_8)) }
+                // Listes uBlock découpées en fichiers : `!#include x.txt` est récupéré dans le même dossier.
+                val base = url.substringBeforeLast('/') + "/"
+                val text = ListIncludes.expand(String(bytes, Charsets.UTF_8)) { name ->
+                    runCatching { String(Http.get(base + name, MAX_LIST_BYTES, timeoutMs = 10_000), Charsets.UTF_8) }.getOrNull()
+                }
+                val parsed = withContext(Dispatchers.Default) { FilterParser.parse(text) }
                 writeAtomically(file, CompiledRules.encode(parsed))
                 parsedLists[url] = parsed
                 File(listsDir, sha1(url) + ".txt").delete() // ancien cache, non compilé
@@ -369,12 +405,18 @@ class ConfigRepository(private val context: Context, private val settings: Setti
 
         /**
          * Listes recommandées, ajoutées à celles de la configuration (réglage « Listes recommandées ») :
-         * EasyList (pubs, réseau et cosmétique), sa variante française, et le filtre DNS d'AdGuard.
+         * EasyList (pubs, réseau et cosmétique), sa variante française, le filtre DNS d'AdGuard, et les
+         * listes d'uBlock Origin (scriptlets contre les pubs et les anti-bloqueurs, correctifs rapides,
+         * exceptions qui réparent les sites cassés par les autres listes). Mises à jour par leurs
+         * communautés, plusieurs fois par jour : WiDo les relit toutes les 6 heures.
          */
         val RECOMMENDED_LISTS = listOf(
             "https://easylist.to/easylist/easylist.txt",
             "https://easylist-downloads.adblockplus.org/liste_fr.txt",
             "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt",
+            "https://ublockorigin.github.io/uAssets/filters/filters.txt",
+            "https://ublockorigin.github.io/uAssets/filters/quick-fixes.txt",
+            "https://ublockorigin.github.io/uAssets/filters/unbreak.txt",
         )
         const val LIST_TTL_MS = 6 * 60 * 60 * 1000L
     }
