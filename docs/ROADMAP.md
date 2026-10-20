@@ -48,7 +48,6 @@ La check-list détaillée, avec les sites de test, est dans [TESTING](TESTING.md
 - Réglages avancés (masquage CSS, agent utilisateur) dans le formulaire des sites perso.
 - Choix du mode de navigation par défaut quand une régie inconnue des listes passe en `relaxed` (liste de domaines publicitaires à enrichir).
 - Export / import des sites perso (aujourd'hui perdus si l'app est désinstallée).
-- Saisie des sites perso depuis un téléphone (la saisie à la télécommande est lente).
 - Profils (par personne, avec leurs sites et règles).
 - Sauvegarde/restauration de la configuration.
 - Blocage par chemin pour un sous-ensemble de règles.

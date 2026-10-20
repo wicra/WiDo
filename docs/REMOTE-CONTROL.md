@@ -44,9 +44,13 @@ L'aide des commandes s'affiche à la **première ouverture** d'un site, puis à 
 Un plateau en bas de l'écran ; la page reste visible au-dessus. ◀ ▶ pour choisir, **OK** pour valider, **Retour** pour le fermer.
 
 - La barre de lecture, si une vidéo a été pilotée sur la page
-- Reprendre, recharger la page, activer/désactiver le curseur
+- Reprendre, recharger la page, **Accueil du site**, activer/désactiver le curseur
 - **A− / A+** : texte plus petit / plus grand (mémorisé par site)
-- **Enregistrer** ce site, Aide, retour aux **Sites**
+- **Téléphone** : un QR code s'affiche ; scanne-le avec ton téléphone (même réseau), tape ton texte, il arrive dans le champ sélectionné de la page (ou le premier champ de recherche). « Envoyer + Entrée » valide aussi la recherche.
+- **Épingler** la page à l'accueil ([CUSTOM-SITES](CUSTOM-SITES.md))
+- **Enregistrer** ce site
+- **Veille** : chaque appui passe à 30, 60, 90, 120 min, puis désactivé. À la fin, la vidéo se met en pause, WiDo revient à l'accueil et la TV peut se mettre en veille. Un avertissement s'affiche une minute avant.
+- Aide, retour aux **Sites**
 - Compteurs : requêtes bloquées et navigations refusées pendant cette session
 - Après une redirection refusée, elle s'affiche en tête du plateau avec **Ouvrir une fois**, **Toujours autoriser** et **Ignorer** (voir [BLOCKING](BLOCKING.md))
 
@@ -55,7 +59,8 @@ Un plateau en bas de l'écran ; la page reste visible au-dessus. ◀ ▶ pour ch
 - Le **clavier de la TV** s'ouvre sur un champ de saisie touché avec le curseur. La dictée du clavier Google peut s'y trouver : **à confirmer sur appareil réel**.
 - Le micro de la télécommande dialogue avec l'assistant Google, pas avec la page.
 - WiDo refuse que les sites accèdent au micro ou à la caméra.
-- Saisie depuis un téléphone ou Home Assistant : voir la [feuille de route](ROADMAP.md).
+- Saisie depuis un téléphone : menu rapide → **Téléphone**. Le petit serveur de la TV n'est ouvert que pendant l'affichage du QR code, et refuse toute requête sans le jeton aléatoire de ce QR code.
+- Saisie depuis Home Assistant : voir la [feuille de route](ROADMAP.md).
 
 ## Limites connues
 

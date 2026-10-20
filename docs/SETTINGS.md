@@ -1,9 +1,12 @@
 # Réglages
 
-Menu principal → onglet **Réglages**, en haut de l'écran. Les réglages forment une seule liste qui défile, rangée par thème (Curseur, Lecture, Touches de couleur, Général). Chaque choix est un **bouton visible** : déplace le focus dessus et appuie sur **OK** ; la valeur choisie est en verre clair. Les réglages à nombreuses valeurs (zoom, touches de couleur) ont deux boutons **◀ ▶** autour de la valeur. Les changements s'appliquent à l'ouverture du site suivant. **Réinitialiser** remet les réglages de confort à leur valeur d'origine, sans toucher à l'URL de configuration ni aux sites.
+Menu principal → onglet **Réglages**, en haut de l'écran. Les réglages forment une seule liste qui défile, rangée par thème (Blocage, Curseur, Lecture, Touches de couleur, Général). Chaque choix est un **bouton visible** : déplace le focus dessus et appuie sur **OK** ; la valeur choisie est en verre clair. Les réglages à nombreuses valeurs (zoom, touches de couleur) ont deux boutons **◀ ▶** autour de la valeur. Les changements s'appliquent à l'ouverture du site suivant. **Réinitialiser** remet les réglages de confort à leur valeur d'origine, sans toucher à l'URL de configuration ni aux sites.
 
 | Réglage | Valeurs | Défaut | Effet |
 |---|---|---|---|
+| Listes recommandées | Activé / Désactivé | Activé | Ajoute EasyList, Liste FR et le filtre DNS d'AdGuard ([BLOCKING](BLOCKING.md)). L'état des listes et **Mettre à jour** sont juste en dessous. |
+| YouTube sans pub | Activé / Désactivé | Activé | Pubs retirées du lecteur, sautées si elles passent, encarts masqués. |
+| Sauter les sponsors | Activé / Désactivé | Activé | Passages sponsorisés sautés (SponsorBlock). |
 | Curseur : vitesse | Lente, Normale, Rapide, Très rapide | Normale | Vitesse du déplacement libre du curseur. |
 | Curseur : taille | Petit, Moyen, Grand | Moyen | Taille de la flèche. |
 | Curseur : masquage automatique | Jamais, 2, 3, 5, 10 s | 3 s | Délai d'inactivité avant que la flèche disparaisse. |
@@ -15,7 +18,8 @@ Menu principal → onglet **Réglages**, en haut de l'écran. Les réglages form
 | Plein écran : flèches | Pilotent le lecteur / Déplacent le curseur | Pilotent le lecteur | Comportement des flèches en plein écran vidéo. |
 | Touches rouge, verte, jaune, bleue | Voir la liste ci-dessous | Menu, Recharger, Texte +, Texte − | Raccourcis des touches de couleur. |
 | Au démarrage | Afficher le menu / Rouvrir le dernier site | Afficher le menu | Au lancement depuis l'accueil de la TV. |
-| Nouveaux sites : redirections | Strictes / Souples | Strictes | Valeur proposée dans le formulaire d'un nouveau site perso. |
+| Ouvrir un site | Dernière page / Accueil du site | Dernière page | Reprend là où tu en étais (position d'une vidéo YouTube comprise). « Accueil du site » est aussi dans le menu rapide. |
+| Nouveaux sites : redirections | Strictes / Souples / Mixtes | Strictes | Valeur proposée dans le formulaire d'un nouveau site perso ([BLOCKING](BLOCKING.md)). |
 
 ## Actions des touches de couleur
 

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.6.0
+
+### Anti-pub
+- **YouTube sans pub** : pubs retirées des données du lecteur, coupées et sautées si elles passent, encarts masqués. **SponsorBlock** saute les passages sponsorisés.
+- **Listes recommandées** (EasyList, Liste FR, filtre DNS d'AdGuard), en plus de celles de la configuration ; compilées sur disque et chargées dès l'accueil.
+- **Masquage cosmétique** : les règles `##` des listes cachent les emplacements publicitaires.
+- Règles à options (`$third-party`, `$script`…) désormais comprises.
+- **Pop-ups mieux bloquées** : script injecté avant ceux de la page et dans toutes les frames, `window.open` verrouillé, formulaires et clics simulés couverts.
+- Redirections **souples** : un autre domaine n'est accepté qu'après un clic ou une redirection du serveur.
+- Nouveau mode de redirection **mixte** : la pub s'ouvre dans une fenêtre affichée 5 s puis fermée, pour les sites qui exigent de la voir.
+
+### Simplicité
+- **Catalogue** de sites prêts à ajouter en un clic.
+- **Saisie depuis le téléphone** par QR code (adresse d'un site, recherche dans une page).
+- **Reprise** de la dernière page de chaque site, position YouTube comprise.
+- **Pages épinglées** à l'accueil ; **ordre des cartes** modifiable (Options → Déplacer).
+- **Minuteur de veille** dans le menu rapide.
+
+### Fluidité
+- Release optimisée par **R8**, profils de démarrage installés (**profileinstaller**).
+- **WebView préparée** pendant l'accueil : les sites s'ouvrent plus vite.
+- Couleurs des sites gardées sur disque : l'accueil s'affiche directement en couleur.
+
+### Divers
+- **Nouvelle icône et bannière** : le logo « WiDo » du style Verre.
+
 ## 0.5.0
 
 ### Nouveau style « Verre »
