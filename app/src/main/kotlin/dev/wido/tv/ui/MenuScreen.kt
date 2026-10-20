@@ -151,6 +151,8 @@ fun MenuScreen(
     // La vidéo de « Reprendre » sélectionnée : son image en fond d'ambiance, ses infos dans la scène.
     var focusedWatch by remember { mutableStateOf<WatchEntry?>(null) }
     var initialFocus by remember { mutableStateOf(false) }
+    // Vidéo de Reprendre dont on a demandé les actions (appui long ou Menu).
+    var watchActions by remember { mutableStateOf<WatchEntry?>(null) }
     // Le disque tiré du bac (dernier focalisé) : ses voisins s'écartent en vague.
     var rackIndex by remember { mutableIntStateOf(-1) }
     var refocusSites by remember { mutableIntStateOf(0) }
@@ -159,6 +161,12 @@ fun MenuScreen(
         refocusSites++
     }
     LaunchedEffect(sitesSignal) { if (sitesSignal > 0) backToSites() }
+    // « Déplacer » : le focus revient sur le disque à déplacer (pas sur Ouvrir / Options), une fois le dialogue fermé.
+    LaunchedEffect(movingId) {
+        val id = movingId ?: return@LaunchedEffect
+        delay(120)
+        runCatching { cardFocus[id]?.requestFocus() }
+    }
     androidx.activity.compose.BackHandler(enabled = tab != Tab.Sites && editor == null && actionsFor == null && !showCatalog) {
         UiSound.back()
         backToSites()
@@ -274,13 +282,31 @@ fun MenuScreen(
                         }
                     },
                     onOpen = onOpenWatch,
-                    onRemove = { entry ->
-                        vm.removeWatch(entry.url)
-                        if (focusedWatch?.url == entry.url) focusedWatch = null
-                    },
+                    onRemove = { entry -> watchActions = entry },
                     modifier = Modifier.weight(1f),
                 )
                 Tab.Settings -> SettingsPane(settings, lists, vm::updateLists, Modifier.weight(1f))
+            }
+        }
+    }
+
+    watchActions?.let { entry ->
+        val siteName = sites.firstOrNull { it.site.id == entry.siteId }?.site?.name ?: Hosts.of(entry.url)?.removePrefix("www.").orEmpty()
+        DialogFrame(title = entry.title, onDismiss = { watchActions = null }, width = 560.dp) {
+            ActionButton(stringResource(R.string.action_resume), { watchActions = null; onOpenWatch(entry) }, Modifier.fillMaxWidth(), glyph = Glyph.Play)
+            ActionButton(
+                stringResource(R.string.action_remove),
+                {
+                    vm.removeWatch(entry.url)
+                    if (focusedWatch?.url == entry.url) focusedWatch = null
+                    watchActions = null
+                },
+                Modifier.fillMaxWidth(),
+                primary = false,
+                glyph = Glyph.Close,
+            )
+            sites.firstOrNull { it.site.id == entry.siteId }?.let { m ->
+                ActionButton(stringResource(R.string.action_open_site, siteName), { watchActions = null; onOpen(m.site) }, Modifier.fillMaxWidth(), primary = false, glyph = Glyph.Globe)
             }
         }
     }
@@ -607,6 +633,7 @@ internal fun SiteCard(
                     .shadow(if (focused) 18.dp else 4.dp, CircleShape, clip = false)
                     .clip(CircleShape)
                     .then(if (moving) Modifier.border(2.5.dp, Color.White, CircleShape) else Modifier)
+                    .then(if (moving) Modifier else Modifier.dpadLongPress(onOptions, onClick))
                     .combinedClickable(onClick = onClick, onLongClick = onOptions),
                 contentAlignment = Alignment.Center,
             ) {
@@ -665,7 +692,7 @@ internal fun AddCard(index: Int, onClick: () -> Unit, onFocus: () -> Unit, dista
                     if (it) onFocus()
                 },
             ) { f ->
-                Text("+", color = onSurface(f), fontSize = 34.sp, fontWeight = FontWeight.Light)
+                GlyphIcon(Glyph.Plus, onSurface(f), 30.dp)
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -928,6 +955,7 @@ private fun WatchTile(entry: WatchEntry, site: Site?, onClick: () -> Unit, onRem
                 .clip(CardShape)
                 .background(Palette.Glass)
                 .then(if (focused) Modifier.border(3.dp, Color.White, CardShape) else Modifier)
+                .dpadLongPress(onRemove, onClick)
                 .combinedClickable(onClick = onClick, onLongClick = onRemove),
         ) {
             VideoArt(rememberWatchImage(entry), site, entry.url, Modifier.matchParentSize(), badge = 30.dp)

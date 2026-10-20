@@ -143,7 +143,6 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             }
             if (site.id != ConfigRepository.LINK_SITE_ID) settings.lastSiteId = site.id
             loadingLabel.text = getString(R.string.loading_site, site.name)
-            dressOverlay(site)
             val blocker = app.repository.blockerFor(site)
             val scripts = ScriptInjector(this@PlayerActivity, site)
             scripts.early = scripts.earlyScript(app.repository.cosmeticFor(site), settings.youtubeAdblock, settings.sponsorBlock)
@@ -749,8 +748,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         hidePauseScreen()
         val c = client
         val current = site
-        fun action(label: String, glyph: Glyph, more: Boolean = false, run: () -> Unit) = QuickAction(label, glyph, more) {
-            hidePanel()
+        // `stay` : le menu reste ouvert (on ajuste encore : texte plus grand, veille…), le résultat s'affiche par-dessus.
+        fun action(label: String, glyph: Glyph, more: Boolean = false, stay: Boolean = false, run: () -> Unit) = QuickAction(label, glyph, more) {
+            if (!stay) hidePanel()
             run()
         }
 
@@ -761,9 +761,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val native = c?.stream?.let { action(getString(R.string.tile_native), Glyph.Native) { openNative() } }
         val next = if (hasNext) action(getString(R.string.tile_next), Glyph.Next) { nextEpisode() } else null
         val pin = action(getString(R.string.panel_pin), Glyph.Star) { pinCurrentPage() }
-        val zoomOut = action(getString(R.string.panel_zoom_out_short), Glyph.ZoomOut) { changeZoom(-1) }
-        val zoomIn = action(getString(R.string.panel_zoom_in_short), Glyph.ZoomIn) { changeZoom(1) }
-        val sleep = action(sleepLabel(), Glyph.Sleep, more = media == null) { cycleSleep() }
+        val zoomOut = action(getString(R.string.panel_zoom_out_short), Glyph.ZoomOut, stay = true) { changeZoom(-1) }
+        val zoomIn = action(getString(R.string.panel_zoom_in_short), Glyph.ZoomIn, stay = true) { changeZoom(1) }
+        val sleep = action(sleepLabel(), Glyph.Sleep, more = media == null, stay = true) { cycleSleep() }
         val sites = action(getString(R.string.panel_sites), Glyph.Sites) { finish() }
         val hide = if (tv) action(getString(R.string.tile_hide), Glyph.Hide, more = media != null) { startPicking() } else null
         val siteHome = action(getString(R.string.tile_site_home), Glyph.Globe, more = media != null) { current?.let { webView?.loadUrl(it.url) } }
@@ -1063,23 +1063,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 topMargin = (18 * density).toInt()
             }
         }
-        // Logo du site sur un disque blanc, affiché dès qu'il est connu (à la place du nom de l'app).
-        val disc = (112 * density).toInt()
-        siteLogo = android.widget.ImageView(this).apply {
-            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-            val pad = (26 * density).toInt()
-            setPadding(pad, pad, pad, pad)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(0xF2FFFFFF.toInt())
-            }
-            elevation = 18 * density
-            visibility = View.GONE
-        }
         wordmark = logo
         val logoBox = FrameLayout(this).apply {
             addView(logo, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-            addView(siteLogo, FrameLayout.LayoutParams(disc, disc, Gravity.CENTER))
         }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1107,31 +1093,13 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
     }
 
-    private var siteLogo: android.widget.ImageView? = null
     private var wordmark: View? = null
 
     /**
-     * L'écran d'ouverture prend la couleur et le logo du site : avec l'agrandissement depuis sa carte,
-     * on voit la carte devenir la page.
-     */
-    private fun dressOverlay(site: Site) {
-        val favicons = (application as WiDoApp).favicons
-        lifecycleScope.launch {
-            val icon = favicons.load(site) ?: return@launch
-            if (!overlayVisible) return@launch
-            siteLogo?.apply {
-                setImageBitmap(icon.image.asAndroidBitmap())
-                visibility = View.VISIBLE
-            }
-            wordmark?.visibility = View.INVISIBLE
-        }
-    }
-
-    /**
-     * Ouverture depuis l'accueil (TV), comme un seul geste : l'accueil reste à l'écran (sa capture), le
-     * vinyle choisi part de sa place exacte, grandit en tournant et glisse vers le centre ; son étiquette
-     * (le logo du site) devient le logo de l'écran d'attente, à la même place et à la même taille. Le
-     * disque se fond alors dans l'écran d'attente.
+     * Ouverture depuis l'accueil (TV), comme un seul geste, sans hâte : l'accueil reste à l'écran (sa
+     * capture), le vinyle choisi part de sa place exacte, grandit lentement en tournant et glisse vers le
+     * centre ; son étiquette se resserre et le logo du site s'efface, puis le disque se fond dans l'écran
+     * d'attente, où apparaît le logo WiDo.
      */
     private fun playOpening(content: View) {
         val origin = intent.getIntArrayExtra(EXTRA_ORIGIN)?.takeIf { it.size == 4 } ?: return
@@ -1160,26 +1128,28 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             val cx1 = if (box != null && box.width > 0) target[0] - here[0] + box.width / 2f else reveal.width / 2f
             val cy1 = if (box != null && box.height > 0) target[1] - here[1] + box.height / 2f else reveal.height / 2f
             val label0 = r0 * LABEL_RATIO
-            val label1 = 56 * density
+            val label1 = 30 * density
             val r1 = kotlin.math.hypot(maxOf(cx1, reveal.width - cx1), maxOf(cy1, reveal.height - cy1)) * 1.05f
             ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = 620
-                interpolator = android.view.animation.PathInterpolator(0.45f, 0f, 0.15f, 1f)
+                duration = 980
+                // Départ en douceur, longue arrivée qui ralentit : pas d'à-coup.
+                interpolator = android.view.animation.PathInterpolator(0.35f, 0f, 0.1f, 1f)
                 addUpdateListener {
                     val f = it.animatedValue as Float
+                    reveal.logoAlpha = (1f - f * 1.6f).coerceIn(0f, 1f)
                     reveal.set(
                         cx0 + (cx1 - cx0) * f,
                         cy0 + (cy1 - cy0) * f,
                         r0 + (r1 - r0) * f,
                         label0 + (label1 - label0) * f,
-                        40f + 320f * f,
+                        40f + 240f * f,
                     )
                 }
                 doOnEnd {
                     shot?.let { overlay.removeView(it) }
                     snapshot?.recycle()
-                    content.alpha = 1f
-                    reveal.animate().alpha(0f).setDuration(280).withEndAction { overlay.removeView(reveal) }.start()
+                    content.animate().alpha(1f).setDuration(420).start()
+                    reveal.animate().alpha(0f).setDuration(520).withEndAction { overlay.removeView(reveal) }.start()
                 }
                 start()
             }
@@ -1210,6 +1180,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private var radius = 0f
         private var labelRadius = 0f
         private var spin = 0f
+
+        /** Opacité du logo (il s'efface pendant l'ouverture). */
+        var logoAlpha = 1f
 
         /** Logo du site sur l'étiquette (dès qu'il est chargé). */
         var logo: android.graphics.Bitmap? = null
@@ -1259,7 +1232,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 val half = labelRadius * 0.62f
                 val ratio = bitmap.height.toFloat() / bitmap.width.coerceAtLeast(1)
                 dest.set(cx - half, cy - half * ratio, cx + half, cy + half * ratio)
-                canvas.drawBitmap(bitmap, null, dest, picture)
+                picture.alpha = (logoAlpha * 255).toInt()
+                if (picture.alpha > 0) canvas.drawBitmap(bitmap, null, dest, picture)
             }
         }
     }
@@ -1917,7 +1891,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val PROGRESS_POLL_MS = 10_000L
         private const val FOLLOW_POLL_MS = 2_000L
         private const val FRAME_EVERY_MS = 45_000L
-        private const val PAUSE_SCREEN_MS = 5_000L
+        private const val PAUSE_SCREEN_MS = 1_200L
         private const val DOUBLE_BACK_MS = 450L
         /** Étiquette du vinyle de l'accueil, rapportée au rayon du disque (50 dp sur 86 dp au focus). */
         private const val LABEL_RATIO = 0.58f

@@ -33,7 +33,7 @@ WiDo n'ajoute pas de barre de lecture par-dessus celle du site : quand tu avance
 
 Le volume et le zoom ont leur propre indicateur, qui disparaît seul.
 
-**Écran de pause** : une vidéo en pause depuis 5 secondes assombrit la page et affiche son titre, le site, le temps restant et l'heure de fin. **OK** (ou lecture) relance la vidéo ; toute autre touche retire simplement l'écran.
+**Écran de pause** : une vidéo en pause depuis environ une seconde assombrit la page et affiche son titre, le site, le temps restant et l'heure de fin. **OK** (ou lecture) relance la vidéo ; toute autre touche retire simplement l'écran.
 
 **Page qui ne s'ouvre pas** : WiDo affiche son propre écran (pas de connexion, site introuvable, site qui ne répond pas) avec **Réessayer**, **Retour** et, pour un site perso dont l'adresse ne répond plus, **Modifier l'adresse**.
 

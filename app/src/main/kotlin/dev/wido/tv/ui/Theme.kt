@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import dev.wido.tv.R
 import dev.wido.tv.UiSound
 
@@ -209,6 +210,45 @@ fun Modifier.liftEffect(
 }
 
 /**
+ * OK à la télécommande, bref ou maintenu : Compose ne reconnaît pas toujours l'appui long au clavier
+ * (son clic long attend un doigt). Ici, OK maintenu ~0,6 s déclenche `onLongPress`, un appui bref
+ * `onClick` ; le tactile reste géré par `combinedClickable`.
+ */
+fun Modifier.dpadLongPress(onLongPress: (() -> Unit)?, onClick: () -> Unit): Modifier {
+    if (onLongPress == null) return this
+    var fired = false
+    var down = false
+    return onPreviewKeyEvent { e ->
+        val native = e.nativeKeyEvent
+        val ok = native.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || native.keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
+            native.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
+        if (!ok) return@onPreviewKeyEvent false
+        when (native.action) {
+            android.view.KeyEvent.ACTION_DOWN -> {
+                if (native.repeatCount == 0) {
+                    fired = false
+                    down = true
+                }
+                if (down && !fired && native.eventTime - native.downTime >= LONG_PRESS_MS) {
+                    fired = true
+                    onLongPress()
+                }
+                true
+            }
+            android.view.KeyEvent.ACTION_UP -> {
+                if (down && !fired) onClick()
+                down = false
+                fired = false
+                true
+            }
+            else -> true
+        }
+    }
+}
+
+private const val LONG_PRESS_MS = 550L
+
+/**
  * Rend un élément activable à la télécommande : il se soulève quand il a le focus, clic au bouton OK
  * et clic long en option. `onFocusChanged` doit précéder `combinedClickable` pour observer son focus.
  */
@@ -231,6 +271,10 @@ fun Modifier.tvFocusable(
         }
         .liftEffect(focused, shape, focusScale, lift)
         .clip(shape)
+        .dpadLongPress(onLongClick?.let { long -> { UiSound.select(); long() } }) {
+            UiSound.select()
+            onClick()
+        }
         .combinedClickable(
             onClick = {
                 UiSound.select()
