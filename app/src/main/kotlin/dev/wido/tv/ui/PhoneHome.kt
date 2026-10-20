@@ -260,7 +260,7 @@ private fun HomeTab(
         item(span = full) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("WiDo", fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp, modifier = Modifier.weight(1f))
-                RoundButton("↻", onRefresh)
+                RoundButton(Glyph.Refresh, onRefresh)
             }
         }
         item(span = full) { update() }
@@ -382,7 +382,7 @@ private fun NowOnTvStrip(now: NowPlaying, tvName: String, onClick: () -> Unit) {
             Text(stringResource(R.string.now_on_tv, tvName), color = Palette.Ok, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, maxLines = 1)
             Text(now.title.ifEmpty { now.siteName }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text("›", fontSize = 26.sp, color = Palette.TextSecondary)
+        GlyphIcon(Glyph.Right, Palette.TextSecondary, 22.dp)
     }
 }
 
@@ -468,17 +468,17 @@ internal fun Thumb(image: ImageBitmap?, modifier: Modifier) {
         if (image != null) {
             Image(image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
         } else {
-            Text("▶", color = Palette.TextMuted, fontSize = 18.sp)
+            GlyphIcon(Glyph.Play, Palette.TextMuted, 20.dp)
         }
     }
 }
 
 @Composable
-internal fun RoundButton(label: String, onClick: () -> Unit, size: Dp = 42.dp) {
+internal fun RoundButton(glyph: Glyph, onClick: () -> Unit, size: Dp = 42.dp) {
     Box(
         Modifier.size(size).clip(CircleShape).background(Palette.Glass).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Text(label, fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+    ) { GlyphIcon(glyph, Color.White, size * 0.5f) }
 }
 
 @Composable

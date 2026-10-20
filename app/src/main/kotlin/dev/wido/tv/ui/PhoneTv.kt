@@ -128,7 +128,7 @@ fun PhoneTvTab(
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PhoneTitle(stringResource(R.string.tab_tv), Modifier.weight(1f))
-                RoundButton("↻", { link.discovery.restart() })
+                RoundButton(Glyph.Refresh, { link.discovery.restart() })
             }
         }
         if (peers.isEmpty()) {
@@ -279,15 +279,15 @@ private fun NowPlayingCard(peer: Peer, state: ScreenLink.ScreenState, link: Scre
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    RoundButton("⏪", { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); link.key(RemoteKey.REWIND) }, size = 52.dp)
+                    RoundButton(Glyph.Rewind, { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); link.key(RemoteKey.REWIND) }, size = 52.dp)
                     Box(
                         Modifier.size(64.dp).clip(CircleShape).background(Color.White).clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             link.key(RemoteKey.PLAY_PAUSE)
                         },
                         contentAlignment = Alignment.Center,
-                    ) { Text(if (now.playing) "❚❚" else "▶", color = Palette.Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
-                    RoundButton("⏩", { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); link.key(RemoteKey.FORWARD) }, size = 52.dp)
+                    ) { GlyphIcon(if (now.playing) Glyph.Pause else Glyph.Play, Palette.Ink, 28.dp) }
+                    RoundButton(Glyph.Forward, { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); link.key(RemoteKey.FORWARD) }, size = 52.dp)
                 }
                 ActionButton(stringResource(R.string.action_play_here), onPlayHere, Modifier.fillMaxWidth())
             }
@@ -343,37 +343,37 @@ private fun KeysPad(link: ScreenLink) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // Croix directionnelle : un disque de verre, OK au centre.
         Box(Modifier.size(232.dp).clip(CircleShape).background(Palette.Glass)) {
-            DpadArrow("▲", Alignment.TopCenter) { press(RemoteKey.UP) }
-            DpadArrow("▼", Alignment.BottomCenter) { press(RemoteKey.DOWN) }
-            DpadArrow("◀", Alignment.CenterStart) { press(RemoteKey.LEFT) }
-            DpadArrow("▶", Alignment.CenterEnd) { press(RemoteKey.RIGHT) }
+            DpadArrow(Glyph.Up, Alignment.TopCenter) { press(RemoteKey.UP) }
+            DpadArrow(Glyph.Down, Alignment.BottomCenter) { press(RemoteKey.DOWN) }
+            DpadArrow(Glyph.Left, Alignment.CenterStart) { press(RemoteKey.LEFT) }
+            DpadArrow(Glyph.Right, Alignment.CenterEnd) { press(RemoteKey.RIGHT) }
             Box(
                 Modifier.align(Alignment.Center).size(88.dp).clip(CircleShape).background(Color.White).clickable { press(RemoteKey.OK) },
                 contentAlignment = Alignment.Center,
             ) { Text("OK", color = Palette.Ink, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold) }
         }
-        KeyRow(listOf("↩" to RemoteKey.BACK, "⌂" to RemoteKey.HOME, "☰" to RemoteKey.MENU), ::press)
-        KeyRow(listOf("−" to RemoteKey.VOLUME_DOWN, "🔇" to RemoteKey.MUTE, "+" to RemoteKey.VOLUME_UP), ::press)
+        KeyRow(listOf(Glyph.Back to RemoteKey.BACK, Glyph.Home to RemoteKey.HOME, Glyph.Menu to RemoteKey.MENU), ::press)
+        KeyRow(listOf(Glyph.VolumeDown to RemoteKey.VOLUME_DOWN, Glyph.Mute to RemoteKey.MUTE, Glyph.VolumeUp to RemoteKey.VOLUME_UP), ::press)
         Text(stringResource(R.string.remote_volume_hint), color = Palette.TextMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
     }
 }
 
 @Composable
-private fun BoxScope.DpadArrow(label: String, alignment: Alignment, onClick: () -> Unit) {
+private fun BoxScope.DpadArrow(glyph: Glyph, alignment: Alignment, onClick: () -> Unit) {
     Box(
         Modifier.align(alignment).size(72.dp).clip(CircleShape).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Text(label, fontSize = 22.sp, color = Color.White.copy(alpha = 0.9f)) }
+    ) { GlyphIcon(glyph, Color.White.copy(alpha = 0.9f), 30.dp) }
 }
 
 @Composable
-private fun KeyRow(keys: List<Pair<String, RemoteKey>>, onPress: (RemoteKey) -> Unit) {
+private fun KeyRow(keys: List<Pair<Glyph, RemoteKey>>, onPress: (RemoteKey) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        keys.forEach { (label, key) ->
+        keys.forEach { (glyph, key) ->
             Box(
                 Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(18.dp)).background(Palette.Glass).clickable { onPress(key) },
                 contentAlignment = Alignment.Center,
-            ) { Text(label, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+            ) { GlyphIcon(glyph, Color.White, 24.dp) }
         }
     }
 }
@@ -432,7 +432,12 @@ private fun TouchPad(link: ScreenLink) {
                     }
                 },
             contentAlignment = Alignment.Center,
-        ) { Text("⇅", color = Palette.TextMuted, fontSize = 20.sp) }
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                GlyphIcon(Glyph.Up, Palette.TextMuted, 22.dp)
+                GlyphIcon(Glyph.Down, Palette.TextMuted, 22.dp)
+            }
+        }
     }
 }
 

@@ -16,6 +16,9 @@
 - **Synchro de mes écrans** : Reprendre, sites perso, épingles et éléments masqués ; le plus récent gagne, une vidéo finie disparaît partout. Mes TV se synchronisent aussi entre elles.
 
 ### Corrigé
+- **Une seule entrée par vidéo dans Reprendre** : `&t=…`, `?si=…`, `m.youtube.com`, `youtu.be` ou `/shorts/` ne créent plus de doublons (les anciens sont fusionnés).
+- **Lire dans WiDo ↔ page** : le lecteur natif démarre à la seconde où en était la page, et la page reprend là où le lecteur natif s'est arrêté.
+- **Téléphone** : barre de lecture et messages du lecteur à la largeur de l'écran ; icônes (actualiser, lecture, télécommande, menu ⋯) dessinées et centrées.
 - La position des vidéos n'était plus relevée après la sélection d'un champ de la page, ni après le réglage du minuteur de veille.
 
 ## 0.7.0

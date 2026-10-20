@@ -240,3 +240,41 @@ class PairingDeskTest {
         assertTrue(desk.pendingRequests().isEmpty())
     }
 }
+
+class CanonicalWatchTest {
+    @Test fun youtubeVariantsAreOneVideo() {
+        val key = "https://www.youtube.com/watch?v=abcdefghijk"
+        listOf(
+            "https://www.youtube.com/watch?v=abcdefghijk&t=95s",
+            "https://m.youtube.com/watch?v=abcdefghijk&si=xyz&pp=1",
+            "https://youtu.be/abcdefghijk?t=3",
+            "https://www.youtube.com/shorts/abcdefghijk",
+            "https://www.youtube.com/watch?list=PL1&v=abcdefghijk&index=2",
+        ).forEach { assertEquals(key, ContinueWatching.canonical(it), it) }
+    }
+
+    @Test fun otherSitesLoseOnlyNoise() {
+        assertEquals("https://site.tv/ep?id=4#x", ContinueWatching.canonical("https://site.tv/ep?utm_source=a&id=4&t=30#x"))
+        assertEquals("https://site.tv/ep", ContinueWatching.canonical("https://site.tv/ep?fbclid=1"))
+        assertEquals("https://site.tv/ep/5", ContinueWatching.canonical("https://site.tv/ep/5"))
+    }
+
+    @Test fun recordMergesTimeVariants() {
+        val a = WatchEntry("yt", "https://www.youtube.com/watch?v=abcdefghijk&t=60s", "V", position = 60.0, duration = 600.0)
+        val b = a.copy(url = "https://www.youtube.com/watch?v=abcdefghijk&t=200s", position = 200.0)
+        val list = ContinueWatching.record(ContinueWatching.record(emptyList(), a), b)
+        assertEquals(1, list.size)
+        assertEquals(200.0, list.single().position)
+        assertTrue(ContinueWatching.remove(list, a.url).isEmpty())
+    }
+
+    @Test fun decodeMergesOldDuplicates() {
+        val old = listOf(
+            WatchEntry("yt", "https://www.youtube.com/watch?v=abcdefghijk&t=200s", "V", position = 200.0, duration = 600.0),
+            WatchEntry("yt", "https://www.youtube.com/watch?v=abcdefghijk&t=60s", "V", position = 60.0, duration = 600.0),
+        )
+        val back = ContinueWatching.decode(ContinueWatching.encode(old))
+        assertEquals(1, back.size)
+        assertEquals(200.0, back.single().position)
+    }
+}

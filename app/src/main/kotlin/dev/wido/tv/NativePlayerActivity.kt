@@ -112,9 +112,11 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
                 finish()
             }
         })
-        val resume = settings.nativePositionFor(positionKey)
+        // La seconde où en était la page ; à défaut, la dernière position retenue dans le lecteur natif.
+        val start = (intent.getDoubleExtra(EXTRA_START, 0.0) * 1000).toLong()
+        val resume = if (start >= 1_000) start else settings.nativePositionFor(positionKey).takeIf { it > 10_000 } ?: 0L
         player.prepare()
-        if (resume > 10_000) player.seekTo(resume)
+        if (resume > 0) player.seekTo(resume)
         player.playWhenReady = true
     }
 
@@ -198,6 +200,14 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         super.onPause()
     }
 
+    /** La page reprend à la seconde où le lecteur natif s'est arrêté. */
+    override fun finish() {
+        if (::player.isInitialized && player.currentPosition > 0) {
+            setResult(RESULT_OK, Intent().putExtra(RESULT_POSITION, player.currentPosition / 1000.0))
+        }
+        super.finish()
+    }
+
     override fun onStop() {
         if (::player.isInitialized) {
             savePosition()
@@ -231,6 +241,9 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
 
     companion object {
         private const val PUBLISH_MS = 2_000L
+        /** Position (s) où le lecteur natif s'est arrêté, rendue à la page. */
+        const val RESULT_POSITION = "position"
+        private const val EXTRA_START = "start"
         private const val EXTRA_URL = "url"
         private const val EXTRA_KIND = "kind"
         private const val EXTRA_REFERER = "referer"
@@ -258,7 +271,10 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             referer: String?,
             cookies: String?,
             userAgent: String?,
+            /** Seconde de départ (celle de la page). */
+            startSeconds: Double = 0.0,
         ): Intent = Intent(context, NativePlayerActivity::class.java)
+            .putExtra(EXTRA_START, startSeconds)
             .putExtra(EXTRA_URL, stream.url)
             .putExtra(EXTRA_KIND, stream.kind.name)
             .putExtra(EXTRA_SITE, siteId)

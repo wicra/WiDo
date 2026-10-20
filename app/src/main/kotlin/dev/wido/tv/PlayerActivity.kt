@@ -289,7 +289,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             cursor.visibility = View.GONE
         }
 
-        osd = OsdView(this).apply { hideSeconds = settings.osdSeconds }
+        osd = OsdView(this, compact = !tv).apply { hideSeconds = settings.osdSeconds }
         root.addView(osd, osd.layoutParamsForRoot())
 
         topBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -1139,14 +1139,28 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             osd.showText(getString(R.string.osd_native_none))
             return
         }
+        // Le lecteur natif part de la seconde où en était la page.
+        val start = currentPosition()
         media("pause")
         val cookies = runCatching { android.webkit.CookieManager.getInstance().getCookie(stream.url) }.getOrNull()
-        startActivity(
+        nativeLauncher.launch(
             NativePlayerActivity.intent(
                 this, stream, current.id, ResumeUrl.toRemember(current, wv.url), wv.title, pageImage, wv.url, cookies,
-                wv.settings.userAgentString,
+                wv.settings.userAgentString, start,
             ),
         )
+    }
+
+    /** Retour du lecteur natif : la vidéo de la page se cale sur la seconde où on l'a quitté (une seule entrée dans Reprendre). */
+    private val nativeLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+        val position = result.data?.getDoubleExtra(NativePlayerActivity.RESULT_POSITION, -1.0) ?: -1.0
+        if (position < 0) return@registerForActivityResult
+        mediaState.value?.let {
+            mediaState.value = it.copy(time = position, paused = true)
+            mediaAt = SystemClock.elapsedRealtime()
+        }
+        mediaJson(JSONObject().put("cmd", "seekTo").put("to", position).toString())
+        root.postDelayed({ passivePoll = true; media("state") }, 600)
     }
 
     /** Heure (horloge système) du dernier état du lecteur, pour estimer la position en cours. */
@@ -1201,11 +1215,18 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private fun addMenuButton() {
         val density = resources.displayMetrics.density
         val size = (44 * density).toInt()
-        val button = TextView(this).apply {
-            text = "⋯"
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 22f
-            gravity = Gravity.CENTER
+        // Trois points dessinés (le caractère « ⋯ » tombe à côté du centre selon la police).
+        val button = object : View(this) {
+            private val dot = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+            override fun onDraw(canvas: android.graphics.Canvas) {
+                super.onDraw(canvas)
+                val r = 2.2f * density
+                val gap = 7f * density
+                val cy = height / 2f
+                val cx = width / 2f
+                for (i in -1..1) canvas.drawCircle(cx + i * gap, cy, r, dot)
+            }
+        }.apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(0x991A1A26.toInt())

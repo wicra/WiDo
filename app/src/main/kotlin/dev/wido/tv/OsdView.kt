@@ -16,16 +16,18 @@ import dev.wido.core.PlayerFormat
  * Affichage à l'écran, au bas de la page : barre de lecture, volume, ou simple message (zoom…).
  * Disparaît seul après `hideSeconds`.
  */
-class OsdView(context: Context) : LinearLayout(context) {
+class OsdView(context: Context, private val compact: Boolean = false) : LinearLayout(context) {
     private val density = resources.displayMetrics.density
     private val title = TextView(context).apply {
         setTextColor(0xFFFFFFFF.toInt())
-        textSize = 18f
+        textSize = if (compact) 15f else 18f
+        maxLines = 3
         useJakarta(700)
     }
     private val detail = TextView(context).apply {
         setTextColor(0xA6FFFFFF.toInt())
-        textSize = 15f
+        textSize = if (compact) 12f else 15f
+        maxLines = 1
         gravity = Gravity.END
         useJakarta(600)
     }
@@ -42,12 +44,12 @@ class OsdView(context: Context) : LinearLayout(context) {
     init {
         orientation = VERTICAL
         visibility = GONE
-        val pad = (20 * density).toInt()
-        setPadding(pad, (14 * density).toInt(), pad, (16 * density).toInt())
+        val pad = ((if (compact) 16 else 20) * density).toInt()
+        setPadding(pad, ((if (compact) 11 else 14) * density).toInt(), pad, ((if (compact) 12 else 16) * density).toInt())
         // Verre du style : panneau sombre translucide, bord clair d'un pixel, coins de 24 dp.
         background = GradientDrawable().apply {
             setColor(0xEB1A1A26.toInt())
-            cornerRadius = 24 * density
+            cornerRadius = (if (compact) 18 else 24) * density
             setStroke((1 * density).toInt(), 0x24FFFFFF)
         }
         elevation = 24 * density
@@ -57,20 +59,30 @@ class OsdView(context: Context) : LinearLayout(context) {
             addView(detail, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         addView(header, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        addView(bar, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (5 * density).toInt()).apply { topMargin = (12 * density).toInt() })
+        addView(bar, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (5 * density).toInt()).apply { topMargin = ((if (compact) 9 else 12) * density).toInt() })
     }
 
+    /** TV : panneau de 640 dp centré. Téléphone : toute la largeur moins une marge, quelle que soit l'orientation. */
     fun layoutParamsForRoot() = FrameLayout.LayoutParams(
-        (640 * density).toInt(),
+        if (compact) ViewGroup.LayoutParams.MATCH_PARENT else (640 * density).toInt(),
         ViewGroup.LayoutParams.WRAP_CONTENT,
         Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL,
-    ).apply { bottomMargin = (36 * density).toInt() }
+    ).apply {
+        if (compact) {
+            val side = (12 * density).toInt()
+            setMargins(side, 0, side, (20 * density).toInt())
+        } else {
+            bottomMargin = (36 * density).toInt()
+        }
+    }
 
     /** `passive` : rafraîchit les valeurs d'une barre déjà visible, sans la maintenir affichée. */
     fun showMedia(state: MediaState, passive: Boolean = false) {
         if (passive && !isShowing) return
         title.text = if (state.paused) "❚❚  Pause" else "▶  Lecture"
-        detail.text = "${PlayerFormat.time(state.time)} / ${PlayerFormat.time(state.duration)}   ·   🔊 ${PlayerFormat.percent(state.volume)} %"
+        val times = "${PlayerFormat.time(state.time)} / ${PlayerFormat.time(state.duration)}"
+        // Sur téléphone, le volume est celui du système (il a son propre indicateur).
+        detail.text = if (compact) times else "$times   ·   🔊 ${PlayerFormat.percent(state.volume)} %"
         bar.progress = if (state.duration > 0) (state.time / state.duration * 1000).toInt().coerceIn(0, 1000) else 0
         bar.visibility = View.VISIBLE
         if (!passive) reveal()

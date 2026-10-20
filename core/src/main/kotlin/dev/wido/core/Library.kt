@@ -167,12 +167,46 @@ object ContinueWatching {
 
     fun encode(entries: List<WatchEntry>): String = json.encodeToString(FileModel(entries))
 
+    /** Relit le fichier ; les doublons d'une même vidéo (anciennes versions) sont fusionnés, le plus récent gardé. */
     fun decode(text: String): List<WatchEntry> =
-        runCatching { json.decodeFromString<FileModel>(text).entries }.getOrDefault(emptyList()).filter { valid(it.url) }.take(MAX)
+        runCatching { json.decodeFromString<FileModel>(text).entries }.getOrDefault(emptyList())
+            .filter { valid(it.url) }
+            .map { it.copy(url = canonical(it.url)) }
+            .distinctBy { it.url }
+            .take(MAX)
+
+    private val YOUTUBE_ID = Regex("[?&]v=([\\w-]{11})")
+    private val YOUTUBE_PATH_ID = Regex("^https?://(?:www\\.|m\\.)?youtube\\.com/(?:shorts|live|embed)/([\\w-]{11})")
+    private val YOUTU_BE = Regex("^https?://youtu\\.be/([\\w-]{11})")
+
+    /** Paramètres qui ne changent pas la vidéo : position, provenance, pistage. */
+    private val NOISE = setOf("t", "start", "time_continue", "si", "pp", "feature", "fbclid", "gclid", "igshid", "ab_channel", "ref", "from")
+
+    /**
+     * L'adresse qui identifie une vidéo, quelle que soit la façon dont on y est arrivé : `&t=95s`,
+     * `?si=…`, `m.youtube.com`, `youtu.be/…` ou `/shorts/…` donnent la même entrée de Reprendre.
+     */
+    fun canonical(url: String): String {
+        val yt = YOUTU_BE.find(url)?.groupValues?.get(1)
+            ?: YOUTUBE_PATH_ID.find(url)?.groupValues?.get(1)
+            ?: Hosts.of(url)?.takeIf { Hosts.matches(it, "youtube.com") && url.contains("/watch") }?.let { YOUTUBE_ID.find(url)?.groupValues?.get(1) }
+        if (yt != null) return "https://www.youtube.com/watch?v=$yt"
+        val hashAt = url.indexOf('#')
+        val fragment = if (hashAt >= 0) url.substring(hashAt) else ""
+        val base = if (hashAt >= 0) url.substring(0, hashAt) else url
+        val q = base.indexOf('?')
+        if (q < 0) return url
+        val kept = base.substring(q + 1).split('&').filter { p ->
+            val key = p.substringBefore('=').lowercase()
+            p.isNotEmpty() && key !in NOISE && !key.startsWith("utm_")
+        }
+        return base.substring(0, q) + (if (kept.isEmpty()) "" else "?" + kept.joinToString("&")) + fragment
+    }
 
     /** Met à jour la liste avec la position d'une vidéo (la plus récente en tête). */
-    fun record(entries: List<WatchEntry>, entry: WatchEntry): List<WatchEntry> {
-        if (!valid(entry.url)) return entries
+    fun record(entries: List<WatchEntry>, raw: WatchEntry): List<WatchEntry> {
+        if (!valid(raw.url)) return entries
+        val entry = raw.copy(url = canonical(raw.url))
         val others = entries.filterNot { it.url == entry.url }
         val finished = entry.duration > 0 && entry.position > entry.duration - END_MARGIN
         if (finished) return others
@@ -182,7 +216,7 @@ object ContinueWatching {
         return (listOf(entry.copy(title = title, image = image)) + others).take(MAX)
     }
 
-    fun remove(entries: List<WatchEntry>, url: String): List<WatchEntry> = entries.filterNot { it.url == url }
+    fun remove(entries: List<WatchEntry>, url: String): List<WatchEntry> = canonical(url).let { key -> entries.filterNot { it.url == key } }
 
     fun removeSite(entries: List<WatchEntry>, siteId: String): List<WatchEntry> = entries.filterNot { it.siteId == siteId }
 
