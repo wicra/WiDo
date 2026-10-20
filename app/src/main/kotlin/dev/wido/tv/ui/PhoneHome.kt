@@ -161,7 +161,7 @@ fun PhoneHome(
                     )
                     PhoneTab.Continue -> ContinueTab(
                         entries = watching,
-                        siteNames = sites.associate { it.site.id to it.site.name },
+                        siteMap = sites.associate { it.site.id to it.site },
                         tvName = screen?.name?.takeIf { tvOnline },
                         onOpen = onOpenWatch,
                         onRemove = { vm.removeWatch(it.url) },
@@ -273,7 +273,7 @@ private fun HomeTab(
                     SectionLabel(stringResource(R.string.continue_title))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(watching, key = { it.url }) { entry ->
-                            WatchTile(entry, sites.firstOrNull { it.site.id == entry.siteId }?.site?.name.orEmpty(), Modifier.width(220.dp)) { onOpenWatch(entry) }
+                            WatchTile(entry, sites.firstOrNull { it.site.id == entry.siteId }?.site, Modifier.width(220.dp)) { onOpenWatch(entry) }
                         }
                     }
                 }
@@ -377,7 +377,7 @@ private fun NowOnTvStrip(now: NowPlaying, tvName: String, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Thumb(image, Modifier.size(72.dp, 42.dp))
+        VideoArt(image, null, now.url, Modifier.size(72.dp, 42.dp).clip(RoundedCornerShape(8.dp)), badge = 0.dp)
         Column(Modifier.weight(1f)) {
             Text(stringResource(R.string.now_on_tv, tvName), color = Palette.Ok, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, maxLines = 1)
             Text(now.title.ifEmpty { now.siteName }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -391,7 +391,7 @@ private fun NowOnTvStrip(now: NowPlaying, tvName: String, onClick: () -> Unit) {
 @Composable
 private fun ContinueTab(
     entries: List<WatchEntry>,
-    siteNames: Map<String, String>,
+    siteMap: Map<String, Site>,
     tvName: String?,
     onOpen: (WatchEntry) -> Unit,
     onRemove: (WatchEntry) -> Unit,
@@ -417,7 +417,7 @@ private fun ContinueTab(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Box(Modifier.size(128.dp, 72.dp).clip(RoundedCornerShape(10.dp))) {
-                    Thumb(rememberThumbnail(entry.image), Modifier.matchParentSize())
+                    VideoArt(rememberWatchImage(entry), siteMap[entry.siteId], entry.url, Modifier.matchParentSize(), badge = 18.dp)
                     Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.25f))) {
                         Box(Modifier.fillMaxWidth(entry.progress).fillMaxHeight().background(Color.White))
                     }
@@ -425,7 +425,7 @@ private fun ContinueTab(
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(entry.title, fontSize = 14.sp, fontWeight = FontWeight.Bold, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(
-                        listOfNotNull(siteNames[entry.siteId], remaining(entry)).joinToString(" · "),
+                        listOfNotNull(siteMap[entry.siteId]?.name ?: Hosts.of(entry.url)?.removePrefix("www."), remaining(entry)).joinToString(" · "),
                         color = Palette.TextSecondary,
                         fontSize = 12.sp,
                         maxLines = 1,
@@ -462,13 +462,42 @@ internal fun rememberThumbnail(url: String?): ImageBitmap? {
     return image
 }
 
+/**
+ * L'image d'une vidéo en cours : celle capturée là où on l'a quittée, sinon celle de la page. Elle
+ * change dès qu'une image plus récente est capturée.
+ */
 @Composable
-internal fun Thumb(image: ImageBitmap?, modifier: Modifier) {
-    Box(modifier.clip(RoundedCornerShape(10.dp)).background(Palette.Glass), contentAlignment = Alignment.Center) {
+internal fun rememberWatchImage(entry: WatchEntry): ImageBitmap? {
+    val app = LocalContext.current.applicationContext as WiDoApp
+    var image by remember(entry.url) { mutableStateOf<ImageBitmap?>(null) }
+    androidx.compose.runtime.LaunchedEffect(entry.url, entry.updatedAt, entry.image) {
+        app.thumbnails.forVideo(entry.url, entry.image)?.let { image = it }
+    }
+    return image
+}
+
+/**
+ * Vignette d'une vidéo : l'image, avec le logo du site en petit badge ; sans image, la couleur du site
+ * et son logo en grand. On reconnaît toujours ce que c'était.
+ */
+@Composable
+internal fun VideoArt(image: ImageBitmap?, site: Site?, url: String, modifier: Modifier, badge: Dp = 22.dp) {
+    val app = LocalContext.current.applicationContext as WiDoApp
+    val shown = site ?: remember(url) {
+        Hosts.of(url)?.let { host -> Site(id = dev.wido.tv.ConfigRepository.LINK_SITE_ID, name = host.removePrefix("www."), url = "https://$host/") }
+    }
+    val icon by produceState<SiteIcon?>(null, shown?.id, shown?.url) { value = shown?.let { app.favicons.load(it) } }
+    val accent = parseColor(shown?.color) ?: icon?.color ?: shown?.let { app.favicons.cachedColor(it) } ?: Palette.Accent
+    Box(modifier.then(if (image == null) Modifier.background(siteGradient(accent)) else Modifier.background(Palette.Glass))) {
         if (image != null) {
             Image(image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
-        } else {
-            GlyphIcon(Glyph.Play, Palette.TextMuted, 20.dp)
+            if (badge > 0.dp && shown != null) {
+                SiteLogo(icon, shown.name, badge, focused = true, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
+            }
+        } else if (shown != null) {
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                SiteLogo(icon, shown.name, if (badge > 0.dp) badge * 1.7f else 26.dp, focused = true)
+            }
         }
     }
 }
@@ -604,10 +633,10 @@ private fun TabIcon(tab: PhoneTab, color: Color) {
 
 /** Vignette d'une vidéo en cours (image, titre, site, avancement). */
 @Composable
-internal fun WatchTile(entry: WatchEntry, siteName: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val image = rememberThumbnail(entry.image)
+internal fun WatchTile(entry: WatchEntry, site: Site?, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val siteName = site?.name ?: Hosts.of(entry.url)?.removePrefix("www.").orEmpty()
     Box(modifier.aspectRatio(16f / 9f).clip(CardShape).background(Palette.Glass).clickable(onClick = onClick)) {
-        image?.let { Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize()) }
+        VideoArt(rememberWatchImage(entry), site, entry.url, Modifier.matchParentSize())
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color(0xE6000000))))
         Column(Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) {
             Text(entry.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)

@@ -140,10 +140,30 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
 
     // --- Lien avec les autres écrans : télécommande, « En cours sur la TV » ---
 
+    private var ticks = 0
+
     private val publish = object : Runnable {
         override fun run() {
             publishNowPlaying()
+            // Toutes les ~45 s de lecture : l'image de la vidéo pour « Reprendre ».
+            if (player.isPlaying && ++ticks % 22 == 0) captureFrame()
             view.postDelayed(this, PUBLISH_MS)
+        }
+    }
+
+    /** Copie l'image affichée par le lecteur (sa surface vidéo) pour la vignette de « Reprendre ». */
+    private fun captureFrame() {
+        val surface = view.videoSurfaceView as? android.view.SurfaceView ?: return
+        val page = intent.getStringExtra(EXTRA_PAGE) ?: return
+        if (surface.width == 0 || surface.height == 0 || !surface.holder.surface.isValid) return
+        val width = minOf(480, surface.width)
+        val height = (surface.height * width.toFloat() / surface.width).toInt().coerceAtLeast(1)
+        val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+        val thumbnails = (application as WiDoApp).thumbnails
+        runCatching {
+            android.view.PixelCopy.request(surface, bitmap, { result ->
+                if (result == android.view.PixelCopy.SUCCESS) kotlin.concurrent.thread { thumbnails.saveFrame(page, bitmap) }
+            }, android.os.Handler(android.os.Looper.getMainLooper()))
         }
     }
 
@@ -193,6 +213,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
 
     override fun onPause() {
         if (::player.isInitialized) {
+            captureFrame()
             view.removeCallbacks(publish)
             (application as WiDoApp).remote.detach(this)
             if ((application as WiDoApp).isTv) (application as WiDoApp).link.nowPlaying.value = null

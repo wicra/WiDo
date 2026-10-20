@@ -15,6 +15,10 @@
 - **Liaison** par QR code ou par la liste des TV du réseau, validée sur la TV : **Invité** (télécommande, envoi) ou **Mon téléphone** (synchro).
 - **Synchro de mes écrans** : Reprendre, sites perso, épingles et éléments masqués ; le plus récent gagne, une vidéo finie disparaît partout. Mes TV se synchronisent aussi entre elles.
 
+### 🖼️ Reprendre en images
+- Chaque vidéo en cours montre **l'image de la vidéo là où tu l'as quittée** (capturée pendant la lecture, dans la page comme dans le lecteur natif), sinon l'image de la page ; le **logo du site** est en petit badge.
+- Sans image (vidéo protégée, page sans illustration) : la **couleur et le logo du site**.
+
 ### Corrigé
 - **Une seule entrée par vidéo dans Reprendre** : `&t=…`, `?si=…`, `m.youtube.com`, `youtu.be` ou `/shorts/` ne créent plus de doublons (les anciens sont fusionnés).
 - **Lire dans WiDo ↔ page** : le lecteur natif démarre à la seconde où en était la page, et la page reprend là où le lecteur natif s'est arrêté.

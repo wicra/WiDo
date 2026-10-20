@@ -249,7 +249,7 @@ private fun NowPlayingCard(peer: Peer, state: ScreenLink.ScreenState, link: Scre
                 var dragging by remember { mutableStateOf(false) }
                 var dragValue by remember { mutableFloatStateOf(0f) }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Thumb(rememberThumbnail(now.image), Modifier.size(112.dp, 63.dp))
+                    VideoArt(rememberThumbnail(now.image), null, now.url, Modifier.size(112.dp, 63.dp).clip(RoundedCornerShape(10.dp)), badge = 16.dp)
                     Column(Modifier.weight(1f)) {
                         Text(now.title.ifEmpty { now.url }, fontSize = 15.sp, fontWeight = FontWeight.Bold, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         if (now.siteName.isNotEmpty()) Text(now.siteName, color = Palette.TextSecondary, fontSize = 12.sp, maxLines = 1)

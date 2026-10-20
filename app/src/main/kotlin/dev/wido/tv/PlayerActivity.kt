@@ -620,6 +620,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         mediaState.value = state
         mediaAt = SystemClock.elapsedRealtime()
         publishNowPlaying(state)
+        if (!state.paused) captureFrame()
         applyPendingSeek(state)
         osd.showMedia(state, passive)
         root.removeCallbacks(poll)
@@ -994,6 +995,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     override fun onPause() {
+        captureFrame(force = true)
         (application as WiDoApp).remote.detach(this)
         if (tv) (application as WiDoApp).link.nowPlaying.value = null
         root.removeCallbacks(progressPoll)
@@ -1163,6 +1165,60 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         root.postDelayed({ passivePoll = true; media("state") }, 600)
     }
 
+    // --- Image de la vidéo pour « Reprendre » ---
+
+    private var lastFrameAt = 0L
+
+    /**
+     * Capture l'image de la vidéo (zone du lecteur dans la page, ou tout l'écran en plein écran) pour la
+     * vignette de « Reprendre ». Toutes les 45 s pendant la lecture, et en quittant la page.
+     */
+    private fun captureFrame(force: Boolean = false) {
+        val current = site ?: return
+        val wv = webView ?: return
+        val state = mediaState.value ?: return
+        if (state.duration <= 0 || panelView != null || helpView != null || adWindow?.isOpen == true) return
+        val now = SystemClock.elapsedRealtime()
+        if (!force && (now - lastFrameAt < FRAME_EVERY_MS || osd.isShowing)) return
+        val page = ResumeUrl.toRemember(current, wv.url) ?: return
+        lastFrameAt = now
+        // Les sites qui changent de vidéo sans recharger la page mettent aussi leur image à jour.
+        captureMeta()
+        if (customView != null) {
+            copyWindow(android.graphics.Rect(0, 0, root.width, root.height), page)
+            return
+        }
+        val loc = IntArray(2)
+        wv.getLocationInWindow(loc)
+        val full = android.graphics.Rect(loc[0], loc[1], loc[0] + wv.width, loc[1] + wv.height)
+        wv.evaluateJavascript(VIDEO_RECT_SCRIPT) { raw ->
+            val rect = runCatching {
+                val o = JSONObject(unquote(raw) ?: return@runCatching null)
+                android.graphics.Rect(
+                    loc[0] + (o.getDouble("x") * wv.width).toInt(),
+                    loc[1] + (o.getDouble("y") * wv.height).toInt(),
+                    loc[0] + (o.getDouble("r") * wv.width).toInt(),
+                    loc[1] + (o.getDouble("b") * wv.height).toInt(),
+                )
+            }.getOrNull()
+            copyWindow(rect?.takeIf { it.width() > 80 && it.height() > 45 } ?: full, page)
+        }
+    }
+
+    /** Copie une zone de la fenêtre (vidéo comprise) dans une petite image, enregistrée hors du fil principal. */
+    private fun copyWindow(rect: android.graphics.Rect, page: String) {
+        if (rect.width() <= 0 || rect.height() <= 0 || window.decorView.width == 0) return
+        val width = minOf(480, rect.width())
+        val height = (rect.height() * width.toFloat() / rect.width()).toInt().coerceAtLeast(1)
+        val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+        val thumbnails = (application as WiDoApp).thumbnails
+        runCatching {
+            android.view.PixelCopy.request(window, rect, bitmap, { result ->
+                if (result == android.view.PixelCopy.SUCCESS) kotlin.concurrent.thread { thumbnails.saveFrame(page, bitmap) }
+            }, android.os.Handler(android.os.Looper.getMainLooper()))
+        }
+    }
+
     /** Heure (horloge système) du dernier état du lecteur, pour estimer la position en cours. */
     private var mediaAt = 0L
 
@@ -1297,10 +1353,30 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         const val EXTRA_POSITION = "position"
         private const val PROGRESS_POLL_MS = 10_000L
         private const val FOLLOW_POLL_MS = 2_000L
+        private const val FRAME_EVERY_MS = 45_000L
+        /** La plus grande vidéo visible (sinon la plus grande iframe, où se cache souvent le lecteur), en fractions de l'écran. */
+        private const val VIDEO_RECT_SCRIPT = """(function () {
+  var best = null, area = 0;
+  function visible(r) { return Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)); }
+  document.querySelectorAll('video').forEach(function (v) { var r = v.getBoundingClientRect(), a = visible(r); if (a > area) { area = a; best = r; } });
+  if (!best) document.querySelectorAll('iframe').forEach(function (f) { var r = f.getBoundingClientRect(), a = visible(r); if (a > area) { area = a; best = r; } });
+  if (!best || area < 20000) return null;
+  return JSON.stringify({ x: Math.max(0, best.left) / innerWidth, y: Math.max(0, best.top) / innerHeight, r: Math.min(innerWidth, best.right) / innerWidth, b: Math.min(innerHeight, best.bottom) / innerHeight });
+})()"""
         private const val RESUME_POLL_MS = 1_500L
         private const val RESUME_ATTEMPTS = 20
-        private const val META_SCRIPT =
-            "(function(){var m=document.querySelector('meta[property=\"og:image\"],meta[name=\"twitter:image\"]');return m?m.content:null;})()"
+        /** Image de la page : og:image, twitter:image, image_src, thumbnailUrl, puis l'affiche du lecteur (`poster`). */
+        private const val META_SCRIPT = """(function () {
+  function abs(u) { try { return u ? new URL(u, location.href).href : null; } catch (e) { return null; } }
+  var m = document.querySelector('meta[property="og:image"],meta[property="og:image:url"],meta[name="twitter:image"],meta[itemprop="thumbnailUrl"],link[itemprop="thumbnailUrl"],link[rel="image_src"]');
+  var u = m ? (m.content || m.href) : null;
+  if (!u) document.querySelectorAll('script[type="application/ld+json"]').forEach(function (s) {
+    if (u) return;
+    try { var j = JSON.parse(s.textContent); var t = (Array.isArray(j) ? j[0] : j).thumbnailUrl; u = Array.isArray(t) ? t[0] : t; } catch (e) {}
+  });
+  if (!u) { var v = document.querySelector('video[poster]'); u = v ? v.getAttribute('poster') : null; }
+  return abs(u);
+})()"""
         /** Valeur spéciale de l'extra `site` : rouvre le dernier site ouvert. */
         const val LAST_SITE = "last"
         private const val FIELD_CARD_GRACE_MS = 1_500L

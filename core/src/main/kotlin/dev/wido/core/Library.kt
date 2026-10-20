@@ -212,7 +212,8 @@ object ContinueWatching {
         if (finished) return others
         if (entry.position < MIN_POSITION) return entries
         val title = entry.title.trim().replace(Regex("\\s+"), " ").take(MAX_TITLE).ifEmpty { Hosts.of(entry.url).orEmpty() }
-        val image = entry.image?.takeIf { Hosts.schemeOf(it) == "https" } ?: youtubeThumbnail(entry.url)
+        // YouTube : la miniature se déduit de la vidéo (l'image de la page peut être celle de la vidéo précédente).
+        val image = youtubeThumbnail(entry.url) ?: entry.image?.takeIf { Hosts.schemeOf(it) == "https" }
         return (listOf(entry.copy(title = title, image = image)) + others).take(MAX)
     }
 

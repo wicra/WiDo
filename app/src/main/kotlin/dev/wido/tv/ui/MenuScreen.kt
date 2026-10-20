@@ -150,7 +150,7 @@ fun MenuScreen(
                     if (watching.isNotEmpty()) {
                         ContinueRow(
                             entries = watching,
-                            siteNames = sites.associate { it.site.id to it.site.name },
+                            siteMap = sites.associate { it.site.id to it.site },
                             onOpen = onOpenWatch,
                             onRemove = { vm.removeWatch(it.url) },
                             onFocus = { entry ->
@@ -573,7 +573,7 @@ internal fun parseColor(hex: String?): Color? = hex?.let {
 @Composable
 private fun ContinueRow(
     entries: List<WatchEntry>,
-    siteNames: Map<String, String>,
+    siteMap: Map<String, Site>,
     onOpen: (WatchEntry) -> Unit,
     onRemove: (WatchEntry) -> Unit,
     onFocus: (WatchEntry) -> Unit,
@@ -586,7 +586,7 @@ private fun ContinueRow(
             modifier = Modifier.fillMaxWidth().height(136.dp),
         ) {
             itemsIndexed(entries, key = { _, it -> it.url }) { _, entry ->
-                WatchCard(entry, siteNames[entry.siteId].orEmpty(), { onOpen(entry) }, { onRemove(entry) }, { onFocus(entry) })
+                WatchCard(entry, siteMap[entry.siteId], { onOpen(entry) }, { onRemove(entry) }, { onFocus(entry) })
             }
         }
     }
@@ -594,11 +594,8 @@ private fun ContinueRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun WatchCard(entry: WatchEntry, siteName: String, onClick: () -> Unit, onRemove: () -> Unit, onFocus: () -> Unit) {
-    val context = LocalContext.current
-    val image by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, entry.image) {
-        value = entry.image?.let { (context.applicationContext as WiDoApp).thumbnails.load(it) }
-    }
+private fun WatchCard(entry: WatchEntry, site: Site?, onClick: () -> Unit, onRemove: () -> Unit, onFocus: () -> Unit) {
+    val siteName = site?.name ?: Hosts.of(entry.url)?.removePrefix("www.").orEmpty()
     var focused by remember { mutableStateOf(false) }
     Box(
         Modifier
@@ -613,9 +610,8 @@ private fun WatchCard(entry: WatchEntry, siteName: String, onClick: () -> Unit, 
             .then(if (focused) Modifier.border(2.dp, Color.White, CardShape) else Modifier)
             .combinedClickable(onClick = onClick, onLongClick = onRemove),
     ) {
-        image?.let {
-            androidx.compose.foundation.Image(it, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.matchParentSize())
-        }
+        // L'image de la vidéo (ou de la page), avec le logo du site ; sinon la couleur et le logo du site.
+        VideoArt(rememberWatchImage(entry), site, entry.url, Modifier.matchParentSize())
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color(0xE6000000))))
         Column(Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) {
             Text(entry.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
