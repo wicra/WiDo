@@ -3,12 +3,11 @@ package dev.wido.tv.ui
 import android.view.KeyEvent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,16 +15,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,21 +36,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -70,15 +63,22 @@ import dev.wido.tv.SiteIcon
 import dev.wido.tv.UpdateUi
 import dev.wido.tv.WiDoApp
 import kotlinx.coroutines.delay
+import java.util.Date
 
 private sealed interface Editor {
     data object Add : Editor
     data class Edit(val site: Site) : Editor
 }
 
+private enum class Tab { Sites, Settings }
+
+/** Voile qui assombrit le bas de l'écran d'accueil, sous la rangée de cartes. */
+private val MenuVeil = Brush.verticalGradient(0.3f to Color.Transparent, 1f to Color(0xD908080E))
+
 /**
- * Écran d'accueil : une barre en haut, la grille des sites, une ligne d'état en bas. Chaque zone a sa
- * propre place dans une colonne : rien ne se superpose.
+ * Écran d'accueil : le logo, les onglets Sites / Réglages et l'état en haut. L'onglet Sites montre en
+ * grand le site sélectionné (son nom, Ouvrir, Options) au-dessus d'une rangée de cartes ; le fond prend
+ * la lumière de la carte sélectionnée. L'onglet Réglages remplace la scène par la liste des réglages.
  */
 @Composable
 fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
@@ -86,70 +86,80 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
     val update by vm.update.collectAsState()
     val sites by vm.sites.collectAsState()
 
+    var tab by remember { mutableStateOf(Tab.Sites) }
     var editor by remember { mutableStateOf<Editor?>(null) }
     var actionsFor by remember { mutableStateOf<Site?>(null) }
-    var showSettings by remember { mutableStateOf(false) }
+    // Le site mis en scène : celui de la dernière carte focalisée (null = carte « Ajouter »).
+    var currentId by remember { mutableStateOf<String?>(null) }
+    var addFocused by remember { mutableStateOf(false) }
     val settings = (LocalContext.current.applicationContext as WiDoApp).settings
 
-    // Ambiance : la lueur du haut prend la couleur de la carte sélectionnée.
-    var ambientTarget by remember { mutableStateOf(Palette.Accent) }
-    val ambient by animateColorAsState(ambientTarget, tween(700), label = "ambient")
+    // Ambiance : les halos prennent la couleur de la carte sélectionnée, ou le bleu-violet des réglages.
+    var siteLight by remember { mutableStateOf(Palette.Accent) }
+    val light by animateColorAsState(if (tab == Tab.Settings) Palette.Accent else siteLight, tween(700), label = "light")
+    val second by animateColorAsState(if (tab == Tab.Settings) Palette.Purple else Palette.Violet, tween(700), label = "light2")
     val firstCard = remember { FocusRequester() }
 
     LaunchedEffect(sites.isNotEmpty()) {
         if (sites.isNotEmpty()) runCatching { firstCard.requestFocus() }
     }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Palette.Background)
-            .drawBehind {
-                drawRect(
-                    Brush.radialGradient(
-                        listOf(ambient.copy(alpha = 0.28f), Color.Transparent),
-                        center = Offset(size.width * 0.5f, -size.height * 0.1f),
-                        radius = size.width * 0.8f,
-                    ),
-                )
-            }
-            .padding(horizontal = 48.dp, vertical = 24.dp),
-    ) {
+    val glows = if (tab == Tab.Settings) {
+        listOf(Glow(light, 0.1f, 0.1f, 0.6f, 0.7f), Glow(second, 0.95f, 0.9f, 0.6f, 0.7f))
+    } else {
+        listOf(Glow(light, 0.2f, 0.3f, 0.55f, 0.7f), Glow(second, 0.85f, 0.1f, 0.6f, 0.7f), Glow(Palette.Navy, 0.6f, 1.1f, 0.8f, 0.6f))
+    }
+
+    Box(Modifier.fillMaxSize().halo(glows, if (tab == Tab.Sites) MenuVeil else null)) {
         Column(Modifier.fillMaxSize()) {
-            TopBar(state, onSettings = { showSettings = true }, onRefresh = vm::refresh)
-            Spacer(Modifier.height(12.dp))
-            UpdateBanner(update, onInstall = vm::install)
-            Text(
-                stringResource(R.string.menu_title).uppercase(),
-                color = Palette.TextSecondary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 3.sp,
-                modifier = Modifier.padding(start = 12.dp),
-            )
-            if (sites.isEmpty() && !state.loading) EmptyHint()
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(210.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-                contentPadding = PaddingValues(12.dp),
-                modifier = Modifier.weight(1f),
-            ) {
-                itemsIndexed(sites, key = { _, it -> it.site.id }) { index, entry ->
-                    SiteCard(
-                        entry = entry,
-                        index = index,
-                        onClick = { onOpen(entry.site) },
-                        onOptions = { actionsFor = entry.site },
-                        onFocus = { ambientTarget = it },
-                        modifier = if (index == 0) Modifier.focusRequester(firstCard) else Modifier,
+            TopBar(state, tab, onTab = { tab = it }, onRefresh = vm::refresh)
+            when (tab) {
+                Tab.Sites -> {
+                    UpdateBanner(update, onInstall = vm::install)
+                    val current = if (addFocused) null else sites.firstOrNull { it.site.id == currentId } ?: sites.firstOrNull()
+                    Hero(
+                        current,
+                        empty = sites.isEmpty() && !state.loading,
+                        onOpen = { current?.let { onOpen(it.site) } },
+                        onOptions = { current?.let { actionsFor = it.site } },
+                        onAdd = { editor = Editor.Add },
+                        modifier = Modifier.weight(1f),
                     )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(22.dp),
+                        verticalAlignment = Alignment.Bottom,
+                        contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 30.dp),
+                        modifier = Modifier.fillMaxWidth().height(176.dp),
+                    ) {
+                        itemsIndexed(sites, key = { _, it -> it.site.id }) { index, entry ->
+                            SiteCard(
+                                entry = entry,
+                                index = index,
+                                onClick = { onOpen(entry.site) },
+                                onOptions = { actionsFor = entry.site },
+                                onFocus = { color ->
+                                    currentId = entry.site.id
+                                    addFocused = false
+                                    siteLight = color
+                                },
+                                modifier = if (index == 0) Modifier.focusRequester(firstCard) else Modifier,
+                            )
+                        }
+                        item(key = "add") {
+                            AddCard(
+                                index = sites.size,
+                                onClick = { editor = Editor.Add },
+                                onFocus = {
+                                    addFocused = true
+                                    siteLight = Palette.Accent
+                                },
+                            )
+                        }
+                    }
+                    Footer(update)
                 }
-                item(key = "add") {
-                    AddCard(index = sites.size, onClick = { editor = Editor.Add }, onFocus = { ambientTarget = it })
-                }
+                Tab.Settings -> SettingsPane(settings, Modifier.weight(1f))
             }
-            Footer(update)
         }
     }
 
@@ -179,38 +189,90 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
             defaultRelaxed = settings.newSitesRelaxed,
         )
     }
-
-    if (showSettings) SettingsDialog(settings) { showSettings = false }
 }
 
+/** Le logo à gauche, la pilule d'onglets au centre, l'état et l'heure à droite. */
 @Composable
-private fun TopBar(state: ConfigState, onSettings: () -> Unit, onRefresh: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Image(painterResource(R.drawable.wido_logo), contentDescription = null, modifier = Modifier.size(40.dp))
-        Spacer(Modifier.width(12.dp))
-        Text("WiDo", color = Palette.TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        Spacer(Modifier.weight(1f))
-        StatusDot(state)
-        Spacer(Modifier.width(14.dp))
-        ActionButton(stringResource(R.string.action_settings), onSettings, primary = false, compact = true)
-        Spacer(Modifier.width(10.dp))
-        ActionButton(stringResource(R.string.action_refresh), onRefresh, compact = true)
+private fun TopBar(state: ConfigState, tab: Tab, onTab: (Tab) -> Unit, onRefresh: () -> Unit) {
+    Box(Modifier.fillMaxWidth().padding(start = 52.dp, end = 40.dp, top = 24.dp, bottom = 8.dp)) {
+        Wordmark(Modifier.align(Alignment.CenterStart))
+        Row(
+            Modifier
+                .align(Alignment.Center)
+                .clip(PillShape)
+                .background(Palette.Glass)
+                .padding(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            TabItem(stringResource(R.string.tab_sites), tab == Tab.Sites) { onTab(Tab.Sites) }
+            TabItem(stringResource(R.string.action_settings), tab == Tab.Settings) { onTab(Tab.Settings) }
+        }
+        StatusPill(state, onRefresh, Modifier.align(Alignment.CenterEnd))
     }
 }
 
-/** État de la configuration en deux mots : un point de couleur et un libellé court. */
+/** Le logo : le nom de l'app en Plus Jakarta Sans extra-grasse. */
 @Composable
-private fun StatusDot(state: ConfigState) {
+fun Wordmark(modifier: Modifier = Modifier) {
+    Text("WiDo", color = Palette.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp, modifier = modifier)
+}
+
+/** Un onglet : il s'active dès qu'il reçoit le focus, comme sur les écrans d'accueil des TV. */
+@Composable
+private fun TabItem(label: String, selected: Boolean, onSelect: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val background by animateColorAsState(if (selected) Color.White else Color.Transparent, label = "tab")
+    Box(
+        Modifier
+            .tvFocusable(
+                PillShape,
+                focusScale = 1.08f,
+                onFocusChange = {
+                    focused = it
+                    if (it) onSelect()
+                },
+                onClick = onSelect,
+            )
+            .background(background)
+            .padding(horizontal = 20.dp, vertical = 7.dp),
+    ) {
+        Text(
+            label,
+            color = if (selected) Palette.Ink else Color.White.copy(alpha = if (focused) 1f else 0.75f),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+    }
+}
+
+/** État de la configuration et heure. Activable : OK actualise la configuration. */
+@Composable
+private fun StatusPill(state: ConfigState, onRefresh: () -> Unit, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     val (text, dot) = when {
         state.loading && state.config == null -> stringResource(R.string.status_loading) to Palette.TextSecondary
         state.warnings.isNotEmpty() -> stringResource(R.string.status_warnings, state.warnings.size) to Palette.Warning
         state.source == ConfigSource.Remote -> stringResource(R.string.status_ok) to Palette.Ok
         else -> stringResource(R.string.status_offline) to Palette.Warning
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
-        Spacer(Modifier.width(8.dp))
-        Text(text, color = Palette.TextSecondary, fontSize = 13.sp, maxLines = 1)
+    val clock by produceState("") {
+        val format = android.text.format.DateFormat.getTimeFormat(context)
+        while (true) {
+            value = format.format(Date())
+            delay(15_000)
+        }
+    }
+    FocusSurface(onRefresh, modifier, idle = Color.Transparent) { focused ->
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (focused) {
+                Text("↻  " + stringResource(R.string.action_refresh), color = Palette.Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            } else {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(dot))
+                Spacer(Modifier.width(8.dp))
+                Text("$text · $clock", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
+        }
     }
 }
 
@@ -225,14 +287,59 @@ private fun UpdateBanner(update: UpdateUi, onInstall: (ReleaseInfo) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp)
-            .clip(CardShape)
-            .background(Palette.Accent.copy(alpha = 0.18f))
-            .padding(horizontal = 20.dp, vertical = 8.dp),
+            .padding(horizontal = 52.dp, vertical = 8.dp)
+            .glassPanel(Palette.Glass, PillShape)
+            .padding(start = 20.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(message, color = Palette.TextPrimary, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(message, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
         if (info != null) ActionButton(stringResource(R.string.update_install), { onInstall(info) }, compact = true)
+    }
+}
+
+/** La scène : le site sélectionné en grand titre, son adresse, et ses actions. */
+@Composable
+private fun Hero(
+    current: MenuSite?,
+    empty: Boolean,
+    onOpen: () -> Unit,
+    onOptions: () -> Unit,
+    onAdd: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier.fillMaxWidth().padding(start = 52.dp, end = 52.dp, top = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        val title = current?.site?.name ?: stringResource(R.string.editor_title_add)
+        Text(
+            title,
+            fontSize = 56.sp,
+            lineHeight = 60.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = (-2).sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        val subtitle = when {
+            current != null -> {
+                val host = Hosts.of(current.site.url).orEmpty()
+                if (current.local) "$host · ${stringResource(R.string.tag_local)}" else host
+            }
+            empty -> stringResource(R.string.empty_body)
+            else -> ""
+        }
+        if (subtitle.isNotEmpty()) {
+            Text(subtitle, color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (current != null) {
+                ActionButton("▶  " + stringResource(R.string.action_open), onOpen)
+                if (current.local) ActionButton(stringResource(R.string.action_options), onOptions, primary = false, idleText = Color.White.copy(alpha = 0.8f))
+            } else {
+                ActionButton("+  " + stringResource(R.string.add_site), onAdd)
+            }
+        }
     }
 }
 
@@ -251,9 +358,9 @@ private fun rememberEntrance(index: Int): Modifier {
 }
 
 /**
- * Carte d'un site. Un site perso a deux zones de focus, l'une sous l'autre et sans se superposer :
- * le corps (OK ouvre le site) et la bande « ••• » en bas (OK ouvre les options). Le halo et le zoom
- * suivent la carte entière ; le contour clair montre la zone active.
+ * Carte d'un site. Au repos : du verre. Avec le focus : elle grandit, passe à la couleur pleine du site
+ * avec un reflet, et se soulève depuis son coin bas gauche. OK ouvre le site ; sur un site perso, la
+ * touche Menu ou l'appui long ouvrent ses options (aussi accessibles par le bouton Options de la scène).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -272,10 +379,12 @@ private fun SiteCard(
     }
     // Couleur : celle de la config si elle en impose une, sinon celle de l'icône du site.
     val accent = parseColor(site.color) ?: icon?.color ?: Palette.Accent
-    var bodyFocused by remember { mutableStateOf(false) }
-    var dotsFocused by remember { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
+    val width by animateDpAsState(if (focused) 210.dp else 170.dp, label = "cardWidth")
+    val height by animateDpAsState(if (focused) 126.dp else 102.dp, label = "cardHeight")
+    // Le zoom part du coin bas gauche : cette marge évite de recouvrir la carte suivante.
+    val room by animateDpAsState(if (focused) 18.dp else 0.dp, label = "cardRoom")
 
-    // Raccourcis en plus du bouton : touche Menu de la télécommande.
     val menuKey = if (entry.local) {
         Modifier.onKeyEvent { e ->
             val handled = e.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_MENU && e.nativeKeyEvent.action == KeyEvent.ACTION_UP
@@ -286,125 +395,72 @@ private fun SiteCard(
         Modifier
     }
 
-    Column(
+    Box(
         modifier
             .then(rememberEntrance(index))
+            .padding(end = room)
+            .size(width, height)
             .then(menuKey)
-            .fillMaxWidth()
-            .aspectRatio(1.3f)
-            .focusEffect(active = bodyFocused || dotsFocused, shape = CardShape, glow = accent, ring = false)
-            .border(3.dp, if (bodyFocused) Palette.Highlight else Color.Transparent, CardShape)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocus(accent)
+            }
+            .liftEffect(focused, CardShape, focusScale = 1.08f, lift = 26.dp, origin = TransformOrigin(0f, 1f))
             .clip(CardShape)
-            .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.55f), Palette.Surface))),
+            .then(if (focused) Modifier.background(siteGradient(accent)).background(GlassSheen) else Modifier.background(Palette.Glass))
+            .combinedClickable(onClick = onClick, onLongClick = if (entry.local) onOptions else null)
+            .padding(14.dp),
+        contentAlignment = Alignment.BottomStart,
     ) {
-        Column(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .onFocusChanged {
-                    bodyFocused = it.isFocused
-                    if (it.isFocused) onFocus(accent)
-                }
-                .combinedClickable(onClick = onClick, onLongClick = if (entry.local) onOptions else null)
-                .padding(14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            IconBubble(icon, site.name)
-            Spacer(Modifier.height(10.dp))
+        Column {
             Text(
                 site.name,
                 color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontSize = if (focused) 17.sp else 15.sp,
+                fontWeight = if (focused) FontWeight.Bold else FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
             )
-            val host = Hosts.of(site.url).orEmpty()
-            Text(
-                if (entry.local) "$host · ${stringResource(R.string.tag_local)}" else host,
-                color = Color.White.copy(alpha = 0.65f),
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-            )
-        }
-        if (entry.local) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(34.dp)
-                    .onFocusChanged {
-                        dotsFocused = it.isFocused
-                        if (it.isFocused) onFocus(accent)
-                    }
-                    .border(2.dp, if (dotsFocused) Palette.Highlight else Color.Transparent, CardShape)
-                    .background(if (dotsFocused) Palette.Accent.copy(alpha = 0.55f) else Color.Black.copy(alpha = 0.28f))
-                    .clickable(onClick = onOptions),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("•••", color = Color.White, fontSize = 16.sp, letterSpacing = 3.sp, maxLines = 1)
+            if (entry.local) {
+                Text(stringResource(R.string.tag_local), color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
             }
         }
     }
 }
 
 @Composable
-private fun IconBubble(icon: SiteIcon?, name: String) {
-    Box(
-        Modifier.size(60.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (icon != null) {
-            Image(icon.image, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(38.dp))
-        } else {
-            Text(name.firstOrNull()?.uppercase().orEmpty(), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-        }
+private fun AddCard(index: Int, onClick: () -> Unit, onFocus: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    FocusSurface(
+        onClick,
+        rememberEntrance(index)
+            .size(102.dp)
+            .border(1.5.dp, if (focused) Color.Transparent else Color.White.copy(alpha = 0.2f), CardShape),
+        shape = CardShape,
+        idle = Color.White.copy(alpha = 0.06f),
+        focusScale = 1.08f,
+        onFocusChange = {
+            focused = it
+            if (it) onFocus()
+        },
+    ) { f ->
+        Text("+", color = onSurface(f), fontSize = 34.sp, fontWeight = FontWeight.Light)
     }
-}
-
-@Composable
-private fun AddCard(index: Int, onClick: () -> Unit, onFocus: (Color) -> Unit) {
-    Column(
-        Modifier
-            .then(rememberEntrance(index))
-            .fillMaxWidth()
-            .aspectRatio(1.3f)
-            .tvFocusable(CardShape, glow = Palette.Highlight, onFocusChange = { if (it) onFocus(Palette.Highlight) }, onClick = onClick)
-            .background(Color.White.copy(alpha = 0.06f)),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text("+", color = Palette.Highlight, fontSize = 44.sp, fontWeight = FontWeight.Light)
-        Text(stringResource(R.string.add_site), color = Palette.TextSecondary, fontSize = 15.sp, maxLines = 1)
-    }
-}
-
-@Composable
-private fun EmptyHint() {
-    Text(
-        stringResource(R.string.empty_body),
-        color = Palette.TextSecondary,
-        fontSize = 15.sp,
-        modifier = Modifier.padding(start = 12.dp, top = 8.dp),
-    )
 }
 
 /** Une seule ligne discrète : la version à gauche, l'état de la mise à jour à droite. */
 @Composable
 private fun Footer(update: UpdateUi) {
     val (status, color) = when (update) {
-        UpdateUi.Checking -> stringResource(R.string.update_checking) to Palette.TextSecondary
-        UpdateUi.UpToDate -> stringResource(R.string.update_uptodate) to Palette.TextSecondary
+        UpdateUi.Checking -> stringResource(R.string.update_checking) to Palette.TextMuted
+        UpdateUi.UpToDate -> stringResource(R.string.update_uptodate) to Palette.TextMuted
         is UpdateUi.CheckFailed -> stringResource(R.string.update_check_failed, update.detail.take(40)) to Palette.Warning
-        else -> "" to Palette.TextSecondary
+        else -> "" to Palette.TextMuted
     }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(stringResource(R.string.version_footer, BuildConfig.VERSION_NAME), color = Palette.TextSecondary.copy(alpha = 0.7f), fontSize = 11.sp)
+    Row(Modifier.fillMaxWidth().padding(start = 52.dp, end = 52.dp, top = 12.dp, bottom = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.version_footer, BuildConfig.VERSION_NAME), color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.weight(1f))
-        if (status.isNotEmpty()) Text(status, color = color, fontSize = 11.sp, maxLines = 1)
+        if (status.isNotEmpty()) Text(status, color = color, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 

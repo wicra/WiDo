@@ -4,12 +4,13 @@ import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
-import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.media.AudioManager
 import android.os.Bundle
 import android.os.SystemClock
@@ -24,12 +25,13 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -39,6 +41,10 @@ import androidx.webkit.WebViewFeature
 import dev.wido.core.Hosts
 import dev.wido.core.Site
 import dev.wido.core.Zoom
+import dev.wido.tv.ui.BlockedRedirect
+import dev.wido.tv.ui.QuickAction
+import dev.wido.tv.ui.QuickMenu
+import dev.wido.tv.ui.WiDoTheme
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -74,6 +80,9 @@ class PlayerActivity : ComponentActivity() {
     private var overlayVisible = true
 
     private var helpView: View? = null
+    private var panelView: ComposeView? = null
+    /** Dernier état connu du lecteur vidéo de la page, affiché dans le menu rapide. */
+    private val mediaState = mutableStateOf<MediaState?>(null)
     private var passivePoll = false
     private val poll = Runnable {
         if (osd.isShowing) {
@@ -244,6 +253,19 @@ class PlayerActivity : ComponentActivity() {
         }
 
         val code = event.keyCode
+
+        // Menu rapide ouvert : les flèches et OK le pilotent ; Retour ou Menu le referment.
+        if (panelView != null) {
+            if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_MENU) {
+                if (event.action == KeyEvent.ACTION_UP) {
+                    // Le relâchement de l'appui long qui vient d'ouvrir le menu ne doit pas le refermer.
+                    if (code == KeyEvent.KEYCODE_BACK && backLongPressed) backLongPressed = false else hidePanel()
+                }
+                return true
+            }
+            return super.dispatchKeyEvent(event)
+        }
+
         when (code) {
             KeyEvent.KEYCODE_BACK -> return handleBack(event)
             KeyEvent.KEYCODE_MENU -> {
@@ -483,6 +505,7 @@ class PlayerActivity : ComponentActivity() {
     private fun onMediaState(state: MediaState) {
         val passive = passivePoll
         passivePoll = false
+        mediaState.value = state
         osd.showMedia(state, passive)
         root.removeCallbacks(poll)
         if (osd.isShowing) root.postDelayed(poll, POLL_MS) // la barre avance pendant qu'elle est visible
@@ -513,35 +536,57 @@ class PlayerActivity : ComponentActivity() {
     // --- Menu rapide ------------------------------------------------------------------------
 
     private fun showPanel() {
+        if (panelView != null) return
         val c = client
         val current = site
-        val entries = mutableListOf<Pair<String, () -> Unit>>()
-        entries += getString(R.string.panel_resume) to {}
-        entries += getString(R.string.panel_reload) to { webView?.reload() }
-        entries += getString(if (cursorMode) R.string.panel_cursor_on else R.string.panel_cursor_off) to { toggleCursor() }
-        entries += getString(R.string.panel_zoom_in) to { changeZoom(1) }
-        entries += getString(R.string.panel_zoom_out) to { changeZoom(-1) }
-
-        // La dernière redirection refusée : l'autoriser pour ce site, ou l'ouvrir une seule fois.
-        val blockedUrl = c?.lastBlockedUrl
-        val blockedHost = blockedUrl?.let { Hosts.of(it) }
-        if (blockedUrl != null && blockedHost != null && current != null) {
-            entries += getString(R.string.panel_allow, blockedHost) to { allowDomain(current, blockedHost, blockedUrl) }
-            entries += getString(R.string.panel_open_once, blockedHost) to {
-                c.allowOnce(blockedUrl)
-                webView?.loadUrl(blockedUrl)
-            }
+        fun action(label: String, run: () -> Unit) = QuickAction(label) {
+            hidePanel()
+            run()
         }
 
-        entries += getString(R.string.panel_save_page) to { saveCurrentPage() }
-        entries += getString(R.string.panel_help) to { showHelp() }
-        entries += getString(R.string.panel_menu) to { finish() }
-        entries += getString(R.string.panel_blocked, c?.blockedRequests?.get() ?: 0, c?.blockedNavigations?.get() ?: 0) to {}
+        val actions = listOf(
+            action("▶  " + getString(R.string.panel_resume)) {},
+            action(getString(R.string.panel_reload)) { webView?.reload() },
+            action(getString(if (cursorMode) R.string.panel_cursor_on else R.string.panel_cursor_off)) { toggleCursor() },
+            action(getString(R.string.panel_zoom_out_short)) { changeZoom(-1) },
+            action(getString(R.string.panel_zoom_in_short)) { changeZoom(1) },
+            action(getString(R.string.panel_save_short)) { saveCurrentPage() },
+            action(getString(R.string.panel_help)) { showHelp() },
+            action(getString(R.string.panel_sites)) { finish() },
+        )
 
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
-            .setTitle(R.string.panel_title)
-            .setItems(entries.map { it.first }.toTypedArray()) { _, which -> entries[which].second() }
-            .show()
+        // La dernière redirection refusée : l'ouvrir une seule fois, l'autoriser pour ce site, ou l'ignorer.
+        val blockedUrl = c?.lastBlockedUrl
+        val blockedHost = blockedUrl?.let { Hosts.of(it) }
+        val redirect = if (blockedUrl != null && blockedHost != null && current != null) {
+            BlockedRedirect(
+                title = getString(R.string.panel_redirect_title),
+                host = blockedHost,
+                openOnce = action(getString(R.string.panel_open_once_short)) {
+                    c.allowOnce(blockedUrl)
+                    webView?.loadUrl(blockedUrl)
+                },
+                allow = action(getString(R.string.panel_allow_always)) { allowDomain(current, blockedHost, blockedUrl) },
+                ignore = action(getString(R.string.panel_ignore)) { c.lastBlockedUrl = null },
+            )
+        } else {
+            null
+        }
+        val counts = getString(R.string.panel_blocked, c?.blockedRequests?.get() ?: 0, c?.blockedNavigations?.get() ?: 0)
+
+        val panel = ComposeView(this).apply {
+            setContent { WiDoTheme { QuickMenu(mediaState.value, redirect, actions, counts) } }
+        }
+        panelView = panel
+        root.addView(panel, FrameLayout.LayoutParams(MATCH, MATCH))
+        panel.bringToFront()
+    }
+
+    private fun hidePanel() {
+        val panel = panelView ?: return
+        panelView = null
+        root.removeView(panel)
+        webView?.requestFocus()
     }
 
     /** Autorise `host` pour ce site (gardé localement), recharge les règles puis ouvre la page refusée. */
@@ -579,16 +624,14 @@ class PlayerActivity : ComponentActivity() {
         val density = resources.displayMetrics.density
         val card = TextView(this).apply {
             text = getString(R.string.help_body)
-            setTextColor(0xFFF4F7FC.toInt())
-            textSize = 19f
-            setLineSpacing(0f, 1.25f)
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 18f
+            useJakarta(600)
+            setLineSpacing(0f, 1.3f)
             val pad = (32 * density).toInt()
             setPadding(pad, pad, pad, pad)
-            background = GradientDrawable().apply {
-                setColor(0xF2101626.toInt())
-                cornerRadius = 20 * density
-                setStroke((2 * density).toInt(), 0x661E90FF)
-            }
+            background = glassDrawable(density)
+            elevation = 30 * density
         }
         helpView = card
         root.addView(card, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
@@ -606,16 +649,22 @@ class PlayerActivity : ComponentActivity() {
 
     private fun buildLoadingOverlay(): FrameLayout {
         val density = resources.displayMetrics.density
-        val logo = ImageView(this).apply {
-            setImageResource(R.drawable.wido_logo)
-            layoutParams = LinearLayout.LayoutParams((150 * density).toInt(), (150 * density).toInt())
+        // Le logo : le nom de l'app en Plus Jakarta Sans extra-grasse, comme sur l'accueil.
+        val logo = TextView(this).apply {
+            text = getString(R.string.app_name)
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 56f
+            letterSpacing = -0.035f
+            useJakarta(800)
+            gravity = Gravity.CENTER
         }
         loadingLabel = TextView(this).apply {
             setText(R.string.player_loading)
-            setTextColor(0xFFF4F7FC.toInt())
-            textSize = 20f
+            setTextColor(0xBFFFFFFF.toInt())
+            textSize = 18f
+            useJakarta(500)
             gravity = Gravity.CENTER
-            setPadding(0, (22 * density).toInt(), 0, 0)
+            setPadding(0, (14 * density).toInt(), 0, 0)
         }
         val bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = true
@@ -644,7 +693,7 @@ class PlayerActivity : ComponentActivity() {
             start()
         }
         return FrameLayout(this).apply {
-            setBackgroundColor(0xFF070B14.toInt())
+            background = haloDrawable()
             addView(column, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         }
     }
@@ -696,10 +745,34 @@ class PlayerActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    /** Panneau de verre des vues classiques : sombre translucide, bord clair d'un pixel, coins de 28 dp. */
+    private fun glassDrawable(density: Float) = GradientDrawable().apply {
+        setColor(0xEB1A1A26.toInt())
+        cornerRadius = 28 * density
+        setStroke((1 * density).toInt(), 0x24FFFFFF)
+    }
+
+    /** Fond de l'écran de chargement : halos bleu et violet sur le noir du style, comme les réglages. */
+    private fun haloDrawable(): LayerDrawable {
+        fun glow(color: Int, x: Float, y: Float, radius: Float) = GradientDrawable().apply {
+            gradientType = GradientDrawable.RADIAL_GRADIENT
+            colors = intArrayOf(color, color and 0x00FFFFFF)
+            setGradientCenter(x, y)
+            gradientRadius = radius * resources.displayMetrics.widthPixels
+        }
+        return LayerDrawable(
+            arrayOf<Drawable>(
+                GradientDrawable().apply { setColor(0xFF0B0B12.toInt()) },
+                glow(0xB31E5BFF.toInt(), 0.15f, 0.1f, 0.42f),
+                glow(0xB37A2BE0.toInt(), 0.9f, 0.9f, 0.42f),
+            ),
+        )
+    }
+
     companion object {
         const val EXTRA_SITE = "site"
         private const val BRIDGE_NAME = "WiDoBridge"
-        private const val ACCENT = 0xFF1E90FF.toInt()
+        private const val ACCENT = 0xFFFFFFFF.toInt()
         private const val OVERLAY_TIMEOUT_MS = 20_000L
         private const val HELP_TIMEOUT_MS = 15_000L
         private const val POLL_MS = 700L

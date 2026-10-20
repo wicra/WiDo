@@ -1,6 +1,6 @@
 # Configuration
 
-Un seul fichier JSON décrit tout ce qui change souvent : sites, listes de blocage, règles. L'app le télécharge à chaque ouverture (et via le bouton *Actualiser*) et garde la dernière version valide en cache. Hors ligne, elle utilise le cache, puis un fichier minimal intégré.
+Un seul fichier JSON décrit tout ce qui change souvent : sites, listes de blocage, règles. L'app le télécharge à chaque ouverture (et à la demande : **OK** sur l'état de la configuration, en haut à droite du menu) et garde la dernière version valide en cache. Hors ligne, elle utilise le cache, puis un fichier minimal intégré.
 
 Fichiers fournis :
 

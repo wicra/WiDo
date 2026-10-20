@@ -30,19 +30,19 @@ Taper un nom de domaine à la télécommande est pénible : WiDo retient donc ce
 
 Les domaines déjà autorisés, déjà bloqués ou propres au site ne sont jamais proposés. Ces informations restent **sur l'appareil**.
 
-## Options d'un site : le bouton « ••• »
+## Options d'un site : le bouton « Options »
 
-Chaque carte de **site perso** a une petite bande **« ••• »** tout en bas. Place le focus dessus (flèche ▼ depuis la carte) puis appuie sur **OK** : trois boutons s'ouvrent.
+Quand une carte de **site perso** est sélectionnée, le site s'affiche en grand au-dessus de la rangée avec deux boutons : **Ouvrir** et **Options**. Monte dessus (flèche ▲ depuis la carte) puis appuie sur **OK** : trois boutons s'ouvrent.
 
 - **Ouvrir**
 - **Modifier**
 - **Supprimer** (un premier appui demande de **Confirmer**)
 
-La touche **Menu** de la télécommande et l'appui long sur OK ouvrent aussi ces options, mais tous les appareils ne les transmettent pas : la bande « ••• » marche partout. Les cartes des sites de la configuration distante n'ont pas cette bande : elles ne sont pas modifiables depuis la TV.
+La touche **Menu** de la télécommande et l'appui long sur OK ouvrent aussi ces options, mais tous les appareils ne les transmettent pas : le bouton **Options** marche partout. Les sites de la configuration distante n'ont pas ce bouton : ils ne sont pas modifiables depuis la TV.
 
 ## Enregistrer un site depuis la lecture
 
-Pendant la lecture, appui long sur Retour → **Enregistrer ce site** : l'adresse racine de la page affichée est ajoutée au menu.
+Pendant la lecture, appui long sur Retour → **Enregistrer** : l'adresse racine de la page affichée est ajoutée au menu.
 
 ## Ce qui est conservé, et quand
 

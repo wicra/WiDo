@@ -1,5 +1,18 @@
 # Changelog
 
+## Non publié
+
+### Nouveau style « Verre »
+- Police **Plus Jakarta Sans** partout, logo en texte « WiDo » extra-gras (accueil et écran de chargement).
+- Fond presque noir éclairé par des **halos de la couleur du site** sélectionné ; panneaux en verre translucide.
+- Focus franc : la pastille ou la ligne focalisée devient **blanche pleine**, la carte focalisée passe à la **couleur du site** et se soulève.
+- **Accueil** : le site sélectionné en grand titre avec **Ouvrir** et **Options**, au-dessus d'une rangée de cartes. Le bouton **Options** remplace la bande « ••• ».
+- **Onglets Sites / Réglages** en haut ; les réglages deviennent une liste défilante dans l'onglet, avec la couleur de chaque touche.
+- **Formulaire de site** plein écran, champs en verre.
+- **Menu rapide** en plateau au bas de l'écran (barre de lecture, pastilles) ; une redirection refusée y prend la tête avec Ouvrir une fois / Toujours autoriser / Ignorer.
+- Barre de lecture, aide et écran de chargement au même style.
+- L'état de la configuration (en haut à droite) remplace le bouton **Actualiser** : OK dessus actualise.
+
 ## 0.4.1
 
 ### Corrigé

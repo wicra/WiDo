@@ -2,7 +2,9 @@
 
 ## Menu des sites
 
-Flèches pour se déplacer, **OK** pour ouvrir. Le fond du menu prend la couleur de la carte sélectionnée. La dernière carte, **« + Ajouter un site »**, ouvre le formulaire ([CUSTOM-SITES](CUSTOM-SITES.md)). Sur une carte de site perso, la bande **« ••• »** en bas de la carte ouvre les options : ouvrir, modifier, supprimer ([CUSTOM-SITES](CUSTOM-SITES.md)). **Réglages** : voir [SETTINGS](SETTINGS.md).
+Les sites sont une **rangée de cartes** en bas de l'écran : ◀ ▶ pour se déplacer, **OK** pour ouvrir. Le site sélectionné s'affiche en grand au-dessus, avec ses boutons **Ouvrir** et, pour un site perso, **Options** (ouvrir, modifier, supprimer, voir [CUSTOM-SITES](CUSTOM-SITES.md)) : flèche ▲ depuis la carte. Le fond prend la couleur de la carte sélectionnée. La dernière carte, **« + »**, ouvre le formulaire d'ajout.
+
+En haut, les onglets **Sites** et **Réglages** ([SETTINGS](SETTINGS.md)) : un onglet s'active dès qu'il reçoit le focus. À droite, l'état de la configuration et l'heure : **OK** dessus actualise la configuration.
 
 ## Pendant la lecture
 
@@ -39,12 +41,14 @@ L'aide des commandes s'affiche à la **première ouverture** d'un site, puis à 
 
 ## Menu rapide
 
+Un plateau en bas de l'écran ; la page reste visible au-dessus. ◀ ▶ pour choisir, **OK** pour valider, **Retour** pour le fermer.
+
+- La barre de lecture, si une vidéo a été pilotée sur la page
 - Reprendre, recharger la page, activer/désactiver le curseur
-- **Texte plus grand / plus petit** (mémorisé par site)
-- **Autoriser <domaine>** et **Ouvrir <domaine> une fois** (après une redirection refusée, voir [BLOCKING](BLOCKING.md))
-- **Enregistrer ce site**
-- Aide, retour aux sites
+- **A− / A+** : texte plus petit / plus grand (mémorisé par site)
+- **Enregistrer** ce site, Aide, retour aux **Sites**
 - Compteurs : requêtes bloquées et navigations refusées pendant cette session
+- Après une redirection refusée, elle s'affiche en tête du plateau avec **Ouvrir une fois**, **Toujours autoriser** et **Ignorer** (voir [BLOCKING](BLOCKING.md))
 
 ## Saisie de texte et voix
 

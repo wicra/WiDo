@@ -1,12 +1,15 @@
 package dev.wido.tv.ui
 
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,11 +21,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import dev.wido.core.LocalSites
 import dev.wido.core.Site
 import dev.wido.tv.R
@@ -90,76 +97,99 @@ fun SiteEditorDialog(
 
     LaunchedEffect(Unit) { if (initial == null) runCatching { urlFocus.requestFocus() } }
 
-    DialogFrame(
-        title = stringResource(if (initial == null) R.string.editor_title_add else R.string.editor_title_edit),
-        onDismiss = onDismiss,
-        buttons = {
-            ActionButton(stringResource(R.string.action_save), { submit() })
-            ActionButton(stringResource(R.string.action_cancel), onDismiss, primary = false)
-        },
-    ) {
-        // 1. L'adresse, avec ses aides.
-        OutlinedTextField(
-            value = url,
-            onValueChange = { setUrl(it) },
-            label = { Text(stringResource(R.string.field_url)) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
-            modifier = Modifier.fillMaxWidth().focusRequester(urlFocus),
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Chip(SCHEME, { setUrl(SCHEME + url.removePrefix("https://").removePrefix("http://")) })
-            URL_HELPERS.forEach { helper -> Chip(helper, { setUrl(url + helper) }) }
-            Chip("⌫", { setUrl(url.dropLast(1)) })
-        }
+    // Plein écran : le formulaire est un panneau de verre posé sur des halos ambre et bleu.
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .halo(listOf(Glow(Palette.Amber, 0.85f, 0.1f, 0.6f, 0.7f), Glow(Palette.Accent, 0.05f, 0.95f, 0.6f, 0.7f)))
+                .padding(horizontal = 150.dp, vertical = 28.dp),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .glassPanel(elevation = 30.dp)
+                    .padding(horizontal = 30.dp, vertical = 26.dp),
+            ) {
+                DialogBody(
+                    title = stringResource(if (initial == null) R.string.editor_title_add else R.string.editor_title_edit),
+                    buttons = {
+                        ActionButton(stringResource(R.string.action_save), { submit() })
+                        ActionButton(stringResource(R.string.action_cancel), onDismiss, primary = false)
+                    },
+                    fill = true,
+                ) {
+                    // 1. L'adresse, avec ses aides.
+                    GlassTextField(
+                        value = url,
+                        onValueChange = { setUrl(it) },
+                        label = stringResource(R.string.field_url),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
+                        modifier = Modifier.fillMaxWidth().focusRequester(urlFocus),
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Chip(SCHEME, { setUrl(SCHEME + url.removePrefix("https://").removePrefix("http://")) })
+                        URL_HELPERS.forEach { helper -> Chip(helper, { setUrl(url + helper) }) }
+                        Chip("⌫", { setUrl(url.dropLast(1)) })
+                    }
 
-        // 2. Le nom, déduit de l'adresse, modifiable.
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it; nameEdited = true; error = null },
-            label = { Text(stringResource(R.string.field_name)) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { submit() }),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        error?.let { Text(it, color = Palette.Warning, fontSize = 14.sp) }
+                    // 2. Le nom, déduit de l'adresse, modifiable.
+                    GlassTextField(
+                        value = name,
+                        onValueChange = { name = it; nameEdited = true; error = null },
+                        label = stringResource(R.string.field_name),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    error?.let { Text(it, color = Palette.Warning, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
 
-        // 3. Les protections : des boutons.
-        SectionLabel(stringResource(R.string.section_protection))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ToggleChip(stringResource(R.string.p_ads), blockAds) { blockAds = !blockAds }
-            ToggleChip(stringResource(R.string.p_popups), blockPopups) { blockPopups = !blockPopups }
-            ToggleChip(stringResource(R.string.p_cookies), hideCookies) { hideCookies = !hideCookies }
-            ToggleChip(stringResource(R.string.p_logins), allowLogins) { allowLogins = !allowLogins }
-            ToggleChip(stringResource(if (relaxed) R.string.nav_relaxed else R.string.nav_strict), relaxed) { relaxed = !relaxed }
-        }
+                    // 3. Les protections : des boutons.
+                    SectionLabel(stringResource(R.string.section_protection))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ToggleChip(stringResource(R.string.p_ads), blockAds) { blockAds = !blockAds }
+                        ToggleChip(stringResource(R.string.p_popups), blockPopups) { blockPopups = !blockPopups }
+                        ToggleChip(stringResource(R.string.p_cookies), hideCookies) { hideCookies = !hideCookies }
+                        ToggleChip(stringResource(R.string.p_logins), allowLogins) { allowLogins = !allowLogins }
+                        ToggleChip(stringResource(if (relaxed) R.string.nav_relaxed else R.string.nav_strict), relaxed) { relaxed = !relaxed }
+                    }
 
-        // 4. Les domaines : on choisit, on ne saisit pas.
-        val allowSuggestions = suggestAllow.filterNot { it in allowed }
-        if (allowed.isNotEmpty() || allowSuggestions.isNotEmpty()) {
-            SectionLabel(stringResource(R.string.section_allowed))
-            DomainChips(chosen = allowed, suggestions = allowSuggestions)
-        }
-        val blockSuggestions = suggestBlock.filterNot { it in blocked }
-        if (blocked.isNotEmpty() || blockSuggestions.isNotEmpty()) {
-            SectionLabel(stringResource(R.string.section_blocked))
-            DomainChips(chosen = blocked, suggestions = blockSuggestions)
+                    // 4. Les domaines : on choisit, on ne saisit pas.
+                    val allowSuggestions = suggestAllow.filterNot { it in allowed }
+                    if (allowed.isNotEmpty() || allowSuggestions.isNotEmpty()) {
+                        SectionLabel(stringResource(R.string.section_allowed))
+                        DomainChips(chosen = allowed, suggestions = allowSuggestions, tint = Palette.Ok, tintText = Color(0xFF9CF2C3))
+                    }
+                    val blockSuggestions = suggestBlock.filterNot { it in blocked }
+                    if (blocked.isNotEmpty() || blockSuggestions.isNotEmpty()) {
+                        SectionLabel(stringResource(R.string.section_blocked))
+                        DomainChips(chosen = blocked, suggestions = blockSuggestions, tint = Palette.Warning, tintText = Color(0xFFFFD2A1))
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun ToggleChip(label: String, on: Boolean, onToggle: () -> Unit) {
-    Chip(if (on) "✓ $label" else label, onToggle, selected = on)
+    Chip(
+        if (on) "✓ $label" else label,
+        onToggle,
+        selected = on,
+        idleText = if (on) Palette.TextPrimary else Color.White.copy(alpha = 0.6f),
+        idle = if (on) Color.White.copy(alpha = 0.28f) else Palette.GlassFaint,
+    )
 }
 
 /** Les domaines retenus (toucher pour retirer) puis ceux que le site a essayé de joindre (toucher pour ajouter). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DomainChips(chosen: MutableList<String>, suggestions: List<String>) {
+private fun DomainChips(chosen: MutableList<String>, suggestions: List<String>, tint: Color, tintText: Color) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        chosen.toList().forEach { domain -> Chip("✓ $domain", { chosen.remove(domain) }, selected = true) }
+        chosen.toList().forEach { domain ->
+            Chip("✓ $domain", { chosen.remove(domain) }, selected = true, idleText = tintText, idle = tint.copy(alpha = 0.22f))
+        }
         suggestions.forEach { domain -> Chip("+ $domain", { chosen.add(domain) }) }
     }
 }

@@ -19,18 +19,20 @@ import dev.wido.core.PlayerFormat
 class OsdView(context: Context) : LinearLayout(context) {
     private val density = resources.displayMetrics.density
     private val title = TextView(context).apply {
-        setTextColor(0xFFF4F7FC.toInt())
-        textSize = 20f
+        setTextColor(0xFFFFFFFF.toInt())
+        textSize = 18f
+        useJakarta(700)
     }
     private val detail = TextView(context).apply {
-        setTextColor(0xFF9AAAC4.toInt())
-        textSize = 16f
+        setTextColor(0xA6FFFFFF.toInt())
+        textSize = 15f
         gravity = Gravity.END
+        useJakarta(600)
     }
     private val bar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
         max = 1000
-        progressTintList = ColorStateList.valueOf(0xFF1E90FF.toInt())
-        progressBackgroundTintList = ColorStateList.valueOf(0x33FFFFFF)
+        progressTintList = ColorStateList.valueOf(0xFFFFFFFF.toInt())
+        progressBackgroundTintList = ColorStateList.valueOf(0x38FFFFFF)
     }
     private val hideRunnable = Runnable { animate().alpha(0f).setDuration(200).withEndAction { visibility = GONE }.start() }
 
@@ -42,18 +44,20 @@ class OsdView(context: Context) : LinearLayout(context) {
         visibility = GONE
         val pad = (20 * density).toInt()
         setPadding(pad, (14 * density).toInt(), pad, (16 * density).toInt())
+        // Verre du style : panneau sombre translucide, bord clair d'un pixel, coins de 24 dp.
         background = GradientDrawable().apply {
-            setColor(0xE60B1020.toInt())
-            cornerRadius = 18 * density
-            setStroke((1 * density).toInt(), 0x331E90FF)
+            setColor(0xEB1A1A26.toInt())
+            cornerRadius = 24 * density
+            setStroke((1 * density).toInt(), 0x24FFFFFF)
         }
+        elevation = 24 * density
         val header = LinearLayout(context).apply {
             orientation = HORIZONTAL
             addView(title, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(detail, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         addView(header, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        addView(bar, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (6 * density).toInt()).apply { topMargin = (10 * density).toInt() })
+        addView(bar, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (5 * density).toInt()).apply { topMargin = (12 * density).toInt() })
     }
 
     fun layoutParamsForRoot() = FrameLayout.LayoutParams(

@@ -19,7 +19,7 @@
     <string name="status_offline">Offline</string>
     <string name="status_bundled">Offline</string>
     <string name="status_warnings">%1$d warn.</string>
-    <string name="version_footer">v%1$s</string>
+    <string name="version_footer">WiDo %1$s</string>
     <string name="update_available">Update %1$s</string>
     <string name="update_install">Install</string>
     <string name="update_downloading">Downloading %1$d %%</string>
@@ -115,4 +115,15 @@
     <string name="sec_player">Playback</string>
     <string name="sec_keys">Color keys</string>
     <string name="sec_general">General</string>
+    <string name="settings_hint">Applies when the next site opens.</string>
+    <string name="tab_sites">Sites</string>
+    <string name="action_options">Options</string>
+    <string name="panel_zoom_out_short">A−</string>
+    <string name="panel_zoom_in_short">A+</string>
+    <string name="panel_save_short">Save</string>
+    <string name="panel_sites">Sites</string>
+    <string name="panel_redirect_title">Redirect blocked</string>
+    <string name="panel_open_once_short">Open once</string>
+    <string name="panel_allow_always">Always allow</string>
+    <string name="panel_ignore">Ignore</string>
 </resources>

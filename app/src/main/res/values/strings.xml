@@ -19,7 +19,7 @@
     <string name="status_offline">Hors ligne</string>
     <string name="status_bundled">Hors ligne</string>
     <string name="status_warnings">%1$d avert.</string>
-    <string name="version_footer">v%1$s</string>
+    <string name="version_footer">WiDo %1$s</string>
     <string name="update_available">Mise à jour %1$s</string>
     <string name="update_install">Installer</string>
     <string name="update_downloading">Téléchargement %1$d %%</string>
@@ -115,5 +115,15 @@
     <string name="sec_player">Lecture</string>
     <string name="sec_keys">Touches de couleur</string>
     <string name="sec_general">Général</string>
-    <string name="settings_hint"></string>
+    <string name="settings_hint">S\'applique à l\'ouverture du prochain site.</string>
+    <string name="tab_sites">Sites</string>
+    <string name="action_options">Options</string>
+    <string name="panel_zoom_out_short">A−</string>
+    <string name="panel_zoom_in_short">A+</string>
+    <string name="panel_save_short">Enregistrer</string>
+    <string name="panel_sites">Sites</string>
+    <string name="panel_redirect_title">Redirection bloquée</string>
+    <string name="panel_open_once_short">Ouvrir une fois</string>
+    <string name="panel_allow_always">Toujours autoriser</string>
+    <string name="panel_ignore">Ignorer</string>
 </resources>
