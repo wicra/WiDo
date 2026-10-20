@@ -40,6 +40,11 @@ import dev.wido.tv.ScreenLink
 fun PairPromptHost(link: ScreenLink) {
     val requests by link.pairRequests.collectAsState()
     val pending = requests.firstOrNull() ?: return
+    // Une demande restée sans réponse expire : la fenêtre se ferme d'elle-même.
+    LaunchedEffect(pending) {
+        kotlinx.coroutines.delay((PairingDesk.EXPIRY_MS - (System.currentTimeMillis() - pending.since)).coerceAtLeast(0) + 500)
+        link.refreshPairRequests()
+    }
     PairPrompt(pending) { approved, level -> link.decidePair(pending, approved, level) }
 }
 

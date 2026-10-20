@@ -191,6 +191,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val link = (application as WiDoApp).link
         showOverlay { PairPrompt(pending) { approved, level -> link.decidePair(pending, approved, level) } }
         pairShown = true
+        val left = dev.wido.core.PairingDesk.EXPIRY_MS - (System.currentTimeMillis() - pending.since)
+        root.postDelayed({ link.refreshPairRequests() }, left.coerceAtLeast(0) + 500)
     }
 
     @SuppressLint("SetJavaScriptEnabled")

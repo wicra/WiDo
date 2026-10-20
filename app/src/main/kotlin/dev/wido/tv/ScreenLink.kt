@@ -123,6 +123,11 @@ class ScreenLink(private val app: WiDoApp) {
         pairRequests.value = desk.pendingRequests()
     }
 
+    /** Retire les demandes expirées (le téléphone a cessé d'attendre) : la fenêtre se ferme. */
+    fun refreshPairRequests() {
+        pairRequests.value = desk.pendingRequests()
+    }
+
     fun peerForToken(token: String?): Peer? = LinkProtocol.peerForToken(_peers.value, token)
 
     /** Les routes du lien ; null si la requête n'en est pas une. Appelé hors du fil principal. */
