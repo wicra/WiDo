@@ -52,9 +52,8 @@ jobs:
           if ! ./gradlew :app:lintDebug --console=plain > lint.log 2>&1; then
             # Une ligne par type d'erreur (nombre, puis le premier exemple) : tout tient dans l'annotation.
             R=lint-errors.txt
-            grep -E ': Error: ' lint.log | sort -u > $R || true
-            ls app/build/reports/ || true
-            MSG=$({ grep -E ': Error: ' $R 2>/dev/null | grep -oE '\[[A-Za-z]+\]$' | sort | uniq -c; for id in $(grep -E ': Error: ' $R 2>/dev/null | grep -oE '\[[A-Za-z]+\]$' | sort -u | tr -d '[]'); do grep -m1 -E ": Error: .*\[$id\]$" $R; done; grep -A10 'What went wrong' lint.log; } | head -80 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            grep -iE 'error' lint.log | grep -v 'What went wrong\|aborting\|abortOnError\|Fix the issues' | sort -u > $R || true
+            MSG=$({ grep -oE '\[[A-Za-z]+\]$' $R | sort | uniq -c; for id in $(grep -oE '\[[A-Za-z]+\]$' $R | sort -u | tr -d '[]'); do grep -m1 -E "\[$id\]$" $R; done; head -20 $R; } | head -80 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
             echo "::error title=Lint failed::$MSG"
             exit 1
           fi
