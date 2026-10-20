@@ -280,7 +280,7 @@ fun PhoneHome(
 
 // --- Accueil ---------------------------------------------------------------------------------
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeTab(
     sites: List<MenuSite>,
