@@ -9,6 +9,7 @@ import dev.wido.core.GroupKey
 import dev.wido.core.HandoffPlay
 import dev.wido.core.LinkLevel
 import dev.wido.core.LinkProtocol
+import dev.wido.core.LinkStatus
 import dev.wido.core.NowPlaying
 import dev.wido.core.PairingDesk
 import dev.wido.core.Peer
