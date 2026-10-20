@@ -1,0 +1,6 @@
+# Profil de démarrage de WiDo : classes et méthodes compilées à l'avance à l'installation
+# (via androidx.profileinstaller). Couvre l'accueil, les réglages et l'ouverture d'un site.
+HSPLdev/wido/tv/**->**(**)**
+Ldev/wido/tv/**;
+HSPLdev/wido/core/**->**(**)**
+Ldev/wido/core/**;

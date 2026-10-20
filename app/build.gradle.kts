@@ -35,7 +35,10 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 : code et ressources inutilisés retirés, code optimisé. APK plus léger, démarrage plus rapide.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Sans clé de release (build local), on signe avec la clé debug : l'APK s'installe,
             // mais ne pourra pas être mis à jour par une release signée avec une autre clé.
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
@@ -65,5 +68,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.webkit:webkit:1.12.1")
+    // Installe les profils de démarrage (Compose, app) même hors Play Store : moins de saccades au lancement.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 }

@@ -31,6 +31,12 @@ class MainActivity : ComponentActivity() {
         ViewModelProvider(this)[MenuViewModel::class.java].onForeground()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Une fois l'accueil affiché, une WebView se prépare au calme : le prochain site s'ouvrira vite.
+        window.decorView.postDelayed({ if (!isFinishing) WebViewPool.prepare(this) }, PREPARE_DELAY_MS)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -53,5 +59,6 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val EXTRA_CONFIG_URL = "config_url"
+        const val PREPARE_DELAY_MS = 1_500L
     }
 }

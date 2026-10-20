@@ -379,7 +379,8 @@ private fun SiteCard(
         value = (context.applicationContext as WiDoApp).favicons.load(site)
     }
     // Couleur : celle de la config si elle en impose une, sinon celle de l'icône du site.
-    val accent = parseColor(site.color) ?: icon?.color ?: Palette.Accent
+    val cached = remember(site.id, site.url, site.icon) { (context.applicationContext as WiDoApp).favicons.cachedColor(site) }
+    val accent = parseColor(site.color) ?: icon?.color ?: cached ?: Palette.Accent
     var focused by remember { mutableStateOf(false) }
     val width by animateDpAsState(if (focused) 210.dp else 170.dp, label = "cardWidth")
     val height by animateDpAsState(if (focused) 126.dp else 102.dp, label = "cardHeight")

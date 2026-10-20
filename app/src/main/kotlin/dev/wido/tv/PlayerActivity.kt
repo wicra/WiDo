@@ -148,7 +148,7 @@ class PlayerActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun start(site: Site, wc: WiDoWebViewClient) {
         client = wc
-        val wv = WebView(this)
+        val wv = WebViewPool.obtain(this)
         webView = wv
         with(wv.settings) {
             javaScriptEnabled = true

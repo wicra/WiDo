@@ -8,7 +8,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import dev.wido.core.Site
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URI
@@ -19,15 +22,40 @@ import java.util.concurrent.ConcurrentHashMap
 data class SiteIcon(val image: ImageBitmap, val color: Color?)
 
 /**
- * Icônes des cartes. Téléchargées directement depuis le site (aucun service tiers), en https
- * seulement, bornées en taille, puis mises en cache sur disque.
+ * Icônes des cartes et leur couleur. Téléchargées directement depuis le site (aucun service tiers),
+ * en https seulement, bornées en taille, puis mises en cache sur disque.
+ *
+ * La couleur de chaque site est aussi gardée dans un petit fichier, relu d'un coup : l'accueil
+ * s'affiche directement en couleur, sans attendre le décodage des icônes. Une icône périmée est
+ * servie tout de suite et rafraîchie en arrière-plan.
  */
 class FaviconRepository(private val context: Context) {
     private val dir by lazy { File(context.filesDir, "favicons").apply { mkdirs() } }
     private val memory = ConcurrentHashMap<String, SiteIcon>()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val refreshing = ConcurrentHashMap.newKeySet<String>()
+
+    private val colorsFile get() = File(dir, "colors.txt")
+
+    /** Couleur connue de chaque site (clé → ARGB), relue une fois depuis le disque. */
+    private val colors: ConcurrentHashMap<String, Int> by lazy {
+        val map = ConcurrentHashMap<String, Int>()
+        runCatching {
+            colorsFile.forEachLine { line ->
+                val tab = line.indexOf('\t')
+                if (tab > 0) line.substring(tab + 1).toLongOrNull(16)?.let { map[line.substring(0, tab)] = it.toInt() }
+            }
+        }
+        map
+    }
+
+    private fun keyOf(site: Site) = sha1(site.icon ?: site.url)
+
+    /** Couleur déjà connue du site, sans réseau ni décodage : de quoi colorer la carte dès le premier affichage. */
+    fun cachedColor(site: Site): Color? = colors[keyOf(site)]?.let { Color(it) }
 
     suspend fun load(site: Site): SiteIcon? = withContext(Dispatchers.IO) {
-        val key = sha1(site.icon ?: site.url)
+        val key = keyOf(site)
         memory[key]?.let { return@withContext it }
 
         val png = File(dir, "$key.png")
@@ -36,20 +64,47 @@ class FaviconRepository(private val context: Context) {
         val fresh = png.exists() && now - png.lastModified() < TTL_MS
         val recentMiss = miss.exists() && now - miss.lastModified() < MISS_TTL_MS
 
-        if (!fresh && !recentMiss) {
-            val bitmap = fetch(site)
-            when {
-                bitmap != null -> {
-                    png.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                    miss.delete()
+        when {
+            fresh || recentMiss -> Unit
+            // Périmée : servie tout de suite, rafraîchie en arrière-plan.
+            png.exists() -> if (refreshing.add(key)) scope.launch {
+                try {
+                    if (download(site, png, miss)) memory.remove(key)
+                } finally {
+                    refreshing.remove(key)
                 }
-                png.exists() -> png.setLastModified(now) // échec : on garde l'ancienne icône
-                else -> miss.writeText("")
             }
+            else -> download(site, png, miss)
         }
         if (!png.exists()) return@withContext null
         val bitmap = BitmapFactory.decodeFile(png.path) ?: return@withContext null
-        SiteIcon(bitmap.asImageBitmap(), dominantColor(bitmap)).also { memory[key] = it }
+        val color = dominantColor(bitmap)
+        rememberColor(key, color)
+        SiteIcon(bitmap.asImageBitmap(), color).also { memory[key] = it }
+    }
+
+    /** Télécharge l'icône. Vrai si une nouvelle icône a été enregistrée. */
+    private fun download(site: Site, png: File, miss: File): Boolean {
+        val bitmap = fetch(site)
+        when {
+            bitmap != null -> {
+                png.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                miss.delete()
+            }
+            png.exists() -> png.setLastModified(System.currentTimeMillis()) // échec : on garde l'ancienne icône
+            else -> miss.writeText("")
+        }
+        return bitmap != null
+    }
+
+    @Synchronized
+    private fun rememberColor(key: String, color: Color?) {
+        val argb = color?.let { android.graphics.Color.argb((it.alpha * 255).toInt(), (it.red * 255).toInt(), (it.green * 255).toInt(), (it.blue * 255).toInt()) }
+        if (colors[key] == argb) return
+        if (argb == null) colors.remove(key) else colors[key] = argb
+        runCatching {
+            colorsFile.writeText(colors.entries.joinToString("") { "${it.key}\t${Integer.toHexString(it.value)}\n" })
+        }
     }
 
     /**
