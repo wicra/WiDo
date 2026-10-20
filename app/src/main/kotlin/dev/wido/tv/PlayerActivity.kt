@@ -180,6 +180,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                         }
                     },
                     onPageStart = {
+                        // On quitte la page (épisode suivant…) : sa position est enregistrée avant d'être oubliée.
+                        runOnUiThread { rememberProgress() }
                         cinema = false
                         runOnUiThread { hidePauseScreen() }
                         bridge?.reset()
@@ -756,6 +758,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val passive = passivePoll
         passivePoll = false
         mediaState.value = state
+        // La page à laquelle appartient cette position (et non celle qui serait déjà en train de s'ouvrir).
+        mediaPage = webView?.url
+        mediaTitle = webView?.title
         mediaAt = SystemClock.elapsedRealtime()
         if (backgrounded) BackgroundBridge.update(playbackInfo(state))
         applyAutoStart(state)
@@ -1397,13 +1402,28 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
      */
     private fun rememberPage() {
         val current = site ?: return
-        val url = webView?.url
-        ResumeUrl.toRemember(current, url, mediaState.value?.time)?.let { settings.setLastUrlFor(current.id, it) }
+        ResumeUrl.toRemember(current, webView?.url, mediaState.value?.time)?.let { settings.setLastUrlFor(current.id, it) }
+        rememberProgress()
+    }
+
+    /** Page de la dernière position connue de la vidéo, et son titre à ce moment-là. */
+    private var mediaPage: String? = null
+    private var mediaTitle: String? = null
+
+    /**
+     * Enregistre la position dans Reprendre, sous l'adresse de la page où la vidéo jouait. Une page
+     * hors des domaines du site (épisode servi par un autre domaine) est gardée aussi : Reprendre la
+     * rouvrira avec un site éphémère plutôt que de revenir à l'épisode précédent.
+     */
+    private fun rememberProgress() {
+        val current = site ?: return
         val state = mediaState.value ?: return
-        val page = ResumeUrl.toRemember(current, url) ?: return
-        if (state.duration > 0) {
-            (application as WiDoApp).repository.recordProgress(current.id, page, webView?.title, pageImage, state.time, state.duration)
-        }
+        val url = mediaPage ?: return
+        if (state.duration <= 0) return
+        val page = ResumeUrl.toRemember(current, url)
+            ?: url.takeIf { (Hosts.schemeOf(it) == "https" || (Hosts.schemeOf(it) == "http" && current.allowInsecure)) && Hosts.of(it) != null }
+            ?: return
+        (application as WiDoApp).repository.recordProgress(current.id, page, mediaTitle ?: webView?.title, pageImage, state.time, state.duration)
     }
 
     // --- Télécommande sur téléphone ----------------------------------------------------------
