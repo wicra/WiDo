@@ -136,4 +136,8 @@
     <string name="lists_never">Lists not downloaded yet</string>
     <string name="lists_update">Update</string>
     <string name="lists_updating">Updating…</string>
+    <string name="catalog_title">Add a site</string>
+    <string name="catalog_other">Other address…</string>
+    <string name="catalog_hint">Pick a site: it is added with suitable settings, which you can change later.</string>
+    <string name="catalog_empty">Every catalogue site is already in your menu.</string>
 </resources>

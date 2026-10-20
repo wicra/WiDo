@@ -150,10 +150,15 @@ class ConfigRepository(private val context: Context, private val settings: Setti
 
     /** Ajoute un site local. Renvoie un message d'erreur, ou null si c'est fait. */
     @Synchronized
-    fun addLocalSite(name: String, url: String, options: LocalSites.SiteOptions = LocalSites.SiteOptions()): String? {
+    fun addLocalSite(
+        name: String,
+        url: String,
+        options: LocalSites.SiteOptions = LocalSites.SiteOptions(),
+        color: String? = null,
+    ): String? {
         val local = _local.value
         if (local.size >= LocalSites.MAX_LOCAL) return "Limite de ${LocalSites.MAX_LOCAL} sites atteinte."
-        return when (val built = LocalSites.build(name, url, takenIds(), options = options)) {
+        return when (val built = LocalSites.build(name, url, takenIds(), options = options, color = color)) {
             is LocalSites.Built.Error -> built.message
             is LocalSites.Built.Ok -> { saveLocal(local + built.site); null }
         }
@@ -162,8 +167,8 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     @Synchronized
     fun updateLocalSite(id: String, name: String, url: String, options: LocalSites.SiteOptions = LocalSites.SiteOptions()): String? {
         val local = _local.value
-        if (local.none { it.id == id }) return "Site introuvable."
-        return when (val built = LocalSites.build(name, url, takenIds(), keepId = id, options = options)) {
+        val existing = local.firstOrNull { it.id == id } ?: return "Site introuvable."
+        return when (val built = LocalSites.build(name, url, takenIds(), keepId = id, options = options, color = existing.color)) {
             is LocalSites.Built.Error -> built.message
             is LocalSites.Built.Ok -> { saveLocal(local.map { if (it.id == id) built.site else it }); null }
         }

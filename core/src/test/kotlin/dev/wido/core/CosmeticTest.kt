@@ -48,3 +48,21 @@ class CompiledRulesTest {
         assertEquals(null, CompiledRules.decode("||a.com^\n"))
     }
 }
+
+class CatalogTest {
+    @Test fun everyEntryBuildsAValidSite() {
+        val taken = mutableSetOf<String>()
+        for (e in Catalog.entries) {
+            val built = LocalSites.build(e.name, e.url, taken, options = e.options(), color = e.color)
+            assertTrue(built is LocalSites.Built.Ok, "${e.name} : $built")
+            assertEquals(e.color, built.site.color)
+            taken += built.site.id
+        }
+    }
+
+    @Test fun hidesSitesAlreadyInTheMenu() {
+        val left = Catalog.available(listOf("https://youtube.com", "https://www.arte.tv/de/"))
+        assertTrue(left.none { it.name == "YouTube" || it.name == "Arte" })
+        assertTrue(left.any { it.name == "Twitch" })
+    }
+}

@@ -76,6 +76,7 @@ object LocalSites {
     }
 
     private const val MAX_DOMAINS = 30
+    private val COLOR = Regex("^#[0-9A-Fa-f]{6}$")
 
     /**
      * Lit une liste de domaines saisie à la main (séparés par virgule, point-virgule, espace ou saut
@@ -126,6 +127,8 @@ object LocalSites {
         taken: Set<String>,
         keepId: String? = null,
         options: SiteOptions = SiteOptions(),
+        /** Couleur de la carte (`#RRGGBB`), sinon celle de l'icône du site. */
+        color: String? = null,
     ): Built {
         val cleanName = name.trim()
         if (cleanName.isEmpty()) return Built.Error("Donne un nom au site.")
@@ -147,6 +150,7 @@ object LocalSites {
             allowInsecure = scheme == "http",
             navigation = if (options.relaxed) Navigation.RELAXED else Navigation.STRICT,
             blockAds = options.blockAds,
+            color = color?.takeIf { COLOR.matches(it) },
         )
         val problem = ConfigParser.validateSite(site, if (keepId != null) taken - keepId else taken)
         return if (problem != null) Built.Error(problem) else Built.Ok(site)

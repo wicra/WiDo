@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.wido.core.Catalog
 import dev.wido.core.Hosts
 import dev.wido.core.ReleaseInfo
 import dev.wido.core.Site
@@ -90,6 +91,7 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
     var tab by remember { mutableStateOf(Tab.Sites) }
     var editor by remember { mutableStateOf<Editor?>(null) }
     var actionsFor by remember { mutableStateOf<Site?>(null) }
+    var showCatalog by remember { mutableStateOf(false) }
     // Le site mis en scène : celui de la dernière carte focalisée (null = carte « Ajouter »).
     var currentId by remember { mutableStateOf<String?>(null) }
     var addFocused by remember { mutableStateOf(false) }
@@ -123,7 +125,7 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
                         empty = sites.isEmpty() && !state.loading,
                         onOpen = { current?.let { onOpen(it.site) } },
                         onOptions = { current?.let { actionsFor = it.site } },
-                        onAdd = { editor = Editor.Add },
+                        onAdd = { showCatalog = true },
                         modifier = Modifier.weight(1f),
                     )
                     LazyRow(
@@ -149,7 +151,7 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
                         item(key = "add") {
                             AddCard(
                                 index = sites.size,
-                                onClick = { editor = Editor.Add },
+                                onClick = { showCatalog = true },
                                 onFocus = {
                                     addFocused = true
                                     siteLight = Palette.Accent
@@ -162,6 +164,18 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit) {
                 Tab.Settings -> SettingsPane(settings, lists, vm::updateLists, Modifier.weight(1f))
             }
         }
+    }
+
+    if (showCatalog) {
+        CatalogDialog(
+            entries = remember(sites) { Catalog.available(sites.map { it.site.url }) },
+            onPick = { entry -> vm.addFromCatalog(entry).also { if (it == null) showCatalog = false } },
+            onOther = {
+                showCatalog = false
+                editor = Editor.Add
+            },
+            onDismiss = { showCatalog = false },
+        )
     }
 
     actionsFor?.let { site ->
