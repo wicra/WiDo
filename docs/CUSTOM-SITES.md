@@ -10,6 +10,8 @@ Ajoute tes propres sites directement sur la TV, sans toucher à la configuration
 4. Le **nom se remplit tout seul** à partir de l'adresse (`youtube.com` donne « Youtube »). Tu peux le modifier : il cesse alors de suivre l'adresse.
 5. Règle les **protections** (boutons, voir ci-dessous), puis **Enregistrer**.
 
+Les champs se sélectionnent sans s'ouvrir : **OK** entre dans la saisie et ouvre le clavier, valider ou quitter le champ en sort. Le petit téléphone à droite de chaque champ affiche un QR code pour le remplir depuis ton téléphone. **Retour** enregistre aussi le site (même en quittant par mégarde) ; si l'adresse est invalide, l'erreur s'affiche et un second Retour quitte sans enregistrer. **Annuler** quitte sans rien garder.
+
 ## Les protections
 
 Chaque bouton s'allume (✓) quand il est actif :
@@ -19,6 +21,7 @@ Chaque bouton s'allume (✓) quand il est actif :
 | **Bloquer les pubs** | Applique les listes de blocage et les règles globales de la configuration. | Activé |
 | **Bloquer les pop-ups** | Empêche les pages d'ouvrir des fenêtres. | Activé |
 | **Masquer les cookies** | Cache les bandeaux de consentement courants. | Désactivé |
+| **Fermer les calques** | Retire les calques plein écran sans lecteur (pop-ups dans la page). Peut se tromper sur des pages atypiques. | Désactivé |
 | **Connexions (Google, Microsoft…)** | Autorise les pages de connexion Google, YouTube, Microsoft, Apple et Facebook. | Désactivé |
 | **Redirections strictes / souples / mixtes** | Chaque appui passe au mode suivant. Strictes : le site ne peut aller que sur son propre domaine. Souples : partout, sauf vers les pubs connues des listes. Mixtes : la pub s'ouvre dans une fenêtre fermée seule une fois affichée. Voir [BLOCKING](BLOCKING.md). | Strictes |
 

@@ -17,7 +17,21 @@ data:
   command: "am start -n dev.wido.tv/.PlayerActivity --es site site-a"
 ```
 
-`site-a` est l'`id` du site dans la configuration. Un identifiant inconnu ou désactivé affiche un message puis ferme l'écran.
+`site-a` est l'`id` du site dans la configuration (pour un site perso : `perso-…`, visible dans le fichier `local-sites.json`). Un identifiant inconnu ou désactivé affiche un message puis ferme l'écran.
+
+## Rouvrir le dernier site
+
+La valeur spéciale `last` rouvre le dernier site ouvert, sur la page où tu l'avais laissé (si le réglage « Ouvrir un site : Dernière page » est actif) :
+
+```yaml
+action: androidtv.adb_command
+target:
+  entity_id: media_player.projecteur
+data:
+  command: "am start -n dev.wido.tv/.MainActivity --es site last"
+```
+
+Passer par `MainActivity` garde l'accueil de WiDo derrière le site : Retour y ramène.
 
 ## Scène « Soirée cinéma »
 
@@ -35,11 +49,15 @@ script:
       - action: remote.send_command            # mise au point, si commandable en infrarouge
         target: { entity_id: remote.emetteur_ir }
         data: { device: projecteur, command: focus_plus, num_repeats: 5 }
-      - action: androidtv.adb_command
+      - action: androidtv.adb_command        # WiDo rouvre le dernier site
         target: { entity_id: media_player.projecteur }
         data:
-          command: "am start -n dev.wido.tv/.MainActivity"
+          command: "am start -n dev.wido.tv/.MainActivity --es site last"
 ```
+
+Pour démarrer sur l'accueil de WiDo plutôt que sur le dernier site, retire `--es site last`. Si l'app n'a encore ouvert aucun site, `last` affiche « Site introuvable » puis l'accueil.
+
+Si le projecteur met du temps à accepter ADB après l'allumage, remplace le `delay` par une attente de son état : `wait_template: "{{ is_state('media_player.projecteur', 'on') }}"` avec `timeout: "00:01:00"`.
 
 Ce que HA peut ou ne peut pas faire dépend du modèle : la mise au point est souvent réservée à la télécommande infrarouge, et l'entrée HDMI dépend de ce que le projecteur expose. **À vérifier sur ton appareil.** Pour l'app WiDo, la partie utile est la dernière action.
 

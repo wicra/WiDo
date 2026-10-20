@@ -176,4 +176,11 @@
     <string name="phone_hint_name">Scan this code with your phone, then type the site name.</string>
     <string name="phone_corner">Type from phone</string>
     <string name="s_field_qr">QR code on text fields</string>
+    <string name="panel_hide_element">Hide an element</string>
+    <string name="osd_pick_hint">Point at the element to hide, then OK · Back: cancel</string>
+    <string name="osd_pick_done">Element hidden (on future visits too)</string>
+    <string name="osd_pick_nothing">Nothing to hide here</string>
+    <string name="osd_pick_cancel">Hiding cancelled</string>
+    <string name="action_unhide">Show hidden elements again (%1$d)</string>
+    <string name="p_overlays">Close overlays</string>
 </resources>

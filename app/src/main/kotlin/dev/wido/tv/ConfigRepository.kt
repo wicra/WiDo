@@ -13,6 +13,7 @@ import dev.wido.core.Hosts
 import dev.wido.core.NavigationPolicy
 import dev.wido.core.Pin
 import dev.wido.core.Pins
+import dev.wido.core.UserHides
 import dev.wido.core.SeenDomains
 import dev.wido.core.SiteOverrides
 import dev.wido.core.Site
@@ -98,6 +99,24 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         _pins.value = next
     }
 
+    private val hidesFile get() = File(context.filesDir, "user-hides.json")
+
+    private val _hides = MutableStateFlow(runCatching { UserHides.decode(hidesFile.readText()) }.getOrDefault(emptyMap()))
+
+    /** Éléments masqués à la main, par site (sélecteurs CSS). */
+    val hides: StateFlow<Map<String, List<String>>> = _hides.asStateFlow()
+
+    @Synchronized
+    fun addHide(siteId: String, selector: String) = saveHides(UserHides.add(_hides.value, siteId, selector))
+
+    @Synchronized
+    fun clearHides(siteId: String) = saveHides(UserHides.clear(_hides.value, siteId))
+
+    private fun saveHides(next: Map<String, List<String>>) {
+        writeAtomically(hidesFile, UserHides.encode(next))
+        _hides.value = next
+    }
+
     private val _local = MutableStateFlow(readLocalSites())
     val localSites: StateFlow<List<Site>> = _local.asStateFlow()
 
@@ -144,6 +163,7 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         return LocalSites.merge(config.sites, _local.value)
             .firstOrNull { it.id == id && it.enabled }
             ?.let { SiteOverrides.apply(it, overrides) }
+            ?.let { UserHides.apply(it, _hides.value) }
     }
 
     /**
@@ -200,6 +220,7 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         if (id in seen) writeSeen(seen - id)
         if (_pins.value.any { it.siteId == id }) savePins(_pins.value.filterNot { it.siteId == id })
         settings.setLastUrlFor(id, null)
+        if (id in _hides.value) saveHides(UserHides.clear(_hides.value, id))
     }
 
     /** Mémorise les redirections refusées et les domaines tiers vus pendant une session. */

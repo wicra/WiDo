@@ -75,6 +75,7 @@ fun SiteEditorDialog(
     var blockAds by remember { mutableStateOf(start.blockAds) }
     var blockPopups by remember { mutableStateOf(start.blockPopups) }
     var hideCookies by remember { mutableStateOf(start.hideCookieBanners) }
+    var hideOverlays by remember { mutableStateOf(start.hideOverlays) }
     var allowLogins by remember { mutableStateOf(start.allowLogins) }
     var navigation by remember { mutableStateOf(start.navigation) }
     val allowed = remember { mutableStateListOf<String>().apply { addAll(start.allowedDomains) } }
@@ -99,6 +100,7 @@ fun SiteEditorDialog(
             blockAds = blockAds,
             blockPopups = blockPopups,
             hideCookieBanners = hideCookies,
+            hideOverlays = hideOverlays,
             allowLogins = allowLogins,
         )
         error = onSave(name, url, options)
@@ -177,6 +179,7 @@ fun SiteEditorDialog(
                         ToggleChip(stringResource(R.string.p_ads), blockAds) { blockAds = !blockAds }
                         ToggleChip(stringResource(R.string.p_popups), blockPopups) { blockPopups = !blockPopups }
                         ToggleChip(stringResource(R.string.p_cookies), hideCookies) { hideCookies = !hideCookies }
+                        ToggleChip(stringResource(R.string.p_overlays), hideOverlays) { hideOverlays = !hideOverlays }
                         ToggleChip(stringResource(R.string.p_logins), allowLogins) { allowLogins = !allowLogins }
                         // Redirections : strictes → souples → mixtes → strictes.
                         ToggleChip(stringResource(navigationLabel(navigation)), navigation != Navigation.STRICT) {

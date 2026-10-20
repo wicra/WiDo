@@ -31,6 +31,8 @@ fun SiteActionsDialog(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onRemovePin: (Pin) -> Unit,
+    hiddenCount: Int,
+    onClearHides: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
@@ -45,6 +47,9 @@ fun SiteActionsDialog(
                 Modifier.fillMaxWidth(),
                 primary = false,
             )
+        }
+        if (hiddenCount > 0) {
+            ActionButton(stringResource(R.string.action_unhide, hiddenCount), onClearHides, Modifier.fillMaxWidth(), primary = false)
         }
         if (pins.isNotEmpty()) {
             SectionLabel(stringResource(R.string.pins_remove))

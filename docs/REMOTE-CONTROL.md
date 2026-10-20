@@ -48,6 +48,7 @@ Un plateau en bas de l'écran ; la page reste visible au-dessus. ◀ ▶ pour ch
 - **A− / A+** : texte plus petit / plus grand (mémorisé par site)
 - **Téléphone** : un QR code s'affiche ; scanne-le avec ton téléphone (même réseau), tape ton texte, il arrive dans le champ sélectionné de la page (ou le premier champ de recherche). « Envoyer + Entrée » valide aussi la recherche.
 - **Épingler** la page à l'accueil ([CUSTOM-SITES](CUSTOM-SITES.md))
+- **Masquer un élément** : pour une pop-up ou un bandeau qui résiste. Pointe-le avec le curseur (les flèches le déplacent librement), puis **OK** : il disparaît, et restera masqué aux prochaines visites. **Retour** annule. Options du site → « Réafficher les éléments masqués » annule tout.
 - **Enregistrer** ce site
 - **Veille** : chaque appui passe à 30, 60, 90, 120 min, puis désactivé. À la fin, la vidéo se met en pause, WiDo revient à l'accueil et la TV peut se mettre en veille. Un avertissement s'affiche une minute avant.
 - Aide, retour aux **Sites**
@@ -59,7 +60,7 @@ Un plateau en bas de l'écran ; la page reste visible au-dessus. ◀ ▶ pour ch
 - Le **clavier de la TV** s'ouvre sur un champ de saisie touché avec le curseur. La dictée du clavier Google peut s'y trouver : **à confirmer sur appareil réel**.
 - Le micro de la télécommande dialogue avec l'assistant Google, pas avec la page.
 - WiDo refuse que les sites accèdent au micro ou à la caméra.
-- Saisie depuis un téléphone : menu rapide → **Téléphone**. Le petit serveur de la TV n'est ouvert que pendant l'affichage du QR code, et refuse toute requête sans le jeton aléatoire de ce QR code.
+- Saisie depuis un téléphone : quand un champ de la page est sélectionné (recherche YouTube, identifiant…), un **QR code** s'affiche en haut à droite ; scanne-le, tape, le texte arrive dans le champ. Réglage « QR code sur les champs ». Aussi : menu rapide → **Téléphone**. Le petit serveur de la TV n'est ouvert que pendant l'affichage du QR code, et refuse toute requête sans le jeton aléatoire de ce QR code.
 - Saisie depuis Home Assistant : voir la [feuille de route](ROADMAP.md).
 
 ## Limites connues

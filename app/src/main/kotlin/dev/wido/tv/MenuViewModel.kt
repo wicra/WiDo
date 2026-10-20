@@ -52,6 +52,11 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
 
     fun removePin(pin: Pin) = app.repository.removePin(pin)
 
+    /** Éléments masqués à la main, par site. */
+    val hides: StateFlow<Map<String, List<String>>> = app.repository.hides
+
+    fun clearHides(siteId: String) = app.repository.clearHides(siteId)
+
     /** Chaque fonction renvoie un message d'erreur à afficher, ou null si c'est fait. */
     fun addSite(name: String, url: String, options: LocalSites.SiteOptions): String? =
         app.repository.addLocalSite(name, url, options)

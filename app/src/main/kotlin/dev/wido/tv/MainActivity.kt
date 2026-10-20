@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
     /**
      * Extras acceptés (utiles depuis `adb` / Home Assistant) :
      * - `config_url` : change l'URL de configuration (https uniquement, mémorisée) ;
-     * - `site` : ouvre directement ce site.
+     * - `site` : ouvre directement ce site (`last` : le dernier site ouvert).
      */
     private fun handleIntent(intent: Intent): Boolean {
         val app = application as WiDoApp

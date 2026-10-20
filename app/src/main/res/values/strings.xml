@@ -176,4 +176,11 @@
     <string name="phone_hint_name">Scanne ce code avec ton téléphone, puis tape le nom du site.</string>
     <string name="phone_corner">Taper au téléphone</string>
     <string name="s_field_qr">QR code sur les champs</string>
+    <string name="panel_hide_element">Masquer un élément</string>
+    <string name="osd_pick_hint">Pointe l\'élément à masquer puis OK · Retour : annuler</string>
+    <string name="osd_pick_done">Élément masqué (aussi aux prochaines visites)</string>
+    <string name="osd_pick_nothing">Rien à masquer ici</string>
+    <string name="osd_pick_cancel">Masquage annulé</string>
+    <string name="action_unhide">Réafficher les éléments masqués (%1$d)</string>
+    <string name="p_overlays">Fermer les calques</string>
 </resources>

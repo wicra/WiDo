@@ -141,3 +141,17 @@ class LibraryTest {
         assertEquals(emptyList(), Pins.add(emptyList(), "yt", "x", "javascript:alert(1)"))
     }
 }
+
+class UserHidesTest {
+    @Test fun addsAppliesAndClears() {
+        var hides = emptyMap<String, List<String>>()
+        hides = UserHides.add(hides, "s", "#popup")
+        hides = UserHides.add(hides, "s", "#popup")
+        hides = UserHides.add(hides, "s", "div{color:red}")
+        assertEquals(mapOf("s" to listOf("#popup")), hides)
+        val site = Site(id = "s", name = "S", url = "https://s.example/", hideSelectors = listOf(".a"))
+        assertEquals(listOf(".a", "#popup"), UserHides.apply(site, hides).hideSelectors)
+        assertEquals(hides, UserHides.decode(UserHides.encode(hides)))
+        assertTrue(UserHides.clear(hides, "s").isEmpty())
+    }
+}

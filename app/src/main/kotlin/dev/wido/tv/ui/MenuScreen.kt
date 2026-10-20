@@ -92,6 +92,7 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit, onOpenPin: (Pin) -> Un
     val sites by vm.sites.collectAsState()
     val lists by vm.lists.collectAsState()
     val pins by vm.pins.collectAsState()
+    val hides by vm.hides.collectAsState()
     // Carte en cours de déplacement (◀ ▶ la déplacent, OK ou Retour terminent).
     var movingId by remember { mutableStateOf<String?>(null) }
 
@@ -200,6 +201,8 @@ fun MenuScreen(vm: MenuViewModel, onOpen: (Site) -> Unit, onOpenPin: (Pin) -> Un
             onEdit = { actionsFor = null; editor = Editor.Edit(site) },
             onDelete = { vm.removeSite(site.id); actionsFor = null },
             onRemovePin = vm::removePin,
+            hiddenCount = hides[site.id]?.size ?: 0,
+            onClearHides = { vm.clearHides(site.id) },
             onDismiss = { actionsFor = null },
         )
     }

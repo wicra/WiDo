@@ -58,6 +58,8 @@ object LocalSites {
         val blockAds: Boolean = true,
         val blockPopups: Boolean = true,
         val hideCookieBanners: Boolean = false,
+        /** Retire les calques plein écran sans lecteur (script `remove-overlays`). */
+        val hideOverlays: Boolean = false,
         /** Autorise les pages de connexion Google, Microsoft, Apple et Facebook. */
         val allowLogins: Boolean = false,
     )
@@ -106,6 +108,7 @@ object LocalSites {
         blockAds = site.blockAds,
         blockPopups = "block-popups" in site.scripts,
         hideCookieBanners = "hide-cookie-banners" in site.scripts,
+        hideOverlays = "remove-overlays" in site.scripts,
         allowLogins = DomainPresets.hasLogins(site.allowedDomains),
     )
 
@@ -147,6 +150,7 @@ object LocalSites {
             scripts = listOfNotNull(
                 "block-popups".takeIf { options.blockPopups },
                 "hide-cookie-banners".takeIf { options.hideCookieBanners },
+                "remove-overlays".takeIf { options.hideOverlays },
             ),
             allowInsecure = scheme == "http",
             navigation = options.navigation.takeIf { it in Navigation.ALL } ?: Navigation.STRICT,

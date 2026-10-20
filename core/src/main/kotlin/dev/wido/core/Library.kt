@@ -96,3 +96,41 @@ object Pins {
         return (path.substringAfterLast('/').ifEmpty { Hosts.of(url).orEmpty() }).take(MAX_TITLE)
     }
 }
+
+/**
+ * Éléments masqués à la main (« Masquer un élément » du menu rapide), par site. Gardés à part de la
+ * configuration : valables pour les sites perso comme pour ceux de la configuration distante.
+ */
+object UserHides {
+    const val MAX_PER_SITE = 50
+    const val MAX_SELECTOR = 300
+
+    @Serializable
+    private data class FileModel(val sites: Map<String, List<String>> = emptyMap())
+
+    private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
+
+    fun encode(hides: Map<String, List<String>>): String = json.encodeToString(FileModel(hides))
+
+    fun decode(text: String): Map<String, List<String>> =
+        runCatching { json.decodeFromString<FileModel>(text).sites }.getOrDefault(emptyMap())
+            .mapValues { (_, list) -> list.filter(::valid).distinct().take(MAX_PER_SITE) }
+            .filterValues { it.isNotEmpty() }
+
+    fun add(hides: Map<String, List<String>>, siteId: String, selector: String): Map<String, List<String>> {
+        val s = selector.trim()
+        if (!valid(s)) return hides
+        val list = (hides[siteId].orEmpty() - s + s).takeLast(MAX_PER_SITE)
+        return hides + (siteId to list)
+    }
+
+    fun clear(hides: Map<String, List<String>>, siteId: String): Map<String, List<String>> = hides - siteId
+
+    /** Le site avec ses éléments masqués à la main ajoutés à `hideSelectors`. */
+    fun apply(site: Site, hides: Map<String, List<String>>): Site {
+        val extra = hides[site.id].orEmpty()
+        return if (extra.isEmpty()) site else site.copy(hideSelectors = (site.hideSelectors + extra).distinct())
+    }
+
+    private fun valid(s: String) = s.isNotEmpty() && s.length <= MAX_SELECTOR && s.none { it in "{}<>\n" }
+}

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.1
+
+### Corrigé
+- **Redirections souples** : elles acceptent de nouveau toute page d'un domaine non bloqué (la 0.6.0 exigeait un clic et refusait des redirections légitimes).
+
+### Amélioré
+- **Formulaire de site** : les champs se sélectionnent sans s'ouvrir, OK entre dans la saisie ; Entrée ne ferme plus le formulaire ; Retour enregistre (un second Retour quitte si le formulaire est invalide).
+- **Saisie au téléphone partout** : bouton téléphone dans chaque champ de l'app, et QR code automatique quand un champ d'une page est sélectionné (YouTube, connexions…).
+- **Masquer un élément** (menu rapide) : la pop-up ou le bandeau pointé au curseur disparaît et le reste sur ce site.
+- Protection **Fermer les calques** dans le formulaire des sites.
+- Home Assistant : `--es site last` rouvre le dernier site.
+
 ## 0.6.0
 
 ### Anti-pub

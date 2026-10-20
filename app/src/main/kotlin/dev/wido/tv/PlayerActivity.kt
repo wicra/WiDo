@@ -116,7 +116,8 @@ class PlayerActivity : ComponentActivity() {
         // Sécurité : si la page ne se dessine jamais, on retire l'écran de chargement après 20 s.
         root.postDelayed({ hideOverlay() }, OVERLAY_TIMEOUT_MS)
 
-        val siteId = intent.getStringExtra(EXTRA_SITE).orEmpty()
+        // `last` : le dernier site ouvert (pratique depuis Home Assistant).
+        val siteId = intent.getStringExtra(EXTRA_SITE).orEmpty().let { if (it == LAST_SITE) settings.lastSiteId.orEmpty() else it }
         val app = application as WiDoApp
         lifecycleScope.launch {
             val site = app.repository.findSite(siteId)
@@ -289,6 +290,31 @@ class PlayerActivity : ComponentActivity() {
         adWindow?.takeIf { it.isOpen }?.let { ad ->
             if (code == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) ad.close()
             return true
+        }
+
+        // « Masquer un élément » : les flèches déplacent le curseur librement, OK masque, Retour annule.
+        if (picking && panelView == null) {
+            when (code) {
+                KeyEvent.KEYCODE_BACK -> {
+                    if (event.action == KeyEvent.ACTION_UP) {
+                        picking = false
+                        osd.showText(getString(R.string.osd_pick_cancel))
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    if (event.action == KeyEvent.ACTION_UP) hideAtCursor()
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        val dx = when (code) { KeyEvent.KEYCODE_DPAD_LEFT -> -1; KeyEvent.KEYCODE_DPAD_RIGHT -> 1; else -> 0 }
+                        val dy = when (code) { KeyEvent.KEYCODE_DPAD_UP -> -1; KeyEvent.KEYCODE_DPAD_DOWN -> 1; else -> 0 }
+                        freeMove(event.repeatCount, dx, dy)
+                    }
+                    return true
+                }
+            }
         }
 
         // Menu rapide ouvert : les flèches et OK le pilotent ; Retour ou Menu le referment.
@@ -590,6 +616,7 @@ class PlayerActivity : ComponentActivity() {
             action(getString(R.string.panel_zoom_in_short)) { changeZoom(1) },
             action(getString(R.string.panel_phone)) { showPhone() },
             action(getString(R.string.panel_pin)) { pinCurrentPage() },
+            action(getString(R.string.panel_hide_element)) { startPicking() },
             action(getString(R.string.panel_save_short)) { saveCurrentPage() },
             action(sleepLabel()) { cycleSleep() },
             action(getString(R.string.panel_help)) { showHelp() },
@@ -693,6 +720,36 @@ class PlayerActivity : ComponentActivity() {
         root.addView(card, FrameLayout.LayoutParams(MATCH, MATCH))
         card.bringToFront()
         cursor.bringToFront()
+    }
+
+    // --- Masquer un élément ------------------------------------------------------------------
+
+    private var picking = false
+
+    /** Pointe un élément gênant (pop-up, bandeau) avec le curseur ; OK le masque, et il le restera sur ce site. */
+    private fun startPicking() {
+        picking = true
+        if (!cursorMode) toggleCursor()
+        cursor.wake()
+        osd.showText(getString(R.string.osd_pick_hint))
+    }
+
+    private fun hideAtCursor() {
+        picking = false
+        val wv = webView ?: return
+        val current = site ?: return
+        if (wv.width == 0 || wv.height == 0) return
+        val fx = cursor.px / wv.width
+        val fy = cursor.py / wv.height
+        wv.evaluateJavascript("($HIDE_SCRIPT)($fx,$fy)") { raw ->
+            val selector = unquote(raw)
+            if (selector == null) {
+                osd.showText(getString(R.string.osd_pick_nothing))
+            } else {
+                (application as WiDoApp).repository.addHide(current.id, selector)
+                osd.showText(getString(R.string.osd_pick_done))
+            }
+        }
     }
 
     // --- Pages épinglées ---------------------------------------------------------------------
@@ -944,6 +1001,8 @@ class PlayerActivity : ComponentActivity() {
     companion object {
         const val EXTRA_SITE = "site"
         const val EXTRA_URL = "url"
+        /** Valeur spéciale de l'extra `site` : rouvre le dernier site ouvert. */
+        const val LAST_SITE = "last"
         private const val FIELD_CARD_GRACE_MS = 1_500L
         private val SLEEP_STEPS = listOf(0, 30, 60, 90, 120)
         private const val BRIDGE_NAME = "WiDoBridge"
@@ -953,6 +1012,38 @@ class PlayerActivity : ComponentActivity() {
         private const val POLL_MS = 700L
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val LONG_PRESS_MS = 600L
+        /**
+         * Masque l'élément sous le curseur, ou le calque qui le contient (position fixe, z-index élevé),
+         * et renvoie un sélecteur CSS qui le retrouvera aux prochaines visites.
+         */
+        private const val HIDE_SCRIPT = """function (fx, fy) {
+  var el = document.elementFromPoint(fx * innerWidth, fy * innerHeight);
+  if (!el || el === document.body || el === document.documentElement) return null;
+  var target = el;
+  for (var cur = el; cur && cur !== document.body; cur = cur.parentElement) {
+    var cs = getComputedStyle(cur);
+    if (cs.position === 'fixed' || cs.position === 'sticky' || (parseInt(cs.zIndex, 10) || 0) >= 100) target = cur;
+  }
+  function selector(e) {
+    var parts = [];
+    while (e && e.nodeType === 1 && e !== document.body && parts.length < 5) {
+      if (e.id && /^[A-Za-z][\w-]*$/.test(e.id)) { parts.unshift('#' + e.id); break; }
+      var part = e.tagName.toLowerCase();
+      var cls = Array.prototype.filter.call(e.classList, function (c) { return /^[A-Za-z][\w-]{0,39}$/.test(c); }).slice(0, 2);
+      if (cls.length) part += '.' + cls.join('.');
+      else if (e.parentElement) part += ':nth-child(' + (Array.prototype.indexOf.call(e.parentElement.children, e) + 1) + ')';
+      parts.unshift(part);
+      e = e.parentElement;
+    }
+    return parts.join(' > ');
+  }
+  var s = selector(target);
+  if (!s) return null;
+  target.style.setProperty('display', 'none', 'important');
+  document.documentElement.style.overflow = '';
+  if (document.body) document.body.style.overflow = '';
+  return s;
+}"""
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
