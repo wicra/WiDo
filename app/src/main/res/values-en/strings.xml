@@ -345,7 +345,7 @@
     <string name="v_amb_black">Black</string>
     <string name="stats_site">%1$s ads and trackers blocked this month</string>
     <string name="stats_total">%1$s ads and trackers blocked this month</string>
-    <string name="pause_hint">OK to resume</string>
+    <string name="pause_hint">OK to resume  ·  arrows: cursor for the player settings</string>
     <string name="err_offline_title">No connection</string>
     <string name="err_offline_body">This phone isn\'t connected to the Internet. Check Wi-Fi or mobile data, then try again.</string>
     <string name="err_offline_body_tv">This TV isn\'t connected to the Internet. Check Wi-Fi or the router cable, then try again.</string>

@@ -22,7 +22,7 @@ En haut, les onglets **Sites** et **Réglages** ([SETTINGS](SETTINGS.md)) : un o
 | **CH + / CH −** (ou Page +/−) | Fait défiler la page d'un écran. |
 | Rouge / vert / jaune / bleu | Raccourcis réglables. Par défaut : menu, recharger, texte +, texte −. |
 
-**En plein écran vidéo** (réglage par défaut) : **◀ ▶** reculent/avancent, **▲ ▼** règlent le volume, **OK** lance/met en pause, **Retour** quitte le plein écran.
+**En plein écran vidéo** (réglage par défaut) : **◀ ▶** reculent/avancent, **▲ ▼** règlent le volume, **OK** lance/met en pause, **Retour** quitte le plein écran. **En pause**, les flèches font apparaître le curseur pour atteindre les réglages du lecteur du site (sous-titres, qualité…), **OK** clique ; dès que la lecture reprend, les flèches pilotent à nouveau le lecteur.
 
 Le curseur est une flèche de souris (la pointe est le point de clic) ; il devient bleu pendant l'appui sur OK et se masque après quelques secondes d'inactivité.
 

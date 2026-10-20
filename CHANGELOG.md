@@ -3,6 +3,8 @@
 ## 0.9.1
 
 ### Corrigé
+- **Reprendre : la vidéo revenait à la bonne minute puis repartait du début.** Beaucoup de lecteurs se réinitialisent juste après le saut (chargement du flux, plein écran, fin d'une pub d'avant-film). Pendant 20 s après la reprise, WiDo vérifie la position et la remet si la vidéo est repartie du début ; il attend aussi la fin d'une pub plus courte que la position avant de sauter. Avancer ou reculer soi-même arrête cette vérification.
+- **En pause en plein écran, les flèches montaient le volume** au lieu de permettre d'atteindre les réglages du lecteur du site. En pause, les flèches font maintenant apparaître le curseur (OK clique : sous-titres, qualité, épisodes…) ; tant que le curseur n'est pas sorti, OK relance la vidéo. À la reprise de la lecture, les flèches pilotent à nouveau le lecteur.
 - **L'appli se fermait pendant une vidéo, puis Reprendre ramenait en boucle à l'accueil.** Quand le moteur de la page s'arrête (le lecteur du site plante, ou la TV manque de mémoire), Android fermait toute l'appli ; en rouvrant la même vidéo, sa lecture automatique relançait le même plantage. Désormais WiDo reste ouvert et affiche « La page s'est arrêtée » avec Réessayer (même seconde) et Retour. Une vidéo qui a fait tomber la session précédente se rouvre sans lecture automatique : OK pour la lancer. Les captures d'image pour Reprendre sont aussi plus espacées (moins de mémoire utilisée).
 - **L'appli téléphone pouvait se fermer** en revenant dessus (notification de la TV ou lecture en arrière-plan arrêtée trop tôt, par exemple après la demande d'autorisation des notifications).
 - **Reprendre retombait sur l'accueil du site** quand le site ne couvrait plus l'adresse de la vidéo : la vidéo s'ouvre maintenant avec le site qui la connaît.

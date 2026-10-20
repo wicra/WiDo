@@ -457,9 +457,14 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             }
         }
 
-        // Plein écran vidéo : les flèches pilotent le lecteur.
+        // Plein écran vidéo : les flèches pilotent le lecteur. En pause, elles déplacent le curseur pour
+        // atteindre les réglages du lecteur du site (sous-titres, qualité, épisodes…) ; OK clique.
         if ((customView != null || cinema) && settings.fullscreenPlayerKeys) {
-            if (fullscreenKey(event)) return true
+            if (mediaState.value?.paused == true) {
+                if (pausedCursorKey(event)) return true
+            } else if (fullscreenKey(event)) {
+                return true
+            }
         }
 
         if (cursorMode) {
@@ -660,6 +665,33 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         return true
     }
 
+    /** Vidéo en pause en plein écran : le curseur apparaît et se déplace librement, OK clique. */
+    private fun pausedCursorKey(event: KeyEvent): Boolean {
+        val dir = when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP -> 0 to -1
+            KeyEvent.KEYCODE_DPAD_DOWN -> 0 to 1
+            KeyEvent.KEYCODE_DPAD_LEFT -> -1 to 0
+            KeyEvent.KEYCODE_DPAD_RIGHT -> 1 to 0
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                // Curseur pas encore sorti : OK relance simplement la vidéo.
+                if (cursor.visibility == View.VISIBLE) return tap(event)
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) media("toggle")
+                return true
+            }
+            else -> return false
+        }
+        if (cursor.visibility != View.VISIBLE) {
+            cursor.visibility = View.VISIBLE
+            pauseCursor = true
+        }
+        cursor.wake()
+        if (event.action == KeyEvent.ACTION_DOWN) freeMove(event.repeatCount, dir.first, dir.second)
+        return true
+    }
+
+    /** Curseur montré pour la pause seulement : il repart quand la lecture reprend. */
+    private var pauseCursor = false
+
     private fun videoVolume(direction: Int) {
         if (settings.customVolume && !audio.isVolumeFixed) {
             adjustVolume(if (direction > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER)
@@ -670,6 +702,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     /** Avance ou recule ; la barre affiche le saut. */
     private fun seekBy(seconds: Double) {
+        cancelSeekGuard()
         osd.markSeek(seconds)
         media("seek", seconds)
     }
@@ -713,6 +746,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         if (backgrounded) BackgroundBridge.update(playbackInfo(state))
         applyAutoStart(state)
         schedulePauseScreen(state)
+        if (pauseCursor && !state.paused) {
+            pauseCursor = false
+            if (!cursorMode) cursor.visibility = View.GONE
+        }
         publishNowPlaying(state)
         if (!state.paused) captureFrame()
         applyPendingSeek(state)
@@ -795,7 +832,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 action(getString(if (media.paused) R.string.tile_play else R.string.tile_pause), if (media.paused) Glyph.Play else Glyph.Pause) { media("toggle") },
                 next,
                 native,
-                action(getString(R.string.tile_restart), Glyph.Restart) { mediaJson(JSONObject().put("cmd", "seekTo").put("to", 0).toString()) },
+                action(getString(R.string.tile_restart), Glyph.Restart) { cancelSeekGuard(); mediaJson(JSONObject().put("cmd", "seekTo").put("to", 0).toString()) },
                 sleep, pin, zoomOut, zoomIn, sites,
                 hide, siteHome, reload,
             ) + extras
@@ -1428,7 +1465,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     /** Interroge le lecteur jusqu'à ce que la vidéo soit prête, puis y saute (voir [applyPendingSeek]). */
     private val resumeSeek = object : Runnable {
         override fun run() {
-            if (pendingSeek <= 0 || resumeAttempts++ > RESUME_ATTEMPTS) return
+            if ((pendingSeek <= 0 && !seekGuarded()) || resumeAttempts++ > RESUME_ATTEMPTS) return
             passivePoll = true
             media("state")
             root.postDelayed(this, RESUME_POLL_MS)
@@ -1681,10 +1718,41 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     private fun applyPendingSeek(state: MediaState) {
+        guardSeek(state)
         if (pendingSeek <= 0 || state.duration <= 0) return
         val target = pendingSeek
+        // Vidéo plus courte que la position : une pub d'avant-film. On attend le vrai film.
+        if (state.duration + 5 < target) return
         pendingSeek = 0.0
         if (kotlin.math.abs(state.time - target) > 5) media("seek", target - state.time)
+        // Bien des lecteurs se réinitialisent juste après (chargement du flux, plein écran, fin de pub) et
+        // repartent du début : pendant quelques secondes, on vérifie et on remet la bonne position.
+        guardTarget = target
+        guardUntil = SystemClock.elapsedRealtime() + SEEK_GUARD_MS
+        guardRetries = 0
+        resumeAttempts = 0
+        root.removeCallbacks(resumeSeek)
+        root.postDelayed(resumeSeek, RESUME_POLL_MS)
+    }
+
+    private var guardTarget = 0.0
+    private var guardUntil = 0L
+    private var guardRetries = 0
+
+    private fun seekGuarded() = SystemClock.elapsedRealtime() < guardUntil
+
+    /** La vidéo est repartie du début juste après la reprise : on la replace (3 fois au plus). */
+    private fun guardSeek(state: MediaState) {
+        if (!seekGuarded() || state.duration <= 0 || state.duration + 5 < guardTarget) return
+        if (state.time < guardTarget - 15 && guardRetries < 3) {
+            guardRetries++
+            media("seek", guardTarget - state.time)
+        }
+    }
+
+    /** L'utilisateur avance ou recule lui-même : on ne le contredit pas. */
+    private fun cancelSeekGuard() {
+        guardUntil = 0L
     }
 
     private var streamHinted = false
@@ -2007,7 +2075,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
   return JSON.stringify({ x: Math.max(0, best.left) / innerWidth, y: Math.max(0, best.top) / innerHeight, r: Math.min(innerWidth, best.right) / innerWidth, b: Math.min(innerHeight, best.bottom) / innerHeight });
 })()"""
         private const val RESUME_POLL_MS = 1_500L
-        private const val RESUME_ATTEMPTS = 20
+        private const val RESUME_ATTEMPTS = 40
+        private const val SEEK_GUARD_MS = 20_000L
         /** Image de la page : og:image, twitter:image, image_src, thumbnailUrl, puis l'affiche du lecteur (`poster`). */
         private const val META_SCRIPT = """(function () {
   function abs(u) { try { return u ? new URL(u, location.href).href : null; } catch (e) { return null; } }

@@ -345,7 +345,7 @@
     <string name="v_amb_black">Noir</string>
     <string name="stats_site">%1$s pubs et pisteurs bloqués ce mois-ci</string>
     <string name="stats_total">%1$s pubs et pisteurs bloqués ce mois-ci</string>
-    <string name="pause_hint">OK pour reprendre</string>
+    <string name="pause_hint">OK pour reprendre  ·  flèches : curseur pour les réglages du lecteur</string>
     <string name="err_offline_title">Pas de connexion</string>
     <string name="err_offline_body">Le téléphone n\'est pas connecté à Internet. Vérifie le Wi-Fi ou les données mobiles, puis réessaie.</string>
     <string name="err_offline_body_tv">La TV n\'est pas connectée à Internet. Vérifie le Wi-Fi ou le câble de la box, puis réessaie.</string>
