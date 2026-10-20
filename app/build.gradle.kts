@@ -68,6 +68,8 @@ android {
         abortOnError = true
         checkReleaseBuilds = false
         htmlReport = true
+        textReport = true
+        textOutput = file("build/reports/lint-results-debug.txt")
         // Appli installée hors Play Store : pas d'exigence de version cible du Store ni de traductions complètes imposées.
         // RestrictedApi : faux positif connu d'androidx sur super.dispatchKeyEvent dans une ComponentActivity.
         disable += setOf("RestrictedApi", "ExpiredTargetSdkVersion", "OldTargetApi", "GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion", "MissingTranslation")
