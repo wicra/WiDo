@@ -764,6 +764,63 @@ private fun Vinyl(accent: Color, focused: Boolean) {
     }
 }
 
+/**
+ * Où se trouve l'élément qui ouvre un site (cercle ou vignette sélectionnée) : la page s'agrandit
+ * depuis lui à l'ouverture.
+ */
+object LaunchOrigin {
+    @Volatile var bounds: android.graphics.Rect? = null
+        private set
+
+    /** Couleur de l'élément (celle du site), pour le cercle qui s'agrandit. */
+    @Volatile var color: Int = 0xFF1E5BFF.toInt()
+        private set
+
+    fun remember(coordinates: androidx.compose.ui.layout.LayoutCoordinates, color: Color) {
+        val r = coordinates.boundsInWindow()
+        bounds = android.graphics.Rect(r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt())
+        this.color = color.toArgb()
+    }
+}
+
+/**
+ * Fond d'ambiance : l'image de la vidéo sélectionnée, très adoucie (réduite puis agrandie, ce qui la
+ * floute même sans effet de flou du système) et assombrie pour que le texte reste lisible.
+ */
+@Composable
+private fun Backdrop(entry: WatchEntry?) {
+    val app = LocalContext.current.applicationContext as WiDoApp
+    var soft by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    LaunchedEffect(entry?.url) {
+        soft = entry?.let { e ->
+            app.thumbnails.forVideo(e.url, e.image)?.let { image ->
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    val src = image.asAndroidBitmap()
+                    val w = 28
+                    val h = (src.height * w / src.width.toFloat()).toInt().coerceAtLeast(1)
+                    android.graphics.Bitmap.createScaledBitmap(src, w, h, true).asImageBitmap()
+                }
+            }
+        }
+    }
+    androidx.compose.animation.Crossfade(soft, animationSpec = tween(700), label = "backdrop") { image ->
+        if (image != null) {
+            Box(Modifier.fillMaxSize()) {
+                androidx.compose.foundation.Image(
+                    image,
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    filterQuality = androidx.compose.ui.graphics.FilterQuality.Low,
+                    alpha = 0.6f,
+                    modifier = Modifier.fillMaxSize().then(if (android.os.Build.VERSION.SDK_INT >= 31) Modifier.blur(24.dp) else Modifier),
+                )
+                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Palette.Background.copy(alpha = 0.85f), 0.65f to Palette.Background.copy(alpha = 0.25f))))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Palette.Background.copy(alpha = 0.95f))))
+            }
+        }
+    }
+}
+
 /** Une seule ligne discrète : la version à gauche, l'état de la mise à jour à droite. */
 @Composable
 private fun Footer(update: UpdateUi, blocked: Int) {
