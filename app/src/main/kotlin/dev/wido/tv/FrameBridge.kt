@@ -33,6 +33,8 @@ class FrameBridge(
     private val onMedia: (MediaState) -> Unit,
     /** Un passage a été sauté par la page (`what` : `sponsor`). */
     private val onSkip: (String) -> Unit = {},
+    /** Un champ texte de la page a reçu (vrai) ou perdu (faux) le focus. */
+    private val onField: (Boolean) -> Unit = {},
 ) : WebViewCompat.WebMessageListener {
     private val proxies = CopyOnWriteArrayList<JavaScriptReplyProxy>()
 
@@ -49,6 +51,7 @@ class FrameBridge(
         when (json.optString("type")) {
             "media" -> parseMediaState(json.optJSONObject("s")?.toString())?.let(onMedia)
             "skip" -> onSkip(json.optString("what"))
+            "field" -> onField(json.optBoolean("on"))
         }
     }
 

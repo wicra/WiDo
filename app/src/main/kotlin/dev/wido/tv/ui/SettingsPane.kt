@@ -155,6 +155,9 @@ fun SettingsPane(
                     if (settings.customVolume) 0 else 1,
                 ) { changed { settings.customVolume = it == 0 } }
             }
+            SettingRow(stringResource(R.string.s_field_qr)) {
+                Segmented(listOf(on, off), if (settings.fieldPhoneQr) 0 else 1) { changed { settings.fieldPhoneQr = it == 0 } }
+            }
             SettingRow(stringResource(R.string.s_fs_keys)) {
                 Segmented(
                     listOf(stringResource(R.string.v_fs_player), stringResource(R.string.v_fs_cursor)),

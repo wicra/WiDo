@@ -144,6 +144,11 @@ class Settings(context: Context) {
         get() = state.getString("site_order", null)?.split('\n')?.filter { it.isNotEmpty() }.orEmpty()
         set(v) = state.edit().putString("site_order", v.joinToString("\n")).apply()
 
+    /** Un QR code s'affiche quand un champ de la page est sélectionné, pour taper depuis le téléphone. */
+    var fieldPhoneQr: Boolean
+        get() = prefs.getBoolean("field_qr", true)
+        set(v) = prefs.edit().putBoolean("field_qr", v).apply()
+
     var helpSeen: Boolean
         get() = prefs.getBoolean("help_seen", false)
         set(v) = prefs.edit().putBoolean("help_seen", v).apply()

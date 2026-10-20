@@ -45,6 +45,7 @@ import dev.wido.core.ResumeUrl
 import dev.wido.core.Site
 import dev.wido.core.Zoom
 import dev.wido.tv.ui.BlockedRedirect
+import dev.wido.tv.ui.PhoneCornerCard
 import dev.wido.tv.ui.PhoneOverlay
 import dev.wido.tv.ui.QuickAction
 import dev.wido.tv.ui.QuickMenu
@@ -189,6 +190,7 @@ class PlayerActivity : ComponentActivity() {
             val frameBridge = FrameBridge(
                 onMedia = { state -> runOnUiThread { onMediaState(state) } },
                 onSkip = { runOnUiThread { osd.showText(getString(R.string.osd_sponsor_skipped)) } },
+                onField = { focused -> runOnUiThread { onPageField(focused) } },
             )
             bridge = frameBridge
             WebViewCompat.addWebMessageListener(wv, BRIDGE_NAME, setOf("*"), frameBridge)
@@ -653,7 +655,44 @@ class PlayerActivity : ComponentActivity() {
      * ou de texte visible), comme si on l'avait tapé ; `submit` valide ensuite (Entrée, formulaire).
      */
     private fun typeText(text: String, submit: Boolean) {
-        webView?.evaluateJavascript("(${TYPE_SCRIPT})(${JSONObject.quote(text)},$submit)", null)
+        val command = JSONObject().put("cmd", "type").put("text", text).put("submit", submit).toString()
+        val b = bridge
+        // Avec la passerelle, toutes les frames reçoivent la commande : celle qui a le champ actif écrit.
+        if (b != null) b.send(command) else webView?.evaluateJavascript("window.__widoCommand&&window.__widoCommand(${JSONObject.quote(command)})", null)
+    }
+
+    // --- QR code sur les champs de la page ---------------------------------------------------
+
+    private var fieldCard: ComposeView? = null
+    private val hideFieldCard = Runnable {
+        fieldCard?.let { root.removeView(it) }
+        fieldCard = null
+    }
+
+    /** Un champ de la page est sélectionné : le QR code s'affiche en coin, tant que le champ garde le focus. */
+    private fun onPageField(focused: Boolean) {
+        root.removeCallbacks(hideFieldCard)
+        if (!focused) {
+            // Le focus passe souvent d'un champ à l'autre : on attend un peu avant de retirer la carte.
+            root.postDelayed(hideFieldCard, FIELD_CARD_GRACE_MS)
+            return
+        }
+        if (!settings.fieldPhoneQr || fieldCard != null || panelView != null) return
+        val card = ComposeView(this).apply {
+            isFocusable = false
+            setContent {
+                WiDoTheme {
+                    PhoneCornerCard { message ->
+                        typeText(message.text, message.submit)
+                        osd.showText(getString(R.string.osd_text_sent))
+                    }
+                }
+            }
+        }
+        fieldCard = card
+        root.addView(card, FrameLayout.LayoutParams(MATCH, MATCH))
+        card.bringToFront()
+        cursor.bringToFront()
     }
 
     // --- Pages épinglées ---------------------------------------------------------------------
@@ -688,6 +727,7 @@ class PlayerActivity : ComponentActivity() {
         val next = SLEEP_STEPS[(SLEEP_STEPS.indexOf(sleepMinutes) + 1) % SLEEP_STEPS.size]
         root.removeCallbacks(sleepWarning)
         root.removeCallbacks(sleepNow)
+        root.removeCallbacks(hideFieldCard)
         adWindow?.close()
         sleepMinutes = next
         if (next == 0) {
@@ -865,6 +905,7 @@ class PlayerActivity : ComponentActivity() {
         root.removeCallbacks(poll)
         root.removeCallbacks(sleepWarning)
         root.removeCallbacks(sleepNow)
+        root.removeCallbacks(hideFieldCard)
         adWindow?.close()
         customCallback?.onCustomViewHidden()
         webView?.let {
@@ -903,6 +944,7 @@ class PlayerActivity : ComponentActivity() {
     companion object {
         const val EXTRA_SITE = "site"
         const val EXTRA_URL = "url"
+        private const val FIELD_CARD_GRACE_MS = 1_500L
         private val SLEEP_STEPS = listOf(0, 30, 60, 90, 120)
         private const val BRIDGE_NAME = "WiDoBridge"
         private const val ACCENT = 0xFFFFFFFF.toInt()
@@ -911,33 +953,6 @@ class PlayerActivity : ComponentActivity() {
         private const val POLL_MS = 700L
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val LONG_PRESS_MS = 600L
-        /** Saisie depuis le téléphone : remplit le champ comme une frappe (événements input/change), puis valide. */
-        private const val TYPE_SCRIPT = """function (t, submit) {
-  var el = document.activeElement;
-  function editable(e) { return e && (e.isContentEditable || /^(INPUT|TEXTAREA)$/.test(e.tagName)); }
-  if (!editable(el)) {
-    el = Array.prototype.find.call(document.querySelectorAll('input[type=search],input[type=text],input:not([type]),textarea'),
-      function (e) { var r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && !e.disabled; });
-  }
-  if (!el) return false;
-  el.focus();
-  if (el.isContentEditable) {
-    document.execCommand('selectAll', false, null);
-    document.execCommand('insertText', false, t);
-  } else {
-    var setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set;
-    setter.call(el, t);
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-  }
-  if (submit) {
-    ['keydown', 'keypress', 'keyup'].forEach(function (type) {
-      el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-    });
-    if (el.form) { if (el.form.requestSubmit) el.form.requestSubmit(); else el.form.submit(); }
-  }
-  return true;
-}"""
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 

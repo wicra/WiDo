@@ -174,4 +174,6 @@
     <string name="ad_closing">Publicité · fermeture dans %1$d s</string>
     <string name="editor_leave_hint">Retour encore pour quitter sans enregistrer.</string>
     <string name="phone_hint_name">Scanne ce code avec ton téléphone, puis tape le nom du site.</string>
+    <string name="phone_corner">Taper au téléphone</string>
+    <string name="s_field_qr">QR code sur les champs</string>
 </resources>

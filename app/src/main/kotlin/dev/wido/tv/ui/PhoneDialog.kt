@@ -129,3 +129,33 @@ fun PhoneOverlay(hint: String, onMessage: (PhoneProtocol.Message) -> Unit, onClo
         }
     }
 }
+
+/**
+ * Petite carte en haut à droite, affichée quand un champ de la page est sélectionné : le QR code
+ * pour taper depuis le téléphone, sans gêner la page ni le clavier de la TV.
+ */
+@Composable
+fun PhoneCornerCard(onMessage: (PhoneProtocol.Message) -> Unit) {
+    val labels = phoneLabels()
+    val latest by rememberUpdatedState(onMessage)
+    var url by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(Unit) {
+        val link = PhoneLink(labels) { latest(it) }
+        url = link.start()
+        onDispose { link.stop() }
+    }
+    val current = url ?: return
+    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.TopEnd) {
+        Column(
+            Modifier.width(196.dp).glassPanel(Palette.PanelSolid, elevation = 20.dp).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White).padding(8.dp)) { QrCode(current, 152.dp) }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PhoneIcon(Palette.TextPrimary, 18.dp)
+                Text(stringResource(R.string.phone_corner), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}

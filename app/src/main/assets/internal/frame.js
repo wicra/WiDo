@@ -99,7 +99,9 @@
   // Repli sans passerelle native : la page principale répond à evaluateJavascript.
   window.__widoCommand = function (json) {
     try {
-      var s = command(JSON.parse(json));
+      var m = JSON.parse(json);
+      if (m.cmd === 'type') return window.__widoType ? String(window.__widoType(m.text, m.submit)) : null;
+      var s = command(m);
       return s ? JSON.stringify(s) : null;
     } catch (e) {
       return null;
@@ -111,7 +113,9 @@
   if (bridge && typeof bridge.postMessage === 'function') {
     bridge.onmessage = function (event) {
       try {
-        var s = command(JSON.parse(event.data));
+        var m = JSON.parse(event.data);
+        if (m.cmd === 'type') { if (window.__widoType) window.__widoType(m.text, m.submit); return; }
+        var s = command(m);
         if (s) bridge.postMessage(JSON.stringify({ type: 'media', s: s, top: isTop }));
       } catch (e) { /* message illisible : ignoré */ }
     };

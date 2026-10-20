@@ -174,4 +174,6 @@
     <string name="ad_closing">Ad · closing in %1$d s</string>
     <string name="editor_leave_hint">Press Back again to leave without saving.</string>
     <string name="phone_hint_name">Scan this code with your phone, then type the site name.</string>
+    <string name="phone_corner">Type from phone</string>
+    <string name="s_field_qr">QR code on text fields</string>
 </resources>

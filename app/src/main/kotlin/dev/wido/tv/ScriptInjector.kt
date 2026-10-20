@@ -94,7 +94,7 @@ class ScriptInjector(private val context: Context, private val site: Site) {
 
     private companion object {
         const val TAG = "WiDoScripts"
-        val INTERNAL = listOf("snap-core.js", "frame.js")
+        val INTERNAL = listOf("snap-core.js", "fields.js", "frame.js")
         val NAME = Regex("^[a-z0-9][a-z0-9-]{0,40}$")
     }
 }
