@@ -398,11 +398,16 @@ class ConfigRepository(private val context: Context, private val settings: Setti
 
     /** Listes de la configuration, plus les listes recommandées si le réglage est activé. */
     private fun effectiveLists(config: WiDoConfig): List<String> =
-        (config.blocklists + if (settings.recommendedLists) RECOMMENDED_LISTS else emptyList()).distinct()
+        (config.blocklists + if (settings.recommendedLists) (if (settings.lightLists) LIGHT_LISTS else RECOMMENDED_LISTS) else emptyList()).distinct()
 
     /** Couches de règles d'un site : listes + règles globales + règles du site. */
     private suspend fun layersFor(site: Site): List<HostRules> {
         val config = ensureLoaded()
+        // Listes qui ne sont plus utilisées (passage aux listes légères…) : libérées de la mémoire.
+        effectiveLists(config).toSet().let { wanted ->
+            parsedLists.keys.retainAll(wanted)
+            urlFilters.keys.retainAll(wanted)
+        }
         return withContext(Dispatchers.Default) {
             // « Bloquer les pubs » désactivé : ni listes ni règles globales, seulement les règles du site.
             val lists = if (site.blockAds) {
@@ -508,15 +513,22 @@ class ConfigRepository(private val context: Context, private val settings: Setti
                 }
                 val parsed = withContext(Dispatchers.Default) { FilterParser.parse(text) }
                 writeAtomically(file, CompiledRules.encode(parsed))
-                parsedLists[url] = parsed
+                // En mémoire : domaines sous forme compacte (déjà écrits sur disque avec leurs noms).
+                val compact = parsed.compact()
+                parsedLists[url] = compact
                 File(listsDir, sha1(url) + ".txt").delete() // ancien cache, non compilé
-                return@withContext parsed
+                return@withContext compact
             } catch (e: Exception) {
                 Log.w(TAG, "Liste $url indisponible, utilisation du cache s'il existe", e)
             }
         }
         parsedLists[url]?.let { return@withContext it }
-        val cached = if (file.exists()) runCatching { CompiledRules.decode(file.readText()) }.getOrNull() else null
+        // Relu ligne à ligne, domaines directement compacts : jamais tout le fichier ni toutes les chaînes en mémoire.
+        val cached = if (file.exists()) {
+            runCatching { file.bufferedReader().use { r -> CompiledRules.decodeLines(r.lineSequence(), compact = true) } }.getOrNull()
+        } else {
+            null
+        }
         (cached ?: HostRules()).also { parsedLists[url] = it }
     }
 
@@ -551,6 +563,16 @@ class ConfigRepository(private val context: Context, private val settings: Setti
             "https://easylist-downloads.adblockplus.org/liste_fr.txt",
             "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt",
             "https://ublockorigin.github.io/uAssets/filters/filters.txt",
+            "https://ublockorigin.github.io/uAssets/filters/quick-fixes.txt",
+            "https://ublockorigin.github.io/uAssets/filters/unbreak.txt",
+        )
+        /**
+         * Listes légères (appareils à peu de mémoire) : les noms de domaine de pubs et de pisteurs (peu
+         * coûteux en mémoire une fois compactés) et les correctifs d'uBlock ; sans les grosses listes de
+         * règles d'adresse et de masquage (EasyList, liste française, filtres d'uBlock).
+         */
+        private val LIGHT_LISTS = listOf(
+            "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt",
             "https://ublockorigin.github.io/uAssets/filters/quick-fixes.txt",
             "https://ublockorigin.github.io/uAssets/filters/unbreak.txt",
         )

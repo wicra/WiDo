@@ -426,4 +426,7 @@
     <string name="a11y_refresh">Refresh</string>
     <string name="a11y_close">Close</string>
     <string name="osd_native_found_low">Video found · quick menu → Play in WiDo: much lighter for this TV</string>
+    <string name="s_light_lists">List size</string>
+    <string name="v_lists_full">Full</string>
+    <string name="v_lists_light">Light (low memory)</string>
 </resources>

@@ -2,6 +2,13 @@
 
 WiDo applique **quatre filtres indépendants** : requêtes, masquage, navigation, scripts. YouTube a en plus son module dédié.
 
+## Listes légères (appareils à peu de mémoire)
+
+Sur une clé TV d'1 Go, les grosses listes pèsent lourd et Android finit par fermer l'appli pendant un film. Les noms de domaine bloqués sont donc gardés sous forme compacte (8 octets par nom, au prix d'une chance infime de bloquer un domaine de trop, jamais d'en laisser passer un), et **Réglages → Blocage → Taille des listes** propose :
+
+- **Complètes** : EasyList, liste française, filtre DNS d'AdGuard et listes d'uBlock Origin ;
+- **Légères** : filtre DNS d'AdGuard et correctifs d'uBlock seulement. Les pubs et pisteurs restent bloqués par leur nom de domaine ; on perd une partie du masquage des bandeaux et des règles d'adresse d'EasyList. C'est le réglage d'office sur les appareils à moins de 1,7 Go de mémoire.
+
 ## 1. Blocage de requêtes par nom d'hôte
 
 Chaque requête de la page (script, image, iframe, vidéo) est vérifiée : si son **nom d'hôte** est dans les règles, elle reçoit une réponse vide (HTTP 403). C'est le même principe qu'un DNS filtrant.

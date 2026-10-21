@@ -24,6 +24,12 @@ data class HostRules(
     val scripts: Map<String, Set<String>> = emptyMap(),
     val unscripts: Map<String, Set<String>> = emptyMap(),
 ) {
+    /**
+     * Même règles, domaines bloqués sous forme compacte ([CompactHostSet]) : bien moins de mémoire pour
+     * les grosses listes. À réserver aux règles qui ne seront plus ré-encodées ni fusionnées.
+     */
+    fun compact(): HostRules = if (blocked is CompactHostSet) this else copy(blocked = CompactHostSet.of(blocked))
+
     /** Nombre de sélecteurs cosmétiques (génériques et par domaine). */
     val selectorCount: Int get() = hide.values.sumOf { it.size }
 

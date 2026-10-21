@@ -133,6 +133,14 @@ class Settings(private val context: Context) {
         set(v) = prefs.edit().putString("new_navigation", v).apply()
 
     // --- Blocage ----------------------------------------------------------------------------
+    /**
+     * Listes légères : seulement le filtre DNS d'AdGuard et les correctifs d'uBlock (peu de mémoire), sans
+     * EasyList, la liste française ni les filtres d'uBlock. Par défaut, activé sur les appareils à peu de mémoire.
+     */
+    var lightLists: Boolean
+        get() = prefs.getBoolean("light_lists", DeviceMemory.isLow(context))
+        set(v) = prefs.edit().putBoolean("light_lists", v).apply()
+
     /** Ajoute EasyList, la liste française et le filtre DNS d'AdGuard aux listes de la configuration. */
     var recommendedLists: Boolean
         get() = prefs.getBoolean("recommended_lists", true)

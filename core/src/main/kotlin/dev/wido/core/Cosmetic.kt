@@ -130,10 +130,18 @@ object CompiledRules {
     }
 
     /** Null si le texte n'est pas au format compilé (ancien cache, fichier abîmé). */
-    fun decode(text: String): HostRules? {
-        val lines = text.lineSequence().iterator()
+    fun decode(text: String): HostRules? = decodeLines(text.lineSequence(), compact = false)
+
+    /**
+     * Relit le format compilé ligne à ligne (pas besoin de tout charger en mémoire). `compact` : les
+     * domaines bloqués deviennent des empreintes ([CompactHostSet]) dès la lecture, sans jamais garder
+     * leurs chaînes.
+     */
+    fun decodeLines(source: Sequence<String>, compact: Boolean = false): HostRules? {
+        val lines = source.iterator()
         if (!lines.hasNext() || lines.next() != HEADER) return null
         val blocked = HashSet<String>()
+        val blockedCompact = if (compact) CompactHostSet.Builder(1 shl 16) else null
         val allowed = HashSet<String>()
         val noGeneric = HashSet<String>()
         val noHide = HashSet<String>()
@@ -148,7 +156,7 @@ object CompiledRules {
             val value = line.substring(2)
             when (line[0]) {
                 's' -> skipped = value.toIntOrNull() ?: 0
-                'b' -> blocked += value
+                'b' -> if (blockedCompact != null) blockedCompact.add(value) else blocked += value
                 'a' -> allowed += value
                 'g' -> noGeneric += value
                 'e' -> noHide += value
@@ -166,7 +174,7 @@ object CompiledRules {
                 }
             }
         }
-        return HostRules(blocked, allowed, skipped, hide, unhide, noGeneric, noHide, urls, scripts, unscripts)
+        return HostRules(blockedCompact?.build() ?: blocked, allowed, skipped, hide, unhide, noGeneric, noHide, urls, scripts, unscripts)
     }
 }
 

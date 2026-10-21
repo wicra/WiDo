@@ -105,6 +105,14 @@ fun SettingsPane(
                 onUpdateLists(false)
             }
         }
+        if (settings.recommendedLists) {
+            SettingRow(stringResource(R.string.s_light_lists)) {
+                Segmented(listOf(stringResource(R.string.v_lists_full), stringResource(R.string.v_lists_light)), if (settings.lightLists) 1 else 0) {
+                    changed { settings.lightLists = it == 1 }
+                    onUpdateLists(false)
+                }
+            }
+        }
         SettingRow(stringResource(R.string.s_youtube)) {
             Segmented(listOf(on, off), if (settings.youtubeAdblock) 0 else 1) { changed { settings.youtubeAdblock = it == 0 } }
         }

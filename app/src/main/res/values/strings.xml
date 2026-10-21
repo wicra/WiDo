@@ -426,4 +426,7 @@
     <string name="a11y_refresh">Actualiser</string>
     <string name="a11y_close">Fermer</string>
     <string name="osd_native_found_low">Vidéo détectée · menu rapide → Lire dans WiDo : bien plus léger pour cette TV</string>
+    <string name="s_light_lists">Taille des listes</string>
+    <string name="v_lists_full">Complètes</string>
+    <string name="v_lists_light">Légères (peu de mémoire)</string>
 </resources>
