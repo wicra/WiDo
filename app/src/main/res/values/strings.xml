@@ -431,4 +431,11 @@
     <string name="v_lists_light">Légères (peu de mémoire)</string>
     <string name="s_auto_native">Lecteur léger automatique</string>
     <string name="osd_auto_native">Film détecté : passage au lecteur léger (économise la mémoire de la TV)</string>
+    <string name="crash_send">Envoyer le rapport</string>
+    <string name="crash_sending">Envoi…</string>
+    <string name="crash_sent">Rapport envoyé</string>
+    <string name="crash_send_ok">Merci ! Le rapport est arrivé</string>
+    <string name="crash_send_failed">Envoi impossible : vérifie la connexion et réessaie</string>
+    <string name="crash_send_note">Un appui envoie ce rapport au projet, sans les noms de sites ni aucune information personnelle.</string>
+    <string name="crash_report_github">Signaler sur GitHub</string>
 </resources>

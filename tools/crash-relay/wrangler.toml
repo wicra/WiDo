@@ -1,0 +1,13 @@
+name = "wido-crash-relay"
+main = "worker.mjs"
+compatibility_date = "2024-11-01"
+
+[vars]
+REPO = "wicra/WiDo"
+
+# Anti-spam : 3 rapports par minute et par adresse IP (liaison « Rate Limiting » de Cloudflare).
+[[unsafe.bindings]]
+name = "LIMITER"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 3, period = 60 }

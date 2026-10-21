@@ -431,4 +431,11 @@
     <string name="v_lists_light">Light (low memory)</string>
     <string name="s_auto_native">Light player automatically</string>
     <string name="osd_auto_native">Movie detected: switching to the light player (saves the TV\'s memory)</string>
+    <string name="crash_send">Send the report</string>
+    <string name="crash_sending">Sending…</string>
+    <string name="crash_sent">Report sent</string>
+    <string name="crash_send_ok">Thank you! The report arrived</string>
+    <string name="crash_send_failed">Could not send: check the connection and try again</string>
+    <string name="crash_send_note">One press sends this report to the project, without site names or any personal information.</string>
+    <string name="crash_report_github">Report on GitHub</string>
 </resources>

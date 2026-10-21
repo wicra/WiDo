@@ -25,6 +25,8 @@ jobs:
           node-version: 20
       - name: Tests de la logique du curseur aimanté
         run: node scripts/js/snap-core.test.mjs
+      - name: Tests du relais des rapports de plantage
+        run: node tools/crash-relay/relay.test.mjs
       - name: APK debug
         run: |
           # Les erreurs Gradle sont répétées en annotation : lisibles sans télécharger les journaux.

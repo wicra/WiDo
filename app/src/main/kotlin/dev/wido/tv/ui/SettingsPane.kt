@@ -45,6 +45,7 @@ import dev.wido.tv.R
 import dev.wido.tv.Settings
 import dev.wido.tv.WiDoApp
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 
 private val SPEEDS = listOf(0.6f, 1.0f, 1.5f, 2.2f)
 private val SIZES = listOf(1.3f, 1.8f, 2.5f)
@@ -369,10 +370,36 @@ fun SettingsPane(
 private fun CrashReportDialog(report: String, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val phone = LocalPhone.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var sending by remember { mutableStateOf(false) }
+    var sent by remember { mutableStateOf(false) }
     DialogFrame(
         title = stringResource(R.string.s_crash_report),
         onDismiss = onDismiss,
         buttons = {
+            if (dev.wido.tv.CrashReporter.canSend) {
+                // Un seul appui : le rapport part, sans les noms de sites, vers le dépôt (via le relais).
+                ActionButton(
+                    stringResource(if (sent) R.string.crash_sent else if (sending) R.string.crash_sending else R.string.crash_send),
+                    {
+                        if (!sending && !sent) {
+                            sending = true
+                            scope.launch {
+                                val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { dev.wido.tv.CrashReporter.send(report) }
+                                sending = false
+                                sent = result == dev.wido.tv.CrashReporter.Result.Sent
+                                android.widget.Toast.makeText(context, if (sent) R.string.crash_send_ok else R.string.crash_send_failed, android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    glyph = Glyph.Check,
+                )
+            } else if (phone) {
+                // Pas de relais déployé : la page « Nouvelle issue » de GitHub, pré-remplie, à valider soi-même.
+                ActionButton(stringResource(R.string.crash_report_github), {
+                    runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, dev.wido.tv.CrashReporter.issueUri(report))) }
+                }, glyph = Glyph.Check)
+            }
             if (phone) {
                 ActionButton(stringResource(R.string.crash_copy), {
                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -394,14 +421,18 @@ private fun CrashReportDialog(report: String, onDismiss: () -> Unit) {
                     Text(stringResource(R.string.crash_scan), color = Palette.TextSecondary, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.width(240.dp))
                 }
             }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (dev.wido.tv.CrashReporter.canSend) {
+                Text(stringResource(R.string.crash_send_note), color = Palette.TextMuted, fontSize = 12.sp)
+            }
             Text(
                 report.take(3_000),
                 fontSize = 11.sp,
                 lineHeight = 14.sp,
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                 color = Palette.TextSecondary,
-                modifier = Modifier.weight(1f),
             )
+            }
         }
     }
 }

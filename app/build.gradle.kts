@@ -19,6 +19,8 @@ android {
         versionName = (findProperty("wido.versionName") as String?) ?: "0.1.0"
         buildConfigField("String", "GITHUB_REPO", "\"${prop("wido.githubRepo")}\"")
         buildConfigField("String", "CONFIG_URL", "\"${prop("wido.configUrl")}\"")
+        // Relais des rapports de plantage (voir tools/crash-relay) ; vide : bouton de repli vers GitHub.
+        buildConfigField("String", "CRASH_REPORT_URL", "\"${(findProperty("wido.crashUrl") as String?).orEmpty()}\"")
     }
 
     val keystorePath = System.getenv("WIDO_KEYSTORE_PATH")
