@@ -73,7 +73,9 @@ fun PairPrompt(pending: PairingDesk.Pending, onDecide: (approved: Boolean, level
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
         )
+        if (pending.source.isNotEmpty()) Text(stringResource(R.string.pair_address, pending.source), color = Palette.TextSecondary, fontSize = 15.sp)
         Text(stringResource(R.string.pair_levels), color = Palette.TextSecondary, fontSize = 14.sp)
+        Text(stringResource(R.string.pair_unknown), color = Palette.Warning, fontSize = 14.sp)
     }
 }
 

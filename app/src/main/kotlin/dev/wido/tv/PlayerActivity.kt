@@ -210,6 +210,11 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             hidePanel()
         }
         if (pending == null || webView == null) return
+        // Pas de fenêtre par-dessus un film qui joue : la demande attend (2 min) et un message le dit.
+        if (mediaState.value?.let { !it.paused && it.duration > 0 } == true) {
+            osd.showText(getString(R.string.osd_pair_waiting))
+            return
+        }
         hidePanel()
         val link = (application as WiDoApp).link
         showOverlay { PairPrompt(pending) { approved, level -> link.decidePair(pending, approved, level) } }

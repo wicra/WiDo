@@ -85,7 +85,8 @@ class MiniHttpServer(
             if (n < 0) break
             read += n
         }
-        respond(client, handler(request, String(body, 0, read, Charsets.UTF_8)))
+        val remote = (client.remoteSocketAddress as? java.net.InetSocketAddress)?.address?.hostAddress.orEmpty()
+        respond(client, handler(request.copy(remote = remote), String(body, 0, read, Charsets.UTF_8)))
     }
 
     /** Une ligne terminée par CRLF, bornée à 4 Ko. */

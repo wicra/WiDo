@@ -125,7 +125,7 @@ class LinkHost(
         val post = request.method == "POST"
         return when (request.path) {
             "/hello" -> MiniHttpServer.json(LinkProtocol.encode(DeviceInfo.serializer(), device()))
-            "/pair" -> if (post) pair(body) else MiniHttpServer.BAD_REQUEST
+            "/pair" -> if (post) pair(body, request.remote) else MiniHttpServer.BAD_REQUEST
             "/status" -> {
                 val peer = peerForToken(token) ?: return MiniHttpServer.FORBIDDEN
                 lastStatusAt = clock()
@@ -181,12 +181,13 @@ class LinkHost(
         if (now - peer.lastSeen > 60_000) updatePeers { list -> list.map { if (it.id == peer.id) it.copy(lastSeen = now) else it } }
     }
 
-    private fun pair(body: String): MiniHttpServer.Response {
+    private fun pair(body: String, remote: String): MiniHttpServer.Response {
         val request = LinkProtocol.decode(PairRequest.serializer(), body)
             ?.takeIf { it.device.id.isNotBlank() && it.device.id.length <= 64 && it.nonce.length in 8..64 }
+            ?.let { it.copy(device = it.device.copy(name = LinkProtocol.cleanName(it.device.name))) }
             ?: return MiniHttpServer.BAD_REQUEST
         val keyValid = request.key != null && PhoneProtocol.tokenMatches(store.pairKey, request.key)
-        val reply = when (val outcome = desk.submit(request, keyValid)) {
+        val reply = when (val outcome = desk.submit(request, keyValid, remote)) {
             is PairingDesk.Outcome.AskUser -> {
                 events.onPairRequests(desk.pendingRequests())
                 PairReply(PairReply.PENDING)

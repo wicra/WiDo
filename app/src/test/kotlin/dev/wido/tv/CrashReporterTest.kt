@@ -13,15 +13,15 @@ class CrashReporterTest {
         Fermeture par Android : mémoire insuffisante (appli à l'écran) · mémoire 238 Mo
 
         Derniers événements :
-        2026-10-21 19:25:24  Lecteur ouvert : Movix (movix.dog)
+        2026-10-21 19:25:24  Lecteur ouvert : Monsite (monsite.example)
         2026-10-21 19:26:04  Mémoire faible signalée par Android (niveau 10)
-        2026-10-21 19:30:00  Page arrêtée (moteur du navigateur) : Movix movix.dog
+        2026-10-21 19:30:00  Page arrêtée (moteur du navigateur) : Monsite monsite.example
     """.trimIndent()
 
     @Test fun siteNamesAndAddressesAreRemoved() {
         val sent = CrashReporter.redacted(report)
-        assertFalse(sent.contains("movix"))
-        assertFalse(sent.contains("Movix"))
+        assertFalse(sent.contains("monsite"))
+        assertFalse(sent.contains("Monsite"))
         assertTrue(sent.contains("Lecteur ouvert : (site masqué)"))
         assertTrue(sent.contains("Page arrêtée (moteur du navigateur) : (site masqué)"))
     }

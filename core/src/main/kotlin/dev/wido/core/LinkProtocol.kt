@@ -146,6 +146,13 @@ data class Peer(
  * TV ou par QR code, statut, envoi d'une vidéo d'un écran à l'autre, synchronisation.
  */
 object LinkProtocol {
+    /**
+     * Le nom d'un appareil tel que la TV l'affiche : sans caractères de contrôle, espaces réduits, 40 signes au
+     * plus. Un nom trop long ou illisible ne peut pas dissimuler qui demande la liaison.
+     */
+    fun cleanName(raw: String): String =
+        raw.filterNot { Character.isISOControl(it) }.replace(Regex("\\s+"), " ").trim().take(40).ifBlank { "Appareil inconnu" }
+
     const val SERVICE_TYPE = "_wido._tcp."
     const val PORT = 8766
     const val MAX_BODY = 512 * 1024
@@ -257,7 +264,8 @@ object LinkProtocol {
  * portent la clé du QR code (qui suppose d'être devant la TV). Une demande expire au bout de 2 minutes.
  */
 class PairingDesk(private val clock: () -> Long = System::currentTimeMillis) {
-    data class Pending(val request: PairRequest, val since: Long)
+    /** `source` : l'adresse de l'appareil qui demande (affichée sur la TV pour le reconnaître). */
+    data class Pending(val request: PairRequest, val since: Long, val source: String = "")
 
     sealed interface Outcome {
         /** À montrer à l'écran (première fois qu'on voit cette demande). */
@@ -270,11 +278,13 @@ class PairingDesk(private val clock: () -> Long = System::currentTimeMillis) {
 
     private val pending = LinkedHashMap<String, Pending>()
     private data class Decision(val approved: Boolean, val level: String, val token: String)
-    private val decided = HashMap<String, Decision>() // appareil/nonce → décision
+    private val decided = LinkedHashMap<String, Decision>() // appareil/nonce → décision (les plus anciennes partent d'abord)
+    private val refusedAt = HashMap<String, Long>() // adresse → dernier refus
+    private val promptTimes = ArrayDeque<Long>() // demandes nouvelles montrées à l'écran (toutes adresses)
 
     /** Une demande arrive (ou revient, le téléphone redemande tant que c'est en attente). */
     @Synchronized
-    fun submit(request: PairRequest, keyValid: Boolean): Outcome {
+    fun submit(request: PairRequest, keyValid: Boolean, source: String = ""): Outcome {
         expire()
         val id = request.device.id + "/" + request.nonce
         decided[id]?.let { d -> return if (d.approved) Outcome.Approved(d.level, d.token) else Outcome.Denied }
@@ -286,8 +296,17 @@ class PairingDesk(private val clock: () -> Long = System::currentTimeMillis) {
         }
         val known = pending[id]
         if (known != null) return Outcome.Waiting
+        val now = clock()
+        // Garde-fous contre un appareil du réseau qui ferait défiler les fenêtres de confirmation sur la TV.
+        if (source.isNotEmpty()) {
+            refusedAt[source]?.let { if (now - it < REFUSAL_COOLDOWN_MS) return Outcome.Denied }
+            if (pending.values.count { it.source == source } >= MAX_PER_SOURCE) return Outcome.Denied
+        }
         if (pending.size >= MAX_PENDING) return Outcome.Denied
-        val p = Pending(request, clock())
+        while (promptTimes.isNotEmpty() && now - promptTimes.first() > MINUTE_MS) promptTimes.removeFirst()
+        if (promptTimes.size >= MAX_PROMPTS_PER_MINUTE) return Outcome.Denied
+        promptTimes.addLast(now)
+        val p = Pending(request, now, source)
         pending[id] = p
         return Outcome.AskUser(p)
     }
@@ -295,7 +314,10 @@ class PairingDesk(private val clock: () -> Long = System::currentTimeMillis) {
     @Synchronized
     fun decide(request: PairRequest, approved: Boolean, level: String = LinkLevel.GUEST) {
         val id = request.device.id + "/" + request.nonce
-        pending.remove(id)
+        val refused = pending.remove(id)
+        // Refusé : cette adresse ne peut plus redemander avant un moment.
+        if (!approved && refused != null && refused.source.isNotEmpty()) refusedAt[refused.source] = clock()
+        decided.remove(id)
         decided[id] = Decision(approved, LinkLevel.of(level), LinkProtocol.randomToken())
     }
 
@@ -308,11 +330,20 @@ class PairingDesk(private val clock: () -> Long = System::currentTimeMillis) {
     private fun expire() {
         val now = clock()
         pending.values.removeAll { now - it.since > EXPIRY_MS }
-        if (decided.size > 50) decided.clear()
+        // Les décisions récentes (jeton à remettre au téléphone) sont gardées ; seules les plus anciennes partent.
+        while (decided.size > 50) decided.remove(decided.keys.first())
+        refusedAt.values.removeAll { now - it > REFUSAL_COOLDOWN_MS }
     }
 
     companion object {
         const val EXPIRY_MS = 120_000L
         const val MAX_PENDING = 4
+        /** Demandes en attente par adresse. */
+        const val MAX_PER_SOURCE = 2
+        /** Après un refus, l'adresse ne peut plus faire apparaître de demande pendant 5 minutes. */
+        const val REFUSAL_COOLDOWN_MS = 300_000L
+        /** Nouvelles demandes montrées à l'écran, toutes adresses confondues, par minute. */
+        const val MAX_PROMPTS_PER_MINUTE = 4
+        private const val MINUTE_MS = 60_000L
     }
 }

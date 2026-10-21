@@ -106,7 +106,7 @@ object LocalSites {
     fun domainsToText(domains: List<String>): String = domains.joinToString(", ")
 
     /**
-     * Le domaine « entité » d'un site : `https://www.wiflix.bio/x` donne `wiflix.*`, qui couvre toutes
+     * Le domaine « entité » d'un site : `https://www.monsite.bio/x` donne `monsite.*`, qui couvre toutes
      * ses extensions. Pour les sites qui changent souvent d'adresse ou redirigent vers un domaine frère.
      */
     fun siteEntity(url: String): String? {

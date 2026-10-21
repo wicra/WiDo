@@ -89,6 +89,8 @@ fun SettingsPane(
     lists: ListStatus,
     onUpdateLists: (force: Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    /** TV : lance le tutoriel interactif de la télécommande. */
+    onTutorial: () -> Unit = {},
 ) {
     // Les réglages ne sont pas un état Compose : ce compteur force le redessin après chaque changement.
     var version by remember { mutableIntStateOf(0) }
@@ -221,7 +223,9 @@ fun SettingsPane(
             SettingRow(stringResource(R.string.s_snap)) {
                 Segmented(listOf(on, off), if (settings.snapNavigation) 0 else 1) { changed { settings.snapNavigation = it == 0 } }
             }
-            SettingRow(stringResource(R.string.s_onboarding)) {
+            SettingRow(stringResource(R.string.s_help)) {
+                // Le tutoriel fait essayer les touches ; la présentation rejoue les écrans du premier lancement.
+                Chip(stringResource(R.string.v_tutorial), onTutorial, glyph = Glyph.Help)
                 Chip(stringResource(R.string.v_onboarding_show), { settings.onboardingDone = false })
             }
         }

@@ -113,6 +113,10 @@ Avec **l'appli WiDo sur le téléphone**, tout cela est intégré (touches, pav�
 - Le zoom agrandit le texte, pas les images.
 
 
+## Tutoriel
+
+**Réglages → Apparence → Aide → Tutoriel de la télécommande** : huit courtes étapes où l'on essaie vraiment chaque geste (OK, OK maintenu, Menu, deux Retour rapides), puis des rappels (film, volume, cookies). On peut passer une étape ou quitter à tout moment (▼ pour atteindre les boutons du bas ; Retour quitte aussi, sauf pendant l'exercice du double Retour). L'aide à l'écran du lecteur (touche « ? » du menu rapide) résume les mêmes touches.
+
 ## Fenêtres surgissantes et défilement (cookies, pop-up)
 
 - Quand une fenêtre de cookies ou un pop-up s'affiche, **le curseur va tout seul sur son bouton principal** (« Tout accepter », « OK », « Fermer »…), qui est entouré en bleu, et un message le dit. À la fermeture de la fenêtre, le curseur revient où il était.

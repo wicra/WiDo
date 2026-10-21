@@ -13,7 +13,8 @@ object PhoneProtocol {
     const val MAX_TEXT = 2000
     const val MAX_BODY = 8 * 1024
 
-    data class Request(val method: String, val path: String, val query: Map<String, String>)
+    /** `remote` : l'adresse de l'appareil qui appelle (vide si inconnue). */
+    data class Request(val method: String, val path: String, val query: Map<String, String>, val remote: String = "")
 
     @Serializable
     data class Message(val text: String = "", val submit: Boolean = false)

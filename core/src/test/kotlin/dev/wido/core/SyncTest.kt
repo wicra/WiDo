@@ -265,6 +265,67 @@ class PairingDeskTest {
     }
 }
 
+class PairingFloodTest {
+    private var now = 1_000_000L
+    private val desk = PairingDesk { now }
+    private fun req(id: String, nonce: String = "nonce-$id") = PairRequest(DeviceInfo(id, "Appareil $id", DeviceRole.PHONE), nonce = nonce)
+
+    @Test fun oneAddressCannotFillTheScreen() {
+        assertIs<PairingDesk.Outcome.AskUser>(desk.submit(req("a1"), keyValid = false, source = "10.0.0.9"))
+        assertIs<PairingDesk.Outcome.AskUser>(desk.submit(req("a2"), keyValid = false, source = "10.0.0.9"))
+        assertEquals(PairingDesk.Outcome.Denied, desk.submit(req("a3"), keyValid = false, source = "10.0.0.9"))
+        // Une autre adresse n'est pas gênée.
+        assertIs<PairingDesk.Outcome.AskUser>(desk.submit(req("b1"), keyValid = false, source = "10.0.0.10"))
+    }
+
+    @Test fun refusedAddressIsQuietForAWhile() {
+        val first = req("a1")
+        desk.submit(first, keyValid = false, source = "10.0.0.9")
+        desk.decide(first, approved = false)
+        assertEquals(PairingDesk.Outcome.Denied, desk.submit(req("a2"), keyValid = false, source = "10.0.0.9"))
+        assertTrue(desk.pendingRequests().isEmpty())
+        now += PairingDesk.REFUSAL_COOLDOWN_MS + 1
+        assertIs<PairingDesk.Outcome.AskUser>(desk.submit(req("a3"), keyValid = false, source = "10.0.0.9"))
+    }
+
+    @Test fun approvedAddressIsNotPunished() {
+        val first = req("a1")
+        desk.submit(first, keyValid = false, source = "10.0.0.9")
+        desk.decide(first, approved = true)
+        assertIs<PairingDesk.Outcome.AskUser>(desk.submit(req("a2"), keyValid = false, source = "10.0.0.9"))
+    }
+
+    @Test fun globalRatePerMinute() {
+        for (i in 1..PairingDesk.MAX_PROMPTS_PER_MINUTE) {
+            val r = req("d$i")
+            assertIs<PairingDesk.Outcome.AskUser>(desk.submit(r, keyValid = false, source = "10.0.1.$i"))
+            desk.decide(r, approved = true)
+        }
+        assertEquals(PairingDesk.Outcome.Denied, desk.submit(req("late"), keyValid = false, source = "10.0.2.1"))
+        now += 61_000
+        assertIs<PairingDesk.Outcome.AskUser>(desk.submit(req("later"), keyValid = false, source = "10.0.2.1"))
+    }
+
+    @Test fun qrKeyIsNeverThrottled() {
+        repeat(10) { i -> assertIs<PairingDesk.Outcome.Approved>(desk.submit(req("q$i"), keyValid = true, source = "10.0.0.9")) }
+    }
+
+    @Test fun recentDecisionsSurviveTheCleanup() {
+        repeat(60) { i -> desk.decide(req("x$i"), approved = false) }
+        val late = req("late")
+        assertIs<PairingDesk.Outcome.AskUser>(desk.submit(late, keyValid = false, source = "10.0.0.5"))
+        desk.decide(late, approved = true)
+        // Plus de 50 décisions en mémoire : seules les plus anciennes partent, jamais celle qu'on vient de prendre.
+        assertIs<PairingDesk.Outcome.Approved>(desk.submit(late, keyValid = false, source = "10.0.0.5"))
+    }
+
+    @Test fun namesAreCleaned() {
+        assertEquals("Mise à jour système", LinkProtocol.cleanName("  Mise à jour\n\u0007  système "))
+        assertEquals(40, LinkProtocol.cleanName("x".repeat(500)).length)
+        assertEquals("Appareil inconnu", LinkProtocol.cleanName("\u0001\u0002   "))
+    }
+}
+
 class CanonicalWatchTest {
     @Test fun youtubeVariantsAreOneVideo() {
         val key = "https://www.youtube.com/watch?v=abcdefghijk"

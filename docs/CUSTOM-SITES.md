@@ -29,7 +29,7 @@ Chaque bouton s'allume (✓) quand il est actif :
 
 Deux sections du formulaire, toujours visibles :
 
-- **Domaines autorisés** : le site peut toujours y aller (redirections, lecteurs, connexions). L'interrupteur **« Même site, autres extensions (site.*) »** autorise le même nom sous toutes ses extensions : `wiflix.bio` peut alors rediriger vers `wiflix.cloud` sans être bloqué. Pratique pour les sites qui changent souvent d'adresse ou redirigent vers un domaine frère.
+- **Domaines autorisés** : le site peut toujours y aller (redirections, lecteurs, connexions). L'interrupteur **« Même site, autres extensions (site.*) »** autorise le même nom sous toutes ses extensions : `monsite.bio` peut alors rediriger vers `monsite.cloud` sans être bloqué. Pratique pour les sites qui changent souvent d'adresse ou redirigent vers un domaine frère.
 - **Domaines bloqués** : jamais chargés, même s'ils ne sont dans aucune liste.
 
 Dans chaque section : les domaines déjà retenus (OK pour retirer), ceux que le site a réellement tenté de joindre pendant tes visites (OK pour ajouter), et **« + Ajouter un domaine »** pour en saisir un : `exemple.org`, une adresse complète, ou `site.*`. Le petit téléphone à droite du champ permet de le taper depuis ton téléphone.

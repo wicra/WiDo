@@ -133,6 +133,19 @@ class LinkEndToEndTest {
         assertEquals(LinkLevel.GUEST, peer.level)
     }
 
+    @Test fun theTvSeesWhoAsksAndACleanName() {
+        val sneaky = LinkGuest({ DeviceInfo("phone-x", "  Mise à jour\n\u0007 système " + "x".repeat(200), DeviceRole.PHONE) })
+        val t = thread { sneaky.pair("127.0.0.1", tv.port, null, pollMs = 50, cancelled = { tv.pending.isNotEmpty() }) }
+        val deadline = System.currentTimeMillis() + 5_000
+        while (tv.pending.isEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(20)
+        val pending = tv.pending.single()
+        assertEquals("127.0.0.1", pending.source)
+        assertTrue(pending.request.device.name.length <= 40)
+        assertTrue(pending.request.device.name.none { it.isISOControl() })
+        assertTrue(pending.request.device.name.startsWith("Mise à jour système"))
+        t.join(5_000)
+    }
+
     @Test fun refusedPairing() {
         var result: LinkGuest.PairResult? = null
         val t = thread { result = phone.pair("127.0.0.1", tv.port, null, pollMs = 50) }

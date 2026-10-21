@@ -3,6 +3,8 @@
 ## 0.9.1
 
 ### Corrigé
+- **Liaison : protection contre les demandes en rafale.** Un appareil du réseau ne peut plus faire défiler les fenêtres de confirmation sur la TV : 2 demandes en attente par adresse, 4 par minute au total, 5 minutes de silence après un refus. La fenêtre montre l'adresse de l'appareil et un nom nettoyé, et ne s'affiche pas par-dessus un film qui joue.
+- Les décisions de liaison récentes ne sont plus effacées en bloc (seules les plus anciennes partent).
 - **Réglages (TV) en deux niveaux** : ▲ ▼ changent de thème, OK ou ▶ entrent dans ses réglages, ◀ ou Retour reviennent à la liste ; aux bords de la liste, le focus ne saute plus vers les onglets du haut.
 - **OK maintenu** sur un site ou une vidéo de Reprendre ouvre ses options **sans lancer la première option** (Ouvrir / Reprendre) en relâchant la touche.
 - **Reprendre** : les vignettes ont toutes la même hauteur, même avec un titre court.
@@ -40,6 +42,7 @@
 - **Accueil TV** : le titre n'est plus coupé sous l'en-tête en descendant vers les sites (la scène et les rangées tiennent dans l'écran).
 
 ### Nouveau
+- **Tutoriel de la télécommande** (Réglages → Apparence → Aide) : on essaie pour de vrai OK, OK maintenu, Menu et le double Retour, avec un retour à chaque réussite ; on peut passer une étape ou quitter à tout moment. L'aide à l'écran du lecteur est mise à jour (OK maintenu, Menu, double Retour, volume).
 - **Bouton « Envoyer le rapport »** (Réglages → Général → Rapport de plantage) : un appui envoie le rapport au projet, sans compte ni configuration, sans les noms de sites. Il passe par un petit relais gratuit (`tools/crash-relay`) qui seul détient la clé GitHub (l'APK n'embarque aucun secret) et dépose le rapport en issue, en regroupant les doublons. Tant que le relais n'est pas déployé, le bouton ouvre la page « Nouvelle issue » de GitHub, pré-remplie.
 - **Envoyer des sites à une TV** (option pour préparer la TV d'un proche) : depuis l'onglet TV du téléphone, coche des sites ou un **pack enregistré** (« Mamie »…) ; la TV demande **toujours** confirmation à l'écran, site par site. Seuls l'adresse et les réglages de blocage voyagent, jamais les comptes. Fonctionne aussi avec une TV liée en Invité.
 - **Rapport de plantage** (Réglages → Général) : la dernière erreur de l'appli, **les fermetures décidées par Android** (mémoire insuffisante, plantage natif du moteur vidéo, appli bloquée… lues au démarrage suivant, Android 11 et plus, avec la mémoire utilisée) et le fil des derniers événements du lecteur (ouvert, fermé et pourquoi, page arrêtée, mémoire faible). Gardé sur l'appareil. Sur TV, un QR code permet de le récupérer avec le téléphone ; un message le signale au démarrage après une fermeture sur erreur.

@@ -163,6 +163,8 @@ fun MenuScreen(
     val rowState = androidx.compose.foundation.lazy.rememberLazyListState()
     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val sitesScroll = rememberScrollState()
+    // Tutoriel de la télécommande (Réglages → Apparence → Aide).
+    var tutorial by remember { mutableStateOf(false) }
     // Déplacer un site : sa place de départ, pour que Retour l'y remette.
     var moveStart by remember { mutableIntStateOf(-1) }
     val context = LocalContext.current
@@ -328,10 +330,12 @@ fun MenuScreen(
                     onRemove = { entry -> watchActions = entry },
                     modifier = Modifier.weight(1f),
                 )
-                Tab.Settings -> SettingsPane(settings, lists, vm::updateLists, Modifier.weight(1f))
+                Tab.Settings -> SettingsPane(settings, lists, vm::updateLists, Modifier.weight(1f), onTutorial = { tutorial = true })
             }
         }
     }
+
+    if (tutorial) RemoteTutorial { tutorial = false }
 
     watchActions?.let { entry ->
         val siteName = sites.firstOrNull { it.site.id == entry.siteId }?.site?.name ?: Hosts.of(entry.url)?.removePrefix("www.").orEmpty()
