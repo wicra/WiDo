@@ -451,4 +451,8 @@
     <string name="home_hint_tv">OK maintenu ou Menu : options du site</string>
     <string name="exit_hint">Appuie encore sur Retour pour quitter WiDo</string>
     <string name="osd_exit_confirm">Retour encore pour quitter le site</string>
+    <string name="menu_back_site">Retour au site</string>
+    <string name="native_pause_hint">OK pour reprendre · Menu : options · Retour : revenir au site</string>
+    <string name="native_framing">Cadrage : %1$s</string>
+    <string name="osd_popup_cursor">Fenêtre détectée : le curseur est sur son bouton</string>
 </resources>

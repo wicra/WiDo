@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import dev.wido.tv.ui.QuickAction
+import dev.wido.tv.ui.Glyph
+import android.os.SystemClock
 import android.widget.TextView
 import android.media.AudioManager
 import android.util.TypedValue
@@ -125,6 +128,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
                     .apply { setMargins((32 * density).toInt(), (28 * density).toInt(), 0, 0) },
             )
         }
+        rootFrame = frame
         setContentView(frame)
         WindowInsetsControllerCompat(window, view).apply {
             hide(WindowInsetsCompat.Type.systemBars())
@@ -143,6 +147,10 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
                 Toast.makeText(this@NativePlayerActivity, R.string.native_failed, Toast.LENGTH_LONG).show()
                 finish()
             }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) = schedulePause()
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = schedulePause()
         })
         // La seconde où en était la page ; à défaut, la dernière position retenue dans le lecteur natif.
         val start = (intent.getDoubleExtra(EXTRA_START, 0.0) * 1000).toLong()
@@ -155,13 +163,39 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        // Menu : cadrage de l'image (adapté → zoomé → étiré).
-        if (event.keyCode == KeyEvent.KEYCODE_MENU) {
-            if (event.action == KeyEvent.ACTION_UP) {
-                resizeIndex = (resizeIndex + 1) % RESIZE_MODES.size
-                view.resizeMode = RESIZE_MODES[resizeIndex]
-                osd.showText(getString(RESIZE_LABELS[resizeIndex]))
+        val code = event.keyCode
+        lastInputAt = SystemClock.uptimeMillis()
+        // Écran de pause : OK ou lecture relance ; toute autre touche ne fait que le retirer (le volume reste utilisable).
+        if (swallowUp == code && event.action == KeyEvent.ACTION_UP) {
+            swallowUp = 0
+            return true
+        }
+        if (pauseView != null && event.action == KeyEvent.ACTION_DOWN) {
+            hidePauseScreen()
+            when (code) {
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                    swallowUp = code
+                    player.play()
+                    return true
+                }
+                KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> Unit
+                else -> {
+                    swallowUp = code
+                    return true
+                }
             }
+        }
+        // Menu ouvert : ses boutons se parcourent aux flèches ; Retour ou Menu le referment.
+        if (panel != null) {
+            if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_MENU) {
+                if (event.action == KeyEvent.ACTION_UP) hidePanel()
+                return true
+            }
+            return super.dispatchKeyEvent(event)
+        }
+        // Menu : les mêmes réglages que dans la page (cadrage, épingler, veille…), sans quitter le film.
+        if (code == KeyEvent.KEYCODE_MENU) {
+            if (event.action == KeyEvent.ACTION_UP) showPanel()
             return true
         }
         // Lecture / pause directe, sans passer par la barre.
@@ -174,6 +208,169 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         // flèche ne ferait qu'afficher la barre.
         if (!view.isControllerFullyVisible && settings.fullscreenPlayerKeys && arrowKey(event)) return true
         return view.dispatchKeyEvent(event) || super.dispatchKeyEvent(event)
+    }
+
+    // --- Menu du lecteur léger -------------------------------------------------------------
+
+    private lateinit var rootFrame: FrameLayout
+    private var panel: android.view.View? = null
+    private val panelTick = androidx.compose.runtime.mutableIntStateOf(0)
+    private val tv get() = (application as WiDoApp).isTv
+
+    private fun framingLabel() = getString(R.string.native_framing, getString(RESIZE_LABELS[resizeIndex]))
+
+    private fun showPanel() {
+        if (panel != null) return
+        view.hideController()
+        hidePauseScreen()
+        val stay = { run: () -> Unit -> run(); panelTick.intValue++ }
+        val page = intent.getStringExtra(EXTRA_PAGE)
+        val siteId = intent.getStringExtra(EXTRA_SITE)
+        val actions = listOfNotNull(
+            QuickAction(getString(R.string.tile_pause), Glyph.Play, dynamic = { getString(if (player.isPlaying) R.string.tile_pause else R.string.tile_play) }) {
+                if (player.isPlaying) player.pause() else player.play()
+                hidePanel()
+            },
+            QuickAction(framingLabel(), Glyph.ZoomIn, dynamic = ::framingLabel) {
+                stay {
+                    resizeIndex = (resizeIndex + 1) % RESIZE_MODES.size
+                    view.resizeMode = RESIZE_MODES[resizeIndex]
+                }
+            },
+            if (page != null && siteId != null) QuickAction(getString(R.string.panel_pin), Glyph.Star) { pinPage(siteId, page); hidePanel() } else null,
+            QuickAction(getString(R.string.tile_restart), Glyph.Restart) { player.seekTo(0); hidePanel() },
+            QuickAction(sleepLabel(), Glyph.Sleep, dynamic = ::sleepLabel) { stay { cycleSleep() } },
+            QuickAction(getString(R.string.menu_back_site), Glyph.Back) { finish() },
+        )
+        val compose = androidx.compose.ui.platform.ComposeView(this).apply {
+            setContent {
+                dev.wido.tv.ui.WiDoTheme {
+                    dev.wido.tv.ui.QuickMenu(null, null, actions, "", compact = !tv, onDismiss = { hidePanel() }, tick = panelTick.intValue)
+                }
+            }
+        }
+        panel = compose
+        rootFrame.addView(compose, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        compose.bringToFront()
+        osd.bringToFront()
+        if (tv) osd.raise((150 * resources.displayMetrics.density).toInt())
+    }
+
+    private fun hidePanel() {
+        val p = panel ?: return
+        panel = null
+        rootFrame.removeView(p)
+        osd.raise(0)
+        view.requestFocus()
+    }
+
+    /** Épingle la page du film depuis le lecteur : pas besoin de retourner sur le site. */
+    private fun pinPage(siteId: String, page: String) {
+        val title = intent.getStringExtra(EXTRA_TITLE)
+        (application as WiDoApp).repository.addPin(siteId, title, page)
+        osd.showText(getString(R.string.toast_pinned, title?.take(40) ?: page), OsdView.Kind.Success)
+    }
+
+    // Veille : désactivé → 30 → 60 → 90 → 120 min ; à l'échéance, le film se met en pause et le lecteur se ferme.
+    private var sleepAt = 0L
+    private var sleepMinutes = 0
+    private val sleepNow = Runnable {
+        player.pause()
+        Toast.makeText(this, R.string.toast_sleep, Toast.LENGTH_LONG).show()
+        finish()
+    }
+
+    private fun sleepLabel(): String {
+        if (sleepAt == 0L) return getString(R.string.panel_sleep)
+        val left = ((sleepAt - SystemClock.elapsedRealtime()) / 60_000L + 1).coerceAtLeast(1)
+        return getString(R.string.panel_sleep_left, left.toInt())
+    }
+
+    private fun cycleSleep() {
+        val steps = listOf(0, 30, 60, 90, 120)
+        val next = steps[(steps.indexOf(sleepMinutes) + 1) % steps.size]
+        view.removeCallbacks(sleepNow)
+        sleepMinutes = next
+        if (next == 0) {
+            sleepAt = 0L
+            osd.showText(getString(R.string.osd_sleep_off))
+            return
+        }
+        sleepAt = SystemClock.elapsedRealtime() + next * 60_000L
+        view.postDelayed(sleepNow, next * 60_000L)
+        osd.showText(getString(R.string.osd_sleep_set, next))
+    }
+
+    // --- Écran de pause (TV) -----------------------------------------------------------------
+
+    private var pauseView: android.view.View? = null
+    private var swallowUp = 0
+    private var lastInputAt = 0L
+    private val showPause = Runnable { showPauseScreen() }
+
+    /** Film en pause depuis un instant : le menu de lecture s'efface, l'écran s'assombrit, titre et temps restant en bas. */
+    private fun schedulePause() {
+        view.removeCallbacks(showPause)
+        if (!tv) return
+        val paused = !player.playWhenReady && player.playbackState == Player.STATE_READY
+        if (paused) view.postDelayed(showPause, 1_200) else hidePauseScreen()
+    }
+
+    private fun showPauseScreen() {
+        if (pauseView != null || panel != null || isFinishing) return
+        val paused = !player.playWhenReady && player.playbackState == Player.STATE_READY
+        if (!paused) return
+        if (SystemClock.uptimeMillis() - lastInputAt < 4_000) {
+            view.postDelayed(showPause, 1_500)
+            return
+        }
+        val density = resources.displayMetrics.density
+        val scale = settings.uiScale
+        val left = ((player.duration - player.currentPosition) / 1000.0).coerceAtLeast(0.0)
+        val end = android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date(System.currentTimeMillis() + (left * 1000).toLong()))
+        val host = intent.getStringExtra(EXTRA_PAGE)?.let { dev.wido.core.Hosts.of(it)?.removePrefix("www.") }.orEmpty()
+        fun text(value: String, size: Float, color: Int, weight: Int, top: Int = 0) = TextView(this).apply {
+            this.text = value
+            setTextColor(color)
+            textSize = size * scale
+            useJakarta(weight)
+            setPadding(0, (top * density).toInt(), 0, 0)
+        }
+        val column = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            addView(text(intent.getStringExtra(EXTRA_TITLE)?.takeIf { it.isNotBlank() } ?: host, 34f, 0xFFFFFFFF.toInt(), 800).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
+            addView(
+                text(
+                    listOfNotNull(host.takeIf { it.isNotEmpty() }, if (player.duration > 0) getString(R.string.osd_remaining, dev.wido.core.PlayerFormat.time(left), end) else null).joinToString("  ·  "),
+                    17f, 0xCCFFFFFF.toInt(), 600, 10,
+                ),
+            )
+            addView(text(getString(R.string.native_pause_hint), 14f, 0x99FFFFFF.toInt(), 600, 18))
+        }
+        val screen = FrameLayout(this).apply {
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0x33000000, 0x99000000.toInt(), 0xE6000000.toInt()),
+            )
+            val pad = (56 * density).toInt()
+            addView(
+                column,
+                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, android.view.Gravity.BOTTOM)
+                    .apply { setMargins(pad, 0, pad, (48 * density).toInt()) },
+            )
+            alpha = 0f
+        }
+        pauseView = screen
+        view.hideController()
+        rootFrame.addView(screen, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        screen.animate().alpha(1f).setDuration(450).start()
+    }
+
+    private fun hidePauseScreen() {
+        view.removeCallbacks(showPause)
+        val screen = pauseView ?: return
+        pauseView = null
+        screen.animate().alpha(0f).setDuration(200).withEndAction { rootFrame.removeView(screen) }.start()
     }
 
     /** Flèche gauche/droite : saut (de plus en plus grand si la touche est maintenue). Le volume reste aux touches volume. */
@@ -294,6 +491,10 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     override fun onDestroy() {
+        if (::view.isInitialized) {
+            view.removeCallbacks(showPause)
+            view.removeCallbacks(sleepNow)
+        }
         if (::player.isInitialized) player.release()
         super.onDestroy()
     }

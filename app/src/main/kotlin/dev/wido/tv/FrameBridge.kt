@@ -37,6 +37,8 @@ class FrameBridge(
     private val onField: (Boolean) -> Unit = {},
     /** La page a lancé ou mis en pause sa vidéo d'elle-même (bouton du lecteur). */
     private val onMediaEvent: (MediaState) -> Unit = {},
+    /** Une fenêtre surgissante (cookies, pop-up) apparaît (x, y : son bouton principal, en fractions) ou disparaît. */
+    private val onModal: (x: Double, y: Double, gone: Boolean) -> Unit = { _, _, _ -> },
 ) : WebViewCompat.WebMessageListener {
     private val proxies = CopyOnWriteArrayList<JavaScriptReplyProxy>()
 
@@ -55,6 +57,7 @@ class FrameBridge(
             "event" -> parseMediaState(json.optJSONObject("s")?.toString())?.let(onMediaEvent)
             "skip" -> onSkip(json.optString("what"))
             "field" -> onField(json.optBoolean("on"))
+            "modal" -> onModal(json.optDouble("x", -1.0), json.optDouble("y", -1.0), json.optBoolean("gone"))
         }
     }
 

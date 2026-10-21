@@ -253,6 +253,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 onMedia = { state -> runOnUiThread { onMediaState(state) } },
                 onSkip = { runOnUiThread { osd.showText(getString(R.string.osd_sponsor_skipped), OsdView.Kind.Success) } },
                 onField = { focused -> runOnUiThread { onPageField(focused) } },
+                onModal = { x, y, gone -> runOnUiThread { onPageModal(x, y, gone) } },
                 onMediaEvent = { state ->
                     runOnUiThread {
                         passivePoll = true
@@ -611,6 +612,39 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
     }
 
+    /** Position du curseur avant qu'une fenêtre surgissante ne l'attire, pour l'y remettre à sa fermeture. */
+    private var cursorBeforeModal: Pair<Float, Float>? = null
+
+    /**
+     * Une fenêtre surgissante (cookies, pop-up) s'affiche : le curseur va sur son bouton principal (et le
+     * marque), sans qu'on ait à le chercher sur toute la page ; à sa fermeture, il revient où il était.
+     */
+    private fun onPageModal(x: Double, y: Double, gone: Boolean) {
+        val wv = webView ?: return
+        if (!tv || !cursorMode || cinema || customView != null || picking) return
+        if (gone) {
+            cursorBeforeModal?.let { cursor.moveTo(it.first, it.second) }
+            cursorBeforeModal = null
+            return
+        }
+        if (x < 0 || y < 0 || wv.width == 0 || wv.height == 0) return
+        if (cursorBeforeModal == null) cursorBeforeModal = cursor.px to cursor.py
+        cursor.moveTo((x * wv.width).toFloat(), (y * wv.height).toFloat())
+        cursor.wake()
+        osd.showText(getString(R.string.osd_popup_cursor))
+    }
+
+    /** Défile ce qui est sous le curseur (zone défilante d'une fenêtre, sinon la page) ; sinon le curseur avance d'un pas. */
+    private fun scrollUnderCursor(dirY: Int) {
+        val wv = webView ?: return
+        if (wv.width == 0 || wv.height == 0) return
+        val fx = cursor.px / wv.width
+        val fy = cursor.py / wv.height
+        wv.evaluateJavascript("window.__widoScrollAt?window.__widoScrollAt($fx,$fy,${dirY * 0.5}):false") { raw ->
+            if (raw != "true") freeMove(0, 0, dirY)
+        }
+    }
+
     /** Demande à la page le lien ou bouton le plus naturel dans cette direction ; sinon déplacement libre. */
     private fun snap(dirX: Int, dirY: Int) {
         val wv = webView ?: return
@@ -627,6 +661,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             val target = parseSnapTarget(raw)
             if (target != null) {
                 cursor.moveTo(target.first * wv.width, target.second * wv.height)
+            } else if (dirY != 0) {
+                // Rien dans cette direction : on défile (la fenêtre surgissante ou la page), comme au doigt.
+                scrollUnderCursor(dirY)
             } else {
                 freeMove(0, dirX, dirY)
             }

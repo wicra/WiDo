@@ -31,6 +31,45 @@
     return best;
   }
 
-  if (typeof module !== 'undefined' && module.exports) module.exports = { pickTarget: pickTarget };
-  else root.__widoPick = pickTarget;
+  /**
+   * Quel bouton d'une fenêtre surgissante (cookies, pop-up) le curseur doit-il rejoindre ? `labels` : les textes
+   * des boutons, dans l'ordre de la page. « Tout accepter » > « Accepter / OK / Continuer » > « Fermer » ; à défaut,
+   * le premier. Renvoie l'index, ou -1 s'il n'y a aucun bouton.
+   */
+  function pickPrimary(labels) {
+    var best = -1;
+    var bestScore = 0;
+    for (var i = 0; i < labels.length; i++) {
+      var t = String(labels[i] || '').trim().toLowerCase();
+      var score = 0;
+      if (/tout accepter|accept all|allow all|accepter et fermer|j['’]accepte|i agree|agree and/.test(t)) score = 3;
+      else if (/accepter|accept|autoriser|allow|\bok\b|okay|got it|compris|d['’]accord|continuer|continue/.test(t)) score = 2;
+      else if (/fermer|close|no thanks|non merci|^[x×✕✖]$/.test(t)) score = 1;
+      if (score > bestScore) {
+        bestScore = score;
+        best = i;
+      }
+    }
+    if (best >= 0) return best;
+    return labels.length ? 0 : -1;
+  }
+
+  /**
+   * Quelle fenêtre surgissante est au premier plan ? `cands` : [{z, order}] (z-index, rang dans la page).
+   * La plus haute (z-index), à égalité la dernière dans la page. Renvoie l'index, ou -1.
+   */
+  function pickModal(cands) {
+    var best = -1;
+    for (var i = 0; i < cands.length; i++) {
+      if (best < 0 || cands[i].z > cands[best].z || (cands[i].z === cands[best].z && cands[i].order > cands[best].order)) best = i;
+    }
+    return best;
+  }
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = { pickTarget: pickTarget, pickPrimary: pickPrimary, pickModal: pickModal };
+  else {
+    root.__widoPick = pickTarget;
+    root.__widoPickPrimary = pickPrimary;
+    root.__widoPickModal = pickModal;
+  }
 })(typeof window !== 'undefined' ? window : this);

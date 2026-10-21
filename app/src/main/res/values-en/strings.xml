@@ -451,4 +451,8 @@
     <string name="home_hint_tv">Hold OK or Menu: site options</string>
     <string name="exit_hint">Press Back again to exit WiDo</string>
     <string name="osd_exit_confirm">Press Back again to leave the site</string>
+    <string name="menu_back_site">Back to the site</string>
+    <string name="native_pause_hint">OK to resume · Menu: options · Back: return to the site</string>
+    <string name="native_framing">Framing: %1$s</string>
+    <string name="osd_popup_cursor">Popup detected: the cursor is on its button</string>
 </resources>

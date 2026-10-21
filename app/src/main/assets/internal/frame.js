@@ -37,24 +37,121 @@
     el.style.outlineOffset = '2px';
   }
 
-  // (fx, fy) : position du curseur en fraction de la fenêtre. Renvoie la cible en fractions, ou null.
-  window.__widoSnap = function (dir, fx, fy) {
-    if (!isTop || !window.__widoPick) return null;
-    var nodes = document.querySelectorAll(SELECTOR);
-    var items = [];
+  // ---------- Fenêtres surgissantes : bandeau de cookies, pop-up ----------
+  var MODAL_HINTS = '[role=dialog],[aria-modal=true],dialog[open],[class*=cookie],[id*=cookie],[class*=consent],[id*=consent],' +
+    '[class*=gdpr],[id*=gdpr],[class*=modal],[id*=modal],[class*=popup],[id*=popup],[class*=overlay],[class*=banner]';
+  var CONSENT_WORDS = /cookie|consent|gdpr|cmp|privacy|rgpd/i;
+
+  // La fenêtre au premier plan (au centre de l'écran, ou bandeau collé en bas), avec au moins un bouton ; sinon null.
+  function topModal() {
+    if (!isTop || !window.__widoPickModal) return null;
+    var iw = window.innerWidth, ih = window.innerHeight;
+    var nodes = document.querySelectorAll(MODAL_HINTS + ',body > div,body > section,body > aside');
+    var cands = [];
     var els = [];
+    for (var i = 0; i < nodes.length && i < 400; i++) {
+      var el = nodes[i];
+      var tag = el.tagName;
+      if (tag === 'NAV' || tag === 'HEADER' || tag === 'FOOTER') continue;
+      var cs = window.getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.05) continue;
+      var dialogish = tag === 'DIALOG' || el.getAttribute('role') === 'dialog' || el.getAttribute('aria-modal') === 'true';
+      if (!dialogish && cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+      var r = el.getBoundingClientRect();
+      var w = Math.min(r.right, iw) - Math.max(r.left, 0);
+      var h = Math.min(r.bottom, ih) - Math.max(r.top, 0);
+      if (w < 120 || h < 40) continue;
+      var consent = CONSENT_WORDS.test((el.id || '') + ' ' + (typeof el.className === 'string' ? el.className : ''));
+      var centered = r.left < iw / 2 && r.right > iw / 2 && r.top < ih / 2 && r.bottom > ih / 2 && w * h >= 0.08 * iw * ih;
+      var bottomBar = r.bottom >= ih - 12 && w >= 0.6 * iw && h >= 60;
+      if (!centered && !bottomBar && !(consent && w * h >= 0.04 * iw * ih)) continue;
+      if (!el.querySelector(SELECTOR)) continue;
+      var z = parseInt(cs.zIndex, 10);
+      cands.push({ z: isNaN(z) ? 0 : z, order: i });
+      els.push(el);
+    }
+    var best = window.__widoPickModal(cands);
+    return best < 0 ? null : els[best];
+  }
+
+  function usableIn(root) {
+    var nodes = root.querySelectorAll(SELECTOR);
+    var list = [];
     for (var i = 0; i < nodes.length; i++) {
       var r = nodes[i].getBoundingClientRect();
-      if (!usable(nodes[i], r)) continue;
-      items.push({ x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height });
-      els.push(nodes[i]);
+      if (usable(nodes[i], r)) list.push({ el: nodes[i], x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height });
     }
-    var index = window.__widoPick(dir, fx * window.innerWidth, fy * window.innerHeight, items);
+    return list;
+  }
+
+  // (fx, fy) : position du curseur en fraction de la fenêtre. Renvoie la cible en fractions, ou null.
+  // Une fenêtre surgissante est ouverte : les flèches ne parcourent que ses boutons (le reste de la page
+  // est derrière), et depuis l'extérieur le curseur la rejoint.
+  window.__widoSnap = function (dir, fx, fy) {
+    if (!isTop || !window.__widoPick) return null;
+    var modal = topModal();
+    var items = modal ? usableIn(modal) : [];
+    if (!items.length) items = usableIn(document);
+    var cx = fx * window.innerWidth, cy = fy * window.innerHeight;
+    var index = window.__widoPick(dir, cx, cy, items);
+    if (index < 0 && modal && items.length) {
+      var m = modal.getBoundingClientRect();
+      var outside = cx < m.left || cx > m.right || cy < m.top || cy > m.bottom;
+      if (outside) index = window.__widoPickPrimary(items.map(function (it) { return it.el.innerText || it.el.value || it.el.getAttribute('aria-label') || ''; }));
+    }
     if (index < 0) return null;
-    mark(els[index]);
+    mark(items[index].el);
     return JSON.stringify({ x: items[index].x / window.innerWidth, y: items[index].y / window.innerHeight });
   };
   window.__widoUnmark = unmark;
+
+  // Défile ce qui se trouve sous le curseur : la zone défilante de la fenêtre surgissante (conditions
+  // d'utilisation, cookies…), sinon la page. k : fraction de la hauteur visible (signée). Vrai si ça peut défiler.
+  window.__widoScrollAt = function (fx, fy, k) {
+    if (!isTop) return false;
+    function by(el, dy, isRoot) {
+      try { (isRoot ? window : el).scrollBy({ top: dy, behavior: 'instant' }); } catch (e) { if (isRoot) window.scrollBy(0, dy); else el.scrollTop += dy; }
+    }
+    var el = document.elementFromPoint(fx * window.innerWidth, fy * window.innerHeight);
+    while (el && el !== document.body && el !== document.documentElement) {
+      var oy = window.getComputedStyle(el).overflowY;
+      if ((oy === 'auto' || oy === 'scroll' || oy === 'overlay') && el.scrollHeight > el.clientHeight + 2) {
+        var can = k > 0 ? el.scrollTop + el.clientHeight < el.scrollHeight - 1 : el.scrollTop > 0;
+        if (can) { by(el, k * el.clientHeight, false); return true; }
+      }
+      el = el.parentElement;
+    }
+    var se = document.scrollingElement || document.documentElement;
+    var canPage = k > 0 ? se.scrollTop + window.innerHeight < se.scrollHeight - 1 : se.scrollTop > 0;
+    if (canPage) { by(null, k * window.innerHeight, true); return true; }
+    return false;
+  };
+
+  // La fenêtre apparaît ou disparaît : l'app amène le curseur sur son bouton principal, puis le ramène
+  // où il était à la fermeture. Vérifié au plus une fois par seconde, et jamais page cachée.
+  var lastModal = null;
+  var modalTimer = 0;
+  function checkModal() {
+    modalTimer = 0;
+    if (document.hidden || !window.WiDoBridge) return;
+    var m = topModal();
+    if (m === lastModal) return;
+    lastModal = m;
+    if (!m) { window.WiDoBridge.postMessage(JSON.stringify({ type: 'modal', gone: true })); return; }
+    var items = usableIn(m);
+    var iw = window.innerWidth, ih = window.innerHeight;
+    var x = 0.5, y = 0.5;
+    if (items.length) {
+      var i = window.__widoPickPrimary(items.map(function (it) { return it.el.innerText || it.el.value || it.el.getAttribute('aria-label') || ''; }));
+      if (i >= 0) { mark(items[i].el); x = items[i].x / iw; y = items[i].y / ih; }
+    }
+    window.WiDoBridge.postMessage(JSON.stringify({ type: 'modal', x: x, y: y }));
+  }
+  if (isTop && typeof MutationObserver === 'function') {
+    new MutationObserver(function () {
+      if (!modalTimer) modalTimer = setTimeout(checkModal, 1000);
+    }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'open', 'aria-hidden'] });
+  }
 
   // ---------- Lecteur vidéo (n'importe quelle frame) ----------
   function bestVideo() {

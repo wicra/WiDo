@@ -1,7 +1,7 @@
 // Tests de la logique du curseur aimanté. Lancer : node scripts/js/snap-core.test.mjs
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-const { pickTarget } = createRequire(import.meta.url)('../../app/src/main/assets/internal/snap-core.js');
+const { pickTarget, pickPrimary, pickModal } = createRequire(import.meta.url)('../../app/src/main/assets/internal/snap-core.js');
 
 // Grille 3 x 3 de boutons 100x40, pas de 200 x 100 ; le curseur est sur le bouton central (400, 300).
 const grid = [];
@@ -24,6 +24,16 @@ const cases = {
   'ignore ce qui est sous le curseur (même position)': () => assert.equal(pickTarget('right', center.x, center.y, [center]), -1),
   'direction inconnue : -1': () => assert.equal(pickTarget('diagonale', 0, 0, grid), -1),
   'liste vide : -1': () => assert.equal(pickTarget('down', 0, 0, []), -1),
+  // Fenêtres surgissantes (cookies, pop-up)
+  'cookies : « Tout accepter » avant « Personnaliser »': () => assert.equal(pickPrimary(['Personnaliser', 'Tout refuser', 'Tout accepter']), 2),
+  'cookies en anglais': () => assert.equal(pickPrimary(['Manage', 'Accept all']), 1),
+  'accepter avant fermer': () => assert.equal(pickPrimary(['Fermer', 'Accepter']), 1),
+  'seulement fermer : fermer': () => assert.equal(pickPrimary(['Réglages', '×']), 1),
+  'aucun mot reconnu : le premier': () => assert.equal(pickPrimary(['Abonnez-vous', 'Plus tard']), 0),
+  'aucun bouton : -1': () => assert.equal(pickPrimary([]), -1),
+  'la fenêtre la plus haute gagne': () => assert.equal(pickModal([{ z: 10, order: 5 }, { z: 9999, order: 1 }, { z: 50, order: 9 }]), 1),
+  'à z égal, la dernière de la page': () => assert.equal(pickModal([{ z: 0, order: 3 }, { z: 0, order: 7 }, { z: 0, order: 5 }]), 1),
+  'aucune fenêtre : -1': () => assert.equal(pickModal([]), -1),
 };
 
 let failed = 0;
