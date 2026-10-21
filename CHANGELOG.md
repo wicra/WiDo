@@ -3,6 +3,15 @@
 ## 0.9.1
 
 ### Corrigé
+- **Réglages (TV) en deux niveaux** : ▲ ▼ changent de thème, OK ou ▶ entrent dans ses réglages, ◀ ou Retour reviennent à la liste ; aux bords de la liste, le focus ne saute plus vers les onglets du haut.
+- **OK maintenu** sur un site ou une vidéo de Reprendre ouvre ses options **sans lancer la première option** (Ouvrir / Reprendre) en relâchant la touche.
+- **Reprendre** : les vignettes ont toutes la même hauteur, même avec un titre court.
+- **Accueil** : le pied ne montre plus que la version (la mise à jour est à côté de l'heure, les pubs bloquées dans les réglages) ; plus de message sous l'accueil.
+- **Quitter** : un premier Retour sur l'accueil prévient, le second quitte WiDo ; dans un site, un Retour qui quitterait le site prévient aussi (le double appui rapide va toujours directement aux sites).
+- **Volume** : uniquement aux touches volume de la télécommande (les flèches ▲ ▼ ne le règlent plus, ni dans le plein écran du site ni dans le lecteur léger) ; ◀ ▶ gardent l'avance de 10 s.
+- **Lecteur léger** : écran de pause (assombri, titre, temps restant, heure de fin) et touche **Menu** qui ouvre les options sans quitter le film (cadrage, **épingler la page**, veille, début, retour au site).
+- **Menu rapide** : fond aux couleurs de WiDo.
+- **Curseur sur les sites** : une fenêtre de cookies ou un pop-up attire le curseur sur son bouton principal (puis il revient), les flèches ne parcourent que ses boutons, et ▲ ▼ font défiler la zone sous le curseur (la fenêtre, sinon la page).
 - **Navigation à la télécommande, reprise de l'audit :**
   - **Écran de pause** : la touche qui le ferme n'agit plus en plus (Retour ne quitte plus la page) ; il n'apparaît pas pendant qu'on navigue.
   - **Page qui ne s'ouvre pas** : la touche Retour fait ce que dit le bouton « Retour » (plus de page noire).

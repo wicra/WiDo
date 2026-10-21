@@ -14,6 +14,7 @@ En haut, les onglets **Sites** et **Réglages** ([SETTINGS](SETTINGS.md)) : un o
 | Flèches (maintenues) | Déplacement **libre** du curseur, de plus en plus rapide. Au bord de l'écran, la page défile. |
 | **OK** | Clic à la position du curseur. Sur un champ de saisie, le clavier de la TV s'ouvre. |
 | **Retour** | Plein écran vidéo → quitte le plein écran ; sinon page précédente ; sinon retour au menu. |
+| **Retour** (une fois, sans page précédente) | Prévient (« Retour encore pour quitter le site ») ; un second appui dans les 2,5 s quitte. Évite de sortir par mégarde. |
 | **Retour, deux fois vite** | Retour direct aux sites, d'où qu'on soit dans la page (désactivable : Réglages → Général → Double Retour). |
 | **Retour** (appui long) ou **Menu** | **Menu rapide**. |
 | Lecture/pause, ▶, ❚❚ | Agit sur la vidéo de la page (le lecteur du site montre sa propre barre). |
@@ -22,7 +23,7 @@ En haut, les onglets **Sites** et **Réglages** ([SETTINGS](SETTINGS.md)) : un o
 | **CH + / CH −** (ou Page +/−) | Fait défiler la page d'un écran. |
 | Rouge / vert / jaune / bleu | Raccourcis réglables. Par défaut : menu, recharger, texte +, texte −. |
 
-**En plein écran vidéo** (réglage par défaut) : **◀ ▶** reculent/avancent, **▲ ▼** règlent le volume, **OK** lance/met en pause, **Retour** quitte le plein écran. **En pause**, les flèches font apparaître le curseur pour atteindre les réglages du lecteur du site (sous-titres, qualité…), **OK** clique ; dès que la lecture reprend, les flèches pilotent à nouveau le lecteur.
+**En plein écran vidéo** (réglage par défaut) : **◀ ▶** reculent/avancent (de plus en plus loin si la touche est maintenue), **OK** lance/met en pause, **Retour** quitte le plein écran. Le volume se règle avec les **touches volume** de la télécommande, pas avec les flèches. **En pause**, les flèches font apparaître le curseur pour atteindre les réglages du lecteur du site (sous-titres, qualité…), **OK** clique ; dès que la lecture reprend, les flèches pilotent à nouveau le lecteur.
 
 Le curseur est une flèche de souris (la pointe est le point de clic) ; il devient bleu pendant l'appui sur OK et se masque après quelques secondes d'inactivité.
 
@@ -66,7 +67,7 @@ Sur une **vidéo**, le menu commence par ses commandes : Lecture/Pause, **Suivan
 
 ## Lire dans WiDo (lecteur natif)
 
-**Touches du lecteur léger** : barre cachée, **◀ ▶** avancent ou reculent (de plus en plus loin si la touche est maintenue), **▲ ▼** règlent le volume, **OK** affiche la barre, dont les boutons (sous-titres, vitesse…) se parcourent alors aux flèches. **← Site** (en haut à gauche de la barre) ou **Retour** revient à la page, à la même seconde ; la page rechargée attend ton OK pour reprendre.
+**Touches du lecteur léger** : barre cachée, **◀ ▶** avancent ou reculent (de plus en plus loin si la touche est maintenue), **OK** affiche la barre, dont les boutons (sous-titres, vitesse…) se parcourent alors aux flèches. **← Site** (en haut à gauche de la barre) ou **Retour** revient à la page, à la même seconde ; la page rechargée attend ton OK pour reprendre. **Menu** ouvre les options sans quitter le film : lecture/pause, cadrage, **épingler la page**, début, veille, retour au site. Au bout d'une seconde de pause, l'écran s'assombrit avec le titre, le temps restant et l'heure de fin (n'importe quelle touche le retire ; OK relance).
 
 
 Quand WiDo repère dans la page un flux vidéo qu'il sait lire (HLS `.m3u8`, DASH `.mpd`, fichier `.mp4`/`.webm`), il l'annonce (« Vidéo détectée »). Menu rapide → **▶ Lire dans WiDo** (ou une touche de couleur réglée sur « Lire dans WiDo ») : la vidéo s'ouvre dans le lecteur natif d'Android.
@@ -110,3 +111,10 @@ Avec **l'appli WiDo sur le téléphone**, tout cela est intégré (touches, pav�
 - Le curseur aimanté ne voit que la page principale : un élément dans une iframe d'un autre domaine se atteint au curseur libre (flèches maintenues).
 - Les sites qui réagissent au survol (`hover`) ne voient pas le curseur : seul le clic est émulé.
 - Le zoom agrandit le texte, pas les images.
+
+
+## Fenêtres surgissantes et défilement (cookies, pop-up)
+
+- Quand une fenêtre de cookies ou un pop-up s'affiche, **le curseur va tout seul sur son bouton principal** (« Tout accepter », « OK », « Fermer »…), qui est entouré en bleu, et un message le dit. À la fermeture de la fenêtre, le curseur revient où il était.
+- Tant qu'elle est ouverte, **les flèches ne parcourent que ses boutons** (le reste de la page est derrière), et depuis l'extérieur le curseur la rejoint.
+- **▲ ▼** sans rien à sélectionner dans cette direction **font défiler** ce qui est sous le curseur : la zone défilante de la fenêtre (conditions, cookies…), sinon la page.
