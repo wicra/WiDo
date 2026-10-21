@@ -112,6 +112,7 @@ private val MenuVeil = Brush.verticalGradient(0.3f to Color.Transparent, 1f to C
  * prend la lumière du disque sélectionné. Reprendre : toutes les vidéos en cours, en grandes vignettes.
  * Retour, depuis Reprendre ou Réglages, ramène aux sites.
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun MenuScreen(
     vm: MenuViewModel,

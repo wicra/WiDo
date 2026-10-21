@@ -266,6 +266,7 @@ fun PhoneIcon(color: Color, size: Dp = 24.dp) {
  * Cadre commun des fenêtres : un panneau de verre, titre en haut, contenu défilant au milieu, boutons
  * toujours visibles en bas. Ainsi rien ne se superpose, quelle que soit la taille du contenu.
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun DialogFrame(
     title: String,

@@ -1325,7 +1325,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             }
 
         private val tileRect = android.graphics.RectF()
-        private val tilePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF0B0B12.toInt() }
+        private val tilePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = 0xFF0B0B12.toInt() }
         private var tileCorner = 0f
         private var tileMode = false
 
