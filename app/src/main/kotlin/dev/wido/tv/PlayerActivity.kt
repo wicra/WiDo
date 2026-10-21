@@ -31,6 +31,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.core.animation.doOnEnd
@@ -374,20 +375,27 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
 
         val code = event.keyCode
+        lastInputAt = SystemClock.uptimeMillis()
 
-        // Écran de pause : n'importe quelle touche le retire ; OK ou lecture relance la vidéo.
+        // Écran de pause : OK ou lecture relance la vidéo ; toute autre touche ne fait que le retirer
+        // (elle n'agit pas en plus : Retour ne quitte pas la page). Le volume reste utilisable.
         if (swallowUp == code && event.action == KeyEvent.ACTION_UP) {
             swallowUp = 0
             return true
         }
         if (pauseView != null && event.action == KeyEvent.ACTION_DOWN) {
             hidePauseScreen()
-            if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER ||
-                code == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || code == KeyEvent.KEYCODE_MEDIA_PLAY
-            ) {
-                swallowUp = code
-                media("play")
-                return true
+            when (code) {
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                    swallowUp = code
+                    media("play")
+                    return true
+                }
+                KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> Unit
+                else -> {
+                    swallowUp = code
+                    return true
+                }
             }
         }
 
@@ -426,6 +434,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                         // Page perdue : rien derrière l'écran d'erreur, Retour ramène à l'accueil.
                         rendererLost && code == KeyEvent.KEYCODE_BACK -> goHome()
                         rendererLost -> Unit
+                        // Page qui ne s'ouvre pas : la touche Retour fait ce que dit le bouton « Retour ».
+                        errorBack != null && code == KeyEvent.KEYCODE_BACK -> errorBack?.invoke()
                         else -> hidePanel()
                     }
                 }
@@ -509,7 +519,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 when {
                     backLongPressed -> backLongPressed = false
                     // Deux appuis rapides : retour direct aux sites, d'où qu'on soit dans la page.
-                    event.eventTime - lastBackUp < DOUBLE_BACK_MS -> {
+                    settings.doubleBackToSites && event.eventTime - lastBackUp < DOUBLE_BACK_MS -> {
                         lastBackUp = 0L
                         backToSites()
                     }
@@ -671,8 +681,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private fun fullscreenKey(event: KeyEvent): Boolean {
         val seek = settings.seekSeconds.toDouble()
         when (event.keyCode) {
-            KeyEvent.KEYCODE_DPAD_LEFT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(-seek)
-            KeyEvent.KEYCODE_DPAD_RIGHT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(seek)
+            KeyEvent.KEYCODE_DPAD_LEFT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(-seek * (1 + minOf(event.repeatCount / 4, 4)))
+            KeyEvent.KEYCODE_DPAD_RIGHT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(seek * (1 + minOf(event.repeatCount / 4, 4)))
             KeyEvent.KEYCODE_DPAD_UP -> if (event.action == KeyEvent.ACTION_DOWN) videoVolume(1)
             KeyEvent.KEYCODE_DPAD_DOWN -> if (event.action == KeyEvent.ACTION_DOWN) videoVolume(-1)
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) media("toggle")
@@ -699,6 +709,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         if (cursor.visibility != View.VISIBLE) {
             cursor.visibility = View.VISIBLE
             pauseCursor = true
+            osd.showText(getString(R.string.osd_paused_cursor))
         }
         cursor.wake()
         if (event.action == KeyEvent.ACTION_DOWN) freeMove(event.repeatCount, dir.first, dir.second)
@@ -814,16 +825,22 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
     }
 
+    /** Augmente quand une action laisse le menu ouvert : le menu relit ses étiquettes. */
+    private val panelTick = mutableIntStateOf(0)
+
     private fun buildPanel(hasNext: Boolean) {
         if (panelView != null) return
         hidePauseScreen()
         val c = client
         val current = site
         // `stay` : le menu reste ouvert (on ajuste encore : texte plus grand, veille…), le résultat s'affiche par-dessus.
-        fun action(label: String, glyph: Glyph, more: Boolean = false, stay: Boolean = false, run: () -> Unit) = QuickAction(label, glyph, more) {
-            if (!stay) hidePanel()
-            run()
-        }
+        fun action(label: String, glyph: Glyph, more: Boolean = false, stay: Boolean = false, dynamic: (() -> String)? = null, run: () -> Unit) =
+            QuickAction(label, glyph, more, dynamic) {
+                if (!stay) hidePanel()
+                run()
+                // Le menu reste ouvert : son étiquette (Veille 30 min…) suit.
+                if (stay) panelTick.intValue++
+            }
 
         val media = mediaState.value?.takeIf { it.duration > 0 }
         // Téléphone lié à une TV : la vidéo passe sur la TV, à la même seconde.
@@ -834,8 +851,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val pin = action(getString(R.string.panel_pin), Glyph.Star) { pinCurrentPage() }
         val zoomOut = action(getString(R.string.panel_zoom_out_short), Glyph.ZoomOut, stay = true) { changeZoom(-1) }
         val zoomIn = action(getString(R.string.panel_zoom_in_short), Glyph.ZoomIn, stay = true) { changeZoom(1) }
-        val sleep = action(sleepLabel(), Glyph.Sleep, more = media == null, stay = true) { cycleSleep() }
-        val sites = action(getString(R.string.panel_sites), Glyph.Sites) { close("menu rapide : Sites") }
+        val sleep = action(sleepLabel(), Glyph.Sleep, more = media == null, stay = true, dynamic = ::sleepLabel) { cycleSleep() }
+        // En dernier de la rangée : on ne quitte pas le lecteur par mégarde en cherchant « Texte + ».
+        val sites = action(getString(R.string.panel_sites), Glyph.Sites, more = true) { close("menu rapide : Sites") }
         val hide = if (tv) action(getString(R.string.tile_hide), Glyph.Hide, more = media != null) { startPicking() } else null
         val siteHome = action(getString(R.string.tile_site_home), Glyph.Globe, more = media != null) { current?.let { webView?.loadUrl(it.url) } }
         val reload = action(getString(R.string.panel_reload), Glyph.Refresh, more = media != null) { webView?.reload() }
@@ -853,11 +871,11 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 next,
                 native,
                 action(getString(R.string.tile_restart), Glyph.Restart) { cancelSeekGuard(); mediaJson(JSONObject().put("cmd", "seekTo").put("to", 0).toString()) },
-                sleep, pin, zoomOut, zoomIn, sites,
+                sleep, pin, zoomOut, zoomIn,
                 hide, siteHome, reload,
-            ) + extras
+            ) + extras + sites
         } else {
-            listOfNotNull(toTv, native, next, pin, zoomOut, zoomIn, hide, siteHome, reload, sites, sleep) + extras
+            listOfNotNull(toTv, native, next, pin, zoomOut, zoomIn, hide, siteHome, reload, sleep) + extras + sites
         }
 
         // La dernière redirection refusée : l'ouvrir une seule fois, l'autoriser pour ce site, ou l'ignorer.
@@ -880,7 +898,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val counts = getString(R.string.panel_blocked, c?.blockedRequests?.get() ?: 0, c?.blockedNavigations?.get() ?: 0)
 
         val more = getString(R.string.tile_more)
-        showOverlay { QuickMenu(mediaState.value, redirect, actions, counts, compact = !tv, onDismiss = { hidePanel() }, moreLabel = more) }
+        showOverlay { QuickMenu(mediaState.value, redirect, actions, counts, compact = !tv, onDismiss = { hidePanel() }, moreLabel = more, tick = panelTick.intValue) }
+        // Les messages (Texte +, Veille…) s'affichent au-dessus du menu, pas dessus.
+        if (tv) osd.raise((150 * resources.displayMetrics.density).toInt())
     }
 
     /** Affiche un calque Compose par-dessus la page (menu rapide, téléphone) ; Retour le ferme. */
@@ -895,6 +915,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private fun hidePanel() {
         val panel = panelView ?: return
         panelView = null
+        errorBack = null
+        osd.raise(0)
         root.removeView(panel)
         webView?.requestFocus()
     }
@@ -1529,10 +1551,18 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     // --- Page qui ne s'ouvre pas ------------------------------------------------------------
 
     /** Écran WiDo à la place de la page d'erreur du navigateur : ce qui se passe, et quoi faire. */
+    /** Ce que fait Retour sur l'écran d'erreur affiché (null : pas d'écran d'erreur). */
+    private var errorBack: (() -> Unit)? = null
+
     private fun showPageError(code: Int, failed: String) {
         hideOverlay()
         hidePanel()
         val current = site
+        val back = {
+            hidePanel()
+            val wv = webView
+            if (wv != null && wv.canGoBackOrForward(-2)) wv.goBackOrForward(-2) else goHome()
+        }
         val host = Hosts.of(failed).orEmpty().removePrefix("www.")
         val online = runCatching {
             val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
@@ -1557,11 +1587,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                     hidePanel()
                     webView?.loadUrl(failed)
                 },
-                onBack = {
-                    hidePanel()
-                    val wv = webView
-                    if (wv != null && wv.canGoBackOrForward(-2)) wv.goBackOrForward(-2) else goHome()
-                },
+                onBack = back,
                 onEdit = {
                     hidePanel()
                     current?.let { startActivity(MainActivity.editSite(this, it.id)) }
@@ -1641,9 +1667,18 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         if (state.paused && state.duration > 0) root.postDelayed(showPause, PAUSE_SCREEN_MS) else hidePauseScreen()
     }
 
+    /** Dernière touche de la télécommande (l'écran de pause n'interrompt pas quelqu'un qui navigue). */
+    private var lastInputAt = 0L
+
     private fun showPauseScreen() {
         val state = mediaState.value ?: return
         if (!state.paused || pauseView != null || panelView != null || helpView != null || picking) return
+        if (SystemClock.uptimeMillis() - lastInputAt < PAUSE_IDLE_MS) {
+            // Quelqu'un vient d'utiliser la télécommande (choisir un épisode…) : on attend le calme.
+            root.removeCallbacks(showPause)
+            root.postDelayed(showPause, 1_500)
+            return
+        }
         val density = resources.displayMetrics.density
         val scale = settings.uiScale
         val left = (state.duration - state.time).coerceAtLeast(0.0)
@@ -1880,6 +1915,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             autoStart = false
             webView?.loadUrl(back)
             startResumeSeek()
+            // Pas de surprise devant une page qui ne joue pas : on dit où elle en est et ce qu'il reste à faire.
+            val resumed = pendingSeek
+            root.postDelayed({ if (!isFinishing) osd.showText(getString(R.string.osd_page_reloaded, dev.wido.core.PlayerFormat.time(resumed))) }, 1_500)
             return@registerForActivityResult
         }
         if (position < 0) return@registerForActivityResult
@@ -2127,6 +2165,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val FOLLOW_POLL_MS = 2_000L
         private const val FRAME_EVERY_MS = 90_000L
         private const val PAUSE_SCREEN_MS = 1_200L
+        private const val PAUSE_IDLE_MS = 4_000L
         private const val DOUBLE_BACK_MS = 450L
         /** En dessous (pub, bande-annonce), on ne quitte pas la page pour le lecteur léger. */
         private const val AUTO_NATIVE_MIN_SECONDS = 600.0

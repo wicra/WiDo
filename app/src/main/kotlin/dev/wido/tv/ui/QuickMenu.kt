@@ -43,7 +43,14 @@ import dev.wido.core.PlayerFormat
 import dev.wido.tv.MediaState
 
 /** Une action du menu rapide : une tuile avec son icône. `more` : rangée sous « Plus… ». */
-data class QuickAction(val label: String, val glyph: Glyph = Glyph.More, val more: Boolean = false, val run: () -> Unit)
+data class QuickAction(
+    val label: String,
+    val glyph: Glyph = Glyph.More,
+    val more: Boolean = false,
+    /** Étiquette recalculée quand le menu reste ouvert après l'action (ex. « Veille 30 min »). */
+    val dynamic: (() -> String)? = null,
+    val run: () -> Unit,
+)
 
 /** La dernière redirection refusée et ses trois réponses. */
 class BlockedRedirect(
@@ -73,6 +80,8 @@ fun QuickMenu(
     compact: Boolean = false,
     onDismiss: () -> Unit = {},
     @Suppress("UNUSED_PARAMETER") moreLabel: String = "",
+    /** Change quand une action a laissé le menu ouvert : les étiquettes dynamiques sont relues. */
+    @Suppress("UNUSED_PARAMETER") tick: Int = 0,
 ) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { if (!compact) runCatching { first.requestFocus() } }
@@ -114,23 +123,22 @@ fun QuickMenu(
             if (media != null && media.duration > 0) MediaBar(media, compact)
             if (compact) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ordered.forEach { action -> ActionButton(action.label, action.run, primary = false, compact = true, glyph = action.glyph) }
+                    ordered.forEach { action -> ActionButton(action.dynamic?.invoke() ?: action.label, action.run, primary = false, compact = true, glyph = action.glyph) }
                 }
                 Text(counts, color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
             } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Row(
-                        Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(vertical = 6.dp, horizontal = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        ordered.forEachIndexed { index, action ->
-                            val focus = if (index == 0 && redirect == null) Modifier.focusRequester(first) else Modifier
-                            ActionButton(action.label, action.run, focus, primary = false, compact = true, glyph = action.glyph)
-                        }
+                // Toutes les pastilles visibles d'un coup, sur une ou deux lignes : plus de rangée qui défile.
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ordered.forEachIndexed { index, action ->
+                        val focus = if (index == 0 && redirect == null) Modifier.focusRequester(first) else Modifier
+                        ActionButton(action.dynamic?.invoke() ?: action.label, action.run, focus, primary = false, compact = true, glyph = action.glyph)
                     }
-                    Spacer(Modifier.width(14.dp))
-                    Text(counts, color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
                 }
+                Text(counts, color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
             }
         }
     }

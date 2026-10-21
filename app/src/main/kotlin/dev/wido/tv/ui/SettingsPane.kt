@@ -282,6 +282,9 @@ fun SettingsPane(
                 if (settings.startupLastSite) 1 else 0,
             ) { changed { settings.startupLastSite = it == 1 } }
         }
+        if (!phone) SettingRow(stringResource(R.string.s_double_back)) {
+            Segmented(listOf(on, off), if (settings.doubleBackToSites) 0 else 1) { changed { settings.doubleBackToSites = it == 0 } }
+        }
         SettingRow(stringResource(R.string.s_new_relaxed)) {
             Segmented(
                 listOf(stringResource(R.string.v_strict), stringResource(R.string.v_relaxed), stringResource(R.string.v_mixed)),

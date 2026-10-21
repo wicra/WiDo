@@ -103,7 +103,7 @@
     <string name="v_strict">Strict</string>
     <string name="v_relaxed">Relaxed</string>
     <string name="a_none">None</string>
-    <string name="a_menu">Menu</string>
+    <string name="a_menu">Back to sites</string>
     <string name="a_reload">Reload</string>
     <string name="a_cursor">Cursor on/off</string>
     <string name="a_zoom_in">Text +</string>
@@ -438,4 +438,9 @@
     <string name="crash_send_failed">Could not send: check the connection and try again</string>
     <string name="crash_send_note">One press sends this report to the project, without site names or any personal information.</string>
     <string name="crash_report_github">Report on GitHub</string>
+    <string name="s_double_back">Double Back: return to sites</string>
+    <string name="osd_paused_cursor">Cursor: OK clicks · to resume, Menu → Play</string>
+    <string name="osd_page_reloaded">Page reloaded at %1$s: press OK to resume</string>
+    <string name="native_back_site">← Site</string>
+    <string name="native_hint">Back: return to the site · ◀ ▶ seek · ▲ ▼ volume</string>
 </resources>

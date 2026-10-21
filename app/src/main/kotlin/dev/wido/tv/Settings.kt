@@ -85,6 +85,11 @@ class Settings(private val context: Context) {
         get() = state.getString("open_page", null)
         set(v) = state.edit().putString("open_page", v).apply()
 
+    /** Deux appuis rapides sur Retour dans le lecteur : retour direct aux sites (sinon : reculer de page en page). */
+    var doubleBackToSites: Boolean
+        get() = prefs.getBoolean("double_back", true)
+        set(v) = prefs.edit().putBoolean("double_back", v).apply()
+
     /** Sons de l'interface sur TV : coupés, doux ou normaux ([UiSound]). */
     var uiSounds: Int
         get() = prefs.getInt("ui_sounds", UiSound.NORMAL)

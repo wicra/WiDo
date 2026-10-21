@@ -103,7 +103,7 @@
     <string name="v_strict">Strictes</string>
     <string name="v_relaxed">Souples</string>
     <string name="a_none">Aucune</string>
-    <string name="a_menu">Menu</string>
+    <string name="a_menu">Retour aux sites</string>
     <string name="a_reload">Recharger</string>
     <string name="a_cursor">Curseur on/off</string>
     <string name="a_zoom_in">Texte +</string>
@@ -438,4 +438,9 @@
     <string name="crash_send_failed">Envoi impossible : vérifie la connexion et réessaie</string>
     <string name="crash_send_note">Un appui envoie ce rapport au projet, sans les noms de sites ni aucune information personnelle.</string>
     <string name="crash_report_github">Signaler sur GitHub</string>
+    <string name="s_double_back">Double Retour : retour aux sites</string>
+    <string name="osd_paused_cursor">Curseur : OK clique · pour reprendre, Menu → Lecture</string>
+    <string name="osd_page_reloaded">Page rechargée à %1$s : OK pour reprendre</string>
+    <string name="native_back_site">← Site</string>
+    <string name="native_hint">Retour : revenir au site · ◀ ▶ avancer ou reculer · ▲ ▼ volume</string>
 </resources>

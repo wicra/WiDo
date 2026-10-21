@@ -132,6 +132,15 @@ class OsdView(context: Context, private val compact: Boolean = false, scale: Flo
         }
     }
 
+    /** Remonte la pastille (menu ouvert dessous) ; `extraPx` = 0 la remet à sa place. */
+    fun raise(extraPx: Int) {
+        val params = layoutParams as? FrameLayout.LayoutParams ?: return
+        val base = if (compact) (20 * density).toInt() else (36 * density).toInt()
+        if (params.bottomMargin == base + extraPx) return
+        params.bottomMargin = base + extraPx
+        layoutParams = params
+    }
+
     /** Titre de la vidéo et nom du site, affichés dans la barre de lecture. */
     fun setInfo(videoTitle: String?, siteName: String?) {
         this.videoTitle = videoTitle?.trim()?.takeIf { it.isNotEmpty() }

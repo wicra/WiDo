@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.widget.TextView
+import android.media.AudioManager
 import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -97,9 +99,31 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         // Les messages (cadrage…) dans la pastille de verre de WiDo, par-dessus l'image.
         val app = application as WiDoApp
         osd = OsdView(this, compact = !app.isTv, scale = if (app.isTv) settings.uiScale else 1f).apply { hideSeconds = settings.osdSeconds }
+        // « ← Site » : visible avec la barre de lecture, atteint par la flèche du haut ; revient à la page à la même seconde.
+        val density = resources.displayMetrics.density
+        val backButton = TextView(this).apply {
+            text = getString(R.string.native_back_site)
+            textSize = 16f * (if (app.isTv) settings.uiScale else 1f)
+            setTextColor(Color.WHITE)
+            setPadding((18 * density).toInt(), (10 * density).toInt(), (18 * density).toInt(), (10 * density).toInt())
+            setBackgroundColor(0x99000000.toInt())
+            isFocusable = true
+            visibility = android.view.View.GONE
+            setOnClickListener { finish() }
+            setOnFocusChangeListener { v, focused ->
+                (v as TextView).setTextColor(if (focused) 0xFF0B0B12.toInt() else Color.WHITE)
+                v.setBackgroundColor(if (focused) Color.WHITE else 0x99000000.toInt())
+            }
+        }
+        view.setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility -> backButton.visibility = visibility })
         val frame = FrameLayout(this).apply {
             addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             addView(osd, osd.layoutParamsForRoot())
+            addView(
+                backButton,
+                FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, android.view.Gravity.TOP or android.view.Gravity.START)
+                    .apply { setMargins((32 * density).toInt(), (28 * density).toInt(), 0, 0) },
+            )
         }
         setContentView(frame)
         WindowInsetsControllerCompat(window, view).apply {
@@ -126,6 +150,8 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         player.prepare()
         if (resume > 0) player.seekTo(resume)
         player.playWhenReady = true
+        // Le rappel des touches, une fois, juste après le début.
+        view.postDelayed({ if (!isFinishing) osd.showText(getString(R.string.native_hint)) }, 1_200)
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -143,7 +169,41 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             if (player.isPlaying) player.pause() else player.play()
             return true
         }
+        // Barre cachée : les flèches font comme dans le plein écran du site (◀ ▶ avancent ou reculent, ▲ ▼ règlent
+        // le volume) ; OK affiche la barre, et ses boutons se parcourent alors aux flèches. Sinon la première
+        // flèche ne ferait qu'afficher la barre.
+        if (!view.isControllerFullyVisible && settings.fullscreenPlayerKeys && arrowKey(event)) return true
         return view.dispatchKeyEvent(event) || super.dispatchKeyEvent(event)
+    }
+
+    /** Flèche gauche/droite : saut (de plus en plus grand si la touche est maintenue) ; haut/bas : volume. */
+    private fun arrowKey(event: KeyEvent): Boolean {
+        val seconds = settings.seekSeconds
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    val sign = if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
+                    val jump = sign * seconds * (1 + minOf(event.repeatCount / 4, 4))
+                    val duration = player.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
+                    player.seekTo((player.currentPosition + jump * 1000L).coerceIn(0L, duration))
+                    osd.showText(if (jump >= 0) "+$jump s" else "−${-jump} s")
+                }
+            }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                val audio = getSystemService(AUDIO_SERVICE) as AudioManager
+                if (!settings.customVolume || audio.isVolumeFixed) return false
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    audio.adjustStreamVolume(
+                        AudioManager.STREAM_MUSIC,
+                        if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+                        0,
+                    )
+                    osd.showVolume(audio.getStreamVolume(AudioManager.STREAM_MUSIC), audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
+                }
+            }
+            else -> return false
+        }
+        return true
     }
 
     // --- Lien avec les autres écrans : télécommande, « En cours sur la TV » ---
