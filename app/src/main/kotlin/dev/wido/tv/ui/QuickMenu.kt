@@ -91,7 +91,17 @@ fun QuickMenu(
     Box(
         Modifier
             .fillMaxSize()
-            .then(if (compact) Modifier.background(Color.Black.copy(alpha = 0.35f)).clickable(remember { MutableInteractionSource() }, null, onClick = onDismiss) else Modifier),
+            .then(
+                if (compact) {
+                    Modifier.background(Color.Black.copy(alpha = 0.35f)).clickable(remember { MutableInteractionSource() }, null, onClick = onDismiss)
+                } else {
+                    // Fond WiDo : la page s'estompe vers le fond de l'appli, avec ses lumières, derrière le menu.
+                    Modifier
+                        .background(Brush.verticalGradient(0.3f to Color.Transparent, 0.62f to Palette.Background.copy(alpha = 0.78f), 1f to Palette.Background.copy(alpha = 0.97f)))
+                        .background(Brush.radialGradient(listOf(Palette.Accent.copy(alpha = 0.28f), Color.Transparent), center = androidx.compose.ui.geometry.Offset(260f, 1500f), radius = 900f))
+                        .background(Brush.radialGradient(listOf(Palette.Violet.copy(alpha = 0.22f), Color.Transparent), center = androidx.compose.ui.geometry.Offset(1700f, 1450f), radius = 800f))
+                },
+            ),
     ) {
         Column(
             Modifier

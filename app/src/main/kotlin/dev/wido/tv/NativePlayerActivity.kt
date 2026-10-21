@@ -169,14 +169,14 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             if (player.isPlaying) player.pause() else player.play()
             return true
         }
-        // Barre cachée : les flèches font comme dans le plein écran du site (◀ ▶ avancent ou reculent, ▲ ▼ règlent
-        // le volume) ; OK affiche la barre, et ses boutons se parcourent alors aux flèches. Sinon la première
+        // Barre cachée : les flèches font comme dans le plein écran du site (◀ ▶ avancent ou reculent ; le volume
+        // reste aux touches volume de la télécommande) ; OK affiche la barre, et ses boutons se parcourent alors aux flèches. Sinon la première
         // flèche ne ferait qu'afficher la barre.
         if (!view.isControllerFullyVisible && settings.fullscreenPlayerKeys && arrowKey(event)) return true
         return view.dispatchKeyEvent(event) || super.dispatchKeyEvent(event)
     }
 
-    /** Flèche gauche/droite : saut (de plus en plus grand si la touche est maintenue) ; haut/bas : volume. */
+    /** Flèche gauche/droite : saut (de plus en plus grand si la touche est maintenue). Le volume reste aux touches volume. */
     private fun arrowKey(event: KeyEvent): Boolean {
         val seconds = settings.seekSeconds
         when (event.keyCode) {
@@ -187,18 +187,6 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
                     val duration = player.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
                     player.seekTo((player.currentPosition + jump * 1000L).coerceIn(0L, duration))
                     osd.showText(if (jump >= 0) "+$jump s" else "−${-jump} s")
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
-                val audio = getSystemService(AUDIO_SERVICE) as AudioManager
-                if (!settings.customVolume || audio.isVolumeFixed) return false
-                if (event.action == KeyEvent.ACTION_DOWN) {
-                    audio.adjustStreamVolume(
-                        AudioManager.STREAM_MUSIC,
-                        if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
-                        0,
-                    )
-                    osd.showVolume(audio.getStreamVolume(AudioManager.STREAM_MUSIC), audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
                 }
             }
             else -> return false

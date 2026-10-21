@@ -30,6 +30,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -75,6 +82,7 @@ private fun <T> clampedStep(options: List<T>, current: T, step: Int): T =
  * choix est une pastille : on la sélectionne avec les flèches puis OK. La valeur choisie est en verre
  * clair, la pastille focalisée en blanc. Les changements s'appliquent à l'ouverture du site suivant.
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun SettingsPane(
     settings: Settings,
@@ -340,16 +348,40 @@ fun SettingsPane(
         return
     }
 
-    // TV : les thèmes en colonne à gauche (le thème sélectionné s'affiche dès qu'il a le focus), leurs réglages à droite.
+    // TV : deux niveaux. Niveau 1, les thèmes en colonne à gauche : ▲ ▼ passent de l'un à l'autre (le thème
+    // s'affiche aussitôt), OK ou ▶ entrent dans ses réglages. Niveau 2, ses réglages : ▲ ▼ d'un réglage à
+    // l'autre, ◀ ▶ entre les choix ; ◀ au bord gauche ou Retour reviennent à la liste des thèmes.
     var selected by remember { mutableIntStateOf(0) }
+    val themeFocus = remember(sections.size) { List(sections.size) { FocusRequester() } }
+    val paneFocus = remember { FocusRequester() }
+    var inPane by remember { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = inPane) { runCatching { themeFocus[selected.coerceIn(0, themeFocus.lastIndex)].requestFocus() } }
     Row(modifier.fillMaxSize().padding(start = 40.dp, end = 32.dp, top = 12.dp)) {
         Column(Modifier.width(250.dp).padding(end = 22.dp, top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            sections.forEachIndexed { index, section -> SectionTab(section, index == selected) { selected = index } }
+            sections.forEachIndexed { index, section ->
+                SectionTab(section, index == selected, Modifier.focusRequester(themeFocus[index]), onEnter = { runCatching { paneFocus.requestFocus() } }) { selected = index }
+            }
         }
         Box(Modifier.weight(1f).fillMaxSize()) {
             androidx.compose.runtime.key(selected) {
                 Column(
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 6.dp, bottom = 56.dp, end = 12.dp),
+                    Modifier
+                        .fillMaxSize()
+                        .onFocusChanged { inPane = it.hasFocus }
+                        .focusRequester(paneFocus)
+                        .focusProperties {
+                            exit = { direction ->
+                                when (direction) {
+                                    FocusDirection.Left -> themeFocus[selected.coerceIn(0, themeFocus.lastIndex)]
+                                    // Aux bords de la liste : on reste dedans (pas de saut vers les onglets du haut).
+                                    FocusDirection.Up, FocusDirection.Down -> FocusRequester.Cancel
+                                    else -> FocusRequester.Default
+                                }
+                            }
+                        }
+                        .focusGroup()
+                        .verticalScroll(rememberScrollState())
+                        .padding(top = 6.dp, bottom = 56.dp, end = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (refresh < 0) return@Column
@@ -453,7 +485,7 @@ private class SettingsSection(val title: Int, val glyph: Glyph, val content: @Co
 
 /** Un thème dans la colonne de gauche (TV) : il s'ouvre dès qu'il reçoit le focus. */
 @Composable
-private fun SectionTab(section: SettingsSection, selected: Boolean, onSelect: () -> Unit) {
+private fun SectionTab(section: SettingsSection, selected: Boolean, modifier: Modifier = Modifier, onEnter: () -> Unit = {}, onSelect: () -> Unit) {
     var focused by remember { androidx.compose.runtime.mutableStateOf(false) }
     val background = when {
         focused -> Color.White
@@ -461,8 +493,18 @@ private fun SectionTab(section: SettingsSection, selected: Boolean, onSelect: ()
         else -> Color.Transparent
     }
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
+            // ▶ entre dans les réglages du thème.
+            .onPreviewKeyEvent { e ->
+                val right = e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+                if (right && e.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
+                    onEnter()
+                    true
+                } else {
+                    right
+                }
+            }
             .tvFocusable(
                 RowShape,
                 focusScale = 1.03f,
@@ -471,7 +513,10 @@ private fun SectionTab(section: SettingsSection, selected: Boolean, onSelect: ()
                     focused = it
                     if (it) onSelect()
                 },
-                onClick = onSelect,
+                onClick = {
+                    onSelect()
+                    onEnter()
+                },
             )
             .background(background)
             .padding(horizontal = 16.dp, vertical = 12.dp),

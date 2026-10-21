@@ -449,4 +449,6 @@
     <string name="confirm_clear">Confirmer : effacer</string>
     <string name="move_hint">◀ ▶ pour déplacer · OK valide · Retour annule</string>
     <string name="home_hint_tv">OK maintenu ou Menu : options du site</string>
+    <string name="exit_hint">Appuie encore sur Retour pour quitter WiDo</string>
+    <string name="osd_exit_confirm">Retour encore pour quitter le site</string>
 </resources>

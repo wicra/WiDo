@@ -534,6 +534,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     private var lastBackUp = 0L
+    private var exitHintAt = 0L
 
     /** L'accueil, onglet Sites. */
     private fun backToSites() {
@@ -549,6 +550,13 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             customView != null -> exitCustomView()
             wv != null && wv.canGoBack() -> wv.goBack()
             else -> {
+                // Quitter le site d'un seul Retour par mégarde : le premier appui prévient, le second (ou le double
+                // appui rapide, qui va aux sites) quitte.
+                if (tv && SystemClock.uptimeMillis() - exitHintAt > EXIT_CONFIRM_MS) {
+                    exitHintAt = SystemClock.uptimeMillis()
+                    osd.showText(getString(R.string.osd_exit_confirm))
+                    return
+                }
                 // Ouvert depuis le téléphone ou Home Assistant sans l'accueil derrière : on y revient au lieu de quitter.
                 if (tv) UiSound.back()
                 if (isTaskRoot) startActivity(Intent(this, MainActivity::class.java))
@@ -683,8 +691,6 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(-seek * (1 + minOf(event.repeatCount / 4, 4)))
             KeyEvent.KEYCODE_DPAD_RIGHT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(seek * (1 + minOf(event.repeatCount / 4, 4)))
-            KeyEvent.KEYCODE_DPAD_UP -> if (event.action == KeyEvent.ACTION_DOWN) videoVolume(1)
-            KeyEvent.KEYCODE_DPAD_DOWN -> if (event.action == KeyEvent.ACTION_DOWN) videoVolume(-1)
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) media("toggle")
             else -> return false
         }
@@ -718,14 +724,6 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     /** Curseur montré pour la pause seulement : il repart quand la lecture reprend. */
     private var pauseCursor = false
-
-    private fun videoVolume(direction: Int) {
-        if (settings.customVolume && !audio.isVolumeFixed) {
-            adjustVolume(if (direction > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER)
-        } else {
-            media("vol", 0.1 * direction)
-        }
-    }
 
     /** Avance ou recule ; la barre affiche le saut. */
     private fun seekBy(seconds: Double) {
@@ -2214,6 +2212,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val PAUSE_SCREEN_MS = 1_200L
         private const val PAUSE_IDLE_MS = 4_000L
         private const val DOUBLE_BACK_MS = 450L
+        private const val EXIT_CONFIRM_MS = 2_500L
         /** En dessous (pub, bande-annonce), on ne quitte pas la page pour le lecteur léger. */
         private const val AUTO_NATIVE_MIN_SECONDS = 600.0
         private const val STATE_URL = "state_url"

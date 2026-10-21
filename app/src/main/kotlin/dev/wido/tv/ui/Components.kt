@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -296,6 +297,16 @@ fun DialogFrame(
         Column(
             size
                 .glassPanel(Palette.PanelSolid, elevation = 30.dp)
+                // Fin d'un OK maintenu qui vient d'ouvrir cette fenêtre : ignorée, sans cliquer le premier bouton.
+                .onPreviewKeyEvent { e ->
+                    val ok = e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER
+                    if (ok && KeyGuard.active()) {
+                        if (e.nativeKeyEvent.action == android.view.KeyEvent.ACTION_UP) KeyGuard.release()
+                        true
+                    } else {
+                        false
+                    }
+                }
                 .focusGroup()
                 .padding(horizontal = if (phone) 20.dp else 30.dp, vertical = if (phone) 20.dp else 26.dp),
         ) {

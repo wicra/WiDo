@@ -449,4 +449,6 @@
     <string name="confirm_clear">Confirm: clear</string>
     <string name="move_hint">◀ ▶ to move · OK confirms · Back cancels</string>
     <string name="home_hint_tv">Hold OK or Menu: site options</string>
+    <string name="exit_hint">Press Back again to exit WiDo</string>
+    <string name="osd_exit_confirm">Press Back again to leave the site</string>
 </resources>

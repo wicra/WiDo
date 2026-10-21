@@ -178,6 +178,19 @@ fun MenuScreen(
         runCatching { cardFocus[id]?.requestFocus() }
         android.widget.Toast.makeText(context, R.string.move_hint, android.widget.Toast.LENGTH_LONG).show()
     }
+    // Retour sur l'accueil : un premier appui prévient, un second (dans les 2,5 s) quitte WiDo.
+    var exitAt by remember { mutableStateOf(0L) }
+    androidx.activity.compose.BackHandler(
+        enabled = tab == Tab.Sites && editor == null && actionsFor == null && !showCatalog && watchActions == null && movingId == null,
+    ) {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - exitAt < 2_500) {
+            (context as? android.app.Activity)?.finish()
+        } else {
+            exitAt = now
+            android.widget.Toast.makeText(context, R.string.exit_hint, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
     androidx.activity.compose.BackHandler(enabled = tab != Tab.Sites && editor == null && actionsFor == null && !showCatalog) {
         UiSound.back()
         backToSites()
@@ -297,7 +310,7 @@ fun MenuScreen(
                             )
                         }
                     }
-                    Footer(update, remember(state) { settings.blockedThisMonth() }, hint = stringResource(R.string.home_hint_tv))
+                    Footer()
                   }
                   }
                 }
@@ -893,25 +906,10 @@ private fun Backdrop(entry: WatchEntry?) {
 
 /** Une seule ligne discrète : la version à gauche, l'état de la mise à jour à droite. */
 @Composable
-private fun Footer(update: UpdateUi, blocked: Int, hint: String = "") {
-    val (status, color) = when (update) {
-        UpdateUi.Checking -> stringResource(R.string.update_checking) to Palette.TextMuted
-        UpdateUi.UpToDate -> stringResource(R.string.update_uptodate) to Palette.TextMuted
-        is UpdateUi.CheckFailed -> stringResource(R.string.update_check_failed, update.detail.take(40)) to Palette.Warning
-        else -> "" to Palette.TextMuted
-    }
+private fun Footer() {
+    // Seulement la version : l'état de la mise à jour est à côté de l'heure, les pubs bloquées dans les réglages.
     Row(Modifier.fillMaxWidth().padding(start = 52.dp, end = 52.dp, top = 12.dp, bottom = 20.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.version_footer, BuildConfig.VERSION_NAME), color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-        if (blocked > 0) {
-            Spacer(Modifier.width(16.dp))
-            GlyphIcon(Glyph.Blocked, Palette.Ok.copy(alpha = 0.8f), 12.dp)
-            Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.stats_total, java.text.NumberFormat.getIntegerInstance().format(blocked)), color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-        }
-        Spacer(Modifier.weight(1f))
-        if (hint.isNotEmpty()) Text(hint, color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-        if (hint.isNotEmpty() && status.isNotEmpty()) Spacer(Modifier.width(24.dp))
-        if (status.isNotEmpty()) Text(status, color = color, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -1022,6 +1020,8 @@ private fun WatchTile(entry: WatchEntry, site: Site?, onClick: () -> Unit, onRem
             fontSize = 17.sp,
             fontWeight = FontWeight.Bold,
             lineHeight = 21.sp,
+            // Toujours deux lignes de place : un titre court n'écrase pas sa vignette par rapport aux autres.
+            minLines = 2,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )

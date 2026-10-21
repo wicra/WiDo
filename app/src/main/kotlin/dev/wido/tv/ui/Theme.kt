@@ -231,6 +231,8 @@ fun Modifier.dpadLongPress(onLongPress: (() -> Unit)?, onClick: () -> Unit): Mod
                 }
                 if (down && !fired && native.eventTime - native.downTime >= LONG_PRESS_MS) {
                     fired = true
+                    // La fenêtre qui s'ouvre ne doit pas recevoir la fin de cet appui (sinon OK « ouvre » aussitôt la 1re option).
+                    KeyGuard.arm()
                     onLongPress()
                 }
                 true
@@ -258,6 +260,25 @@ fun Modifier.dpadRepeat(onRepeat: () -> Unit): Modifier = onPreviewKeyEvent { e 
         true
     } else {
         false
+    }
+}
+
+/**
+ * Après un OK maintenu qui ouvre une fenêtre, le doigt est encore sur OK : les répétitions et le
+ * relâchement arriveraient à la fenêtre, qui les prendrait pour un clic sur son premier bouton. Les
+ * fenêtres ignorent OK jusqu'à ce relâchement (ou 2 s au plus).
+ */
+object KeyGuard {
+    @Volatile private var until = 0L
+
+    fun arm() {
+        until = android.os.SystemClock.uptimeMillis() + 2_000
+    }
+
+    fun active() = android.os.SystemClock.uptimeMillis() < until
+
+    fun release() {
+        until = 0L
     }
 }
 
