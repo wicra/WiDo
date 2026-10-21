@@ -373,6 +373,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (webView == null) return super.dispatchKeyEvent(event)
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            CrashLog.trace("site : touche ${KeyEvent.keyCodeToString(event.keyCode).removePrefix("KEYCODE_")}, curseur=$cursorMode, cinéma=$cinema")
+        }
 
         // L'aide à l'écran se ferme à n'importe quelle touche.
         if (helpView != null) {
@@ -512,6 +515,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     private fun handleBack(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_UP) CrashLog.trace("site : retour (aide=${helpView != null}, menu=${panelView != null})")
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
                 if (event.repeatCount == 0) {
@@ -625,6 +629,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
      * marque), sans qu'on ait à le chercher sur toute la page ; à sa fermeture, il revient où il était.
      */
     private fun onPageModal(x: Double, y: Double, gone: Boolean) {
+        CrashLog.trace(if (gone) "site : fenêtre de la page disparue" else "site : fenêtre de la page détectée")
         val wv = webView ?: return
         if (!tv || !cursorMode || cinema || customView != null || picking) return
         if (gone) {
@@ -1464,6 +1469,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     override fun onPause() {
+        CrashLog.trace("site : en pause (${CrashLog.memoryLine(this)})")
         captureFrame(force = true)
         (application as WiDoApp).remote.detach(this)
         if (tv) (application as WiDoApp).link.nowPlaying.value = null
@@ -1758,6 +1764,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     private fun showPauseScreen() {
         val state = mediaState.value ?: return
+        if (state.paused) CrashLog.trace("site : écran de pause demandé")
         if (!state.paused || pauseView != null || panelView != null || helpView != null || picking) return
         if (SystemClock.uptimeMillis() - lastInputAt < PAUSE_IDLE_MS) {
             // Quelqu'un vient d'utiliser la télécommande (choisir un épisode…) : on attend le calme.
@@ -1799,7 +1806,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             addView(hint)
         }
         val view = FrameLayout(this).apply {
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x33000000, 0x99000000.toInt(), 0xE6000000.toInt()))
+            background = PauseBackdrop.drawable(resources)
             val pad = (56 * density).toInt()
             addView(column, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
                 setMargins(pad, 0, pad, (48 * density).toInt())
@@ -1963,6 +1970,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     private fun openNative() {
+        CrashLog.trace("lecteur natif : ouverture demandée")
         val current = site ?: return
         val wv = webView ?: return
         val stream = client?.stream

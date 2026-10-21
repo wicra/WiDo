@@ -41,9 +41,22 @@ class WiDoApp : Application() {
     }
     val updates by lazy { UpdateManager(this, BuildConfig.GITHUB_REPO) }
 
+    private fun memoryLine() = CrashLog.memoryLine(this)
+
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
+        CrashLog.tracing = settings.detailedLog
+        if (settings.detailedLog) {
+            CrashLog.trace("démarrage : WebView ${runCatching { android.webkit.WebView.getCurrentWebViewPackage()?.versionName }.getOrNull()}, ${memoryLine()}")
+            val sampler = object : Runnable {
+                override fun run() {
+                    if (CrashLog.tracing) CrashLog.trace(memoryLine())
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(this, 30_000)
+                }
+            }
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(sampler, 30_000)
+        }
     }
 
     override fun onTrimMemory(level: Int) {

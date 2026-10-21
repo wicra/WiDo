@@ -163,6 +163,8 @@ fun MenuScreen(
     val rowState = androidx.compose.foundation.lazy.rememberLazyListState()
     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val sitesScroll = rememberScrollState()
+    // Le thème choisi des réglages : ce que rejoint ▼ depuis l'onglet Réglages.
+    val settingsEntry = remember { FocusRequester() }
     // Tutoriel de la télécommande (Réglages → Apparence → Aide).
     var tutorial by remember { mutableStateOf(false) }
     // Déplacer un site : sa place de départ, pour que Retour l'y remette.
@@ -221,7 +223,7 @@ fun MenuScreen(
         // Une vidéo de Reprendre sélectionnée : son image, floutée et assombrie, en fond d'ambiance.
         Backdrop(if (tab == Tab.Continue) focusedWatch ?: watching.firstOrNull() else null)
         Column(Modifier.fillMaxSize()) {
-            TopBar(state, tab, onTab = { tab = it }, onRefresh = vm::refresh)
+            TopBar(state, tab, settingsEntry, onTab = { tab = it }, onRefresh = vm::refresh)
             when (tab) {
                 // La scène en haut, les rangées en bas. Si l'écran est trop petit (bandeau de mise à jour,
                 // Reprendre, épingles…), la page défile au focus au lieu d'écraser les boutons.
@@ -330,7 +332,7 @@ fun MenuScreen(
                     onRemove = { entry -> watchActions = entry },
                     modifier = Modifier.weight(1f),
                 )
-                Tab.Settings -> SettingsPane(settings, lists, vm::updateLists, Modifier.weight(1f), onTutorial = { tutorial = true })
+                Tab.Settings -> SettingsPane(settings, lists, vm::updateLists, Modifier.weight(1f), onTutorial = { tutorial = true }, entry = settingsEntry)
             }
         }
     }
@@ -411,7 +413,7 @@ fun MenuScreen(
 
 /** Le logo à gauche, la pilule d'onglets au centre, l'état et l'heure à droite. */
 @Composable
-private fun TopBar(state: ConfigState, tab: Tab, onTab: (Tab) -> Unit, onRefresh: () -> Unit) {
+private fun TopBar(state: ConfigState, tab: Tab, settingsEntry: FocusRequester, onTab: (Tab) -> Unit, onRefresh: () -> Unit) {
     Box(Modifier.fillMaxWidth().padding(start = 52.dp, end = 40.dp, top = 24.dp, bottom = 8.dp)) {
         Wordmark(Modifier.align(Alignment.CenterStart))
         Row(
@@ -424,7 +426,8 @@ private fun TopBar(state: ConfigState, tab: Tab, onTab: (Tab) -> Unit, onRefresh
         ) {
             TabItem(stringResource(R.string.tab_sites), tab == Tab.Sites) { onTab(Tab.Sites) }
             TabItem(stringResource(R.string.continue_title), tab == Tab.Continue) { onTab(Tab.Continue) }
-            TabItem(stringResource(R.string.action_settings), tab == Tab.Settings) { onTab(Tab.Settings) }
+            // ▼ depuis « Réglages » va au thème choisi (colonne de gauche), pas au premier réglage de la liste.
+            TabItem(stringResource(R.string.action_settings), tab == Tab.Settings, downTo = settingsEntry) { onTab(Tab.Settings) }
         }
         StatusPill(state, onRefresh, Modifier.align(Alignment.CenterEnd))
     }
@@ -438,11 +441,12 @@ fun Wordmark(modifier: Modifier = Modifier) {
 
 /** Un onglet : il s'active dès qu'il reçoit le focus, comme sur les écrans d'accueil des TV. */
 @Composable
-private fun TabItem(label: String, selected: Boolean, onSelect: () -> Unit) {
+private fun TabItem(label: String, selected: Boolean, downTo: FocusRequester? = null, onSelect: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val background by animateColorAsState(if (selected) Color.White else Color.Transparent, label = "tab")
     Box(
         Modifier
+            .focusProperties { if (downTo != null) down = downTo }
             .tvFocusable(
                 PillShape,
                 focusScale = 1.08f,

@@ -2,6 +2,9 @@ package dev.wido.tv.ui
 
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -91,6 +94,8 @@ fun SettingsPane(
     modifier: Modifier = Modifier,
     /** TV : lance le tutoriel interactif de la télécommande. */
     onTutorial: () -> Unit = {},
+    /** Reçoit le focus quand on descend de l'onglet « Réglages » : le thème choisi, pas un réglage. */
+    entry: FocusRequester? = null,
 ) {
     // Les réglages ne sont pas un état Compose : ce compteur force le redessin après chaque changement.
     var version by remember { mutableIntStateOf(0) }
@@ -312,6 +317,15 @@ fun SettingsPane(
                 ConfirmChip(stringResource(R.string.crash_clear), stringResource(R.string.confirm_clear), { changed { dev.wido.tv.CrashLog.clear() } })
             }
         }
+        SettingRow(stringResource(R.string.s_detailed_log)) {
+            Segmented(listOf(on, off), if (settings.detailedLog) 0 else 1) {
+                changed {
+                    settings.detailedLog = it == 0
+                    dev.wido.tv.CrashLog.tracing = settings.detailedLog
+                }
+            }
+        }
+        Text(stringResource(R.string.s_detailed_log_note), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             ConfirmActionButton(
@@ -363,7 +377,12 @@ fun SettingsPane(
     Row(modifier.fillMaxSize().padding(start = 40.dp, end = 32.dp, top = 12.dp)) {
         Column(Modifier.width(250.dp).padding(end = 22.dp, top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             sections.forEachIndexed { index, section ->
-                SectionTab(section, index == selected, Modifier.focusRequester(themeFocus[index]), onEnter = { runCatching { paneFocus.requestFocus() } }) { selected = index }
+                SectionTab(
+                    section,
+                    index == selected,
+                    Modifier.focusRequester(themeFocus[index]).then(if (index == selected && entry != null) Modifier.focusRequester(entry) else Modifier),
+                    onEnter = { runCatching { paneFocus.requestFocus() } },
+                ) { selected = index }
             }
         }
         Box(Modifier.weight(1f).fillMaxSize()) {
@@ -429,7 +448,7 @@ private fun CrashReportDialog(report: String, onDismiss: () -> Unit) {
                         if (!sending && !sent) {
                             sending = true
                             scope.launch {
-                                val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { dev.wido.tv.CrashReporter.send(report) }
+                                val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { dev.wido.tv.CrashReporter.send(dev.wido.tv.CrashLog.report(forSend = true) ?: report) }
                                 sending = false
                                 sent = result == dev.wido.tv.CrashReporter.Result.Sent
                                 android.widget.Toast.makeText(context, if (sent) R.string.crash_send_ok else R.string.crash_send_failed, android.widget.Toast.LENGTH_LONG).show()
@@ -469,16 +488,46 @@ private fun CrashReportDialog(report: String, onDismiss: () -> Unit) {
             if (dev.wido.tv.CrashReporter.canSend) {
                 Text(stringResource(R.string.crash_send_note), color = Palette.TextMuted, fontSize = 12.sp)
             }
-            Text(
-                report.take(3_000),
-                fontSize = 11.sp,
-                lineHeight = 14.sp,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                color = Palette.TextSecondary,
-            )
+            ScrollableReport(report)
             }
         }
     }
+}
+
+/**
+ * Le rapport en entier dans un cadre à hauteur fixe : à la télécommande, ▲ ▼ le font défiler quand il a le
+ * focus, et rendent la main aux boutons une fois en butée.
+ */
+@Composable
+private fun ScrollableReport(report: String) {
+    val scroll = rememberScrollState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var focused by remember { mutableStateOf(false) }
+    Text(
+        report,
+        fontSize = 11.sp,
+        lineHeight = 14.sp,
+        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+        color = Palette.TextSecondary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(300.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .onFocusChanged { focused = it.hasFocus }
+            .border(1.dp, if (focused) Palette.Accent else Color.White.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+            .onPreviewKeyEvent { event ->
+                val down = event.key == androidx.compose.ui.input.key.Key.DirectionDown
+                val up = event.key == androidx.compose.ui.input.key.Key.DirectionUp
+                if (!focused || !(down || up)) return@onPreviewKeyEvent false
+                if (event.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent true
+                if ((down && scroll.value >= scroll.maxValue) || (up && scroll.value <= 0)) return@onPreviewKeyEvent false
+                scope.launch { scroll.animateScrollBy(if (down) 120f else -120f) }
+                true
+            }
+            .focusable()
+            .verticalScroll(scroll)
+            .padding(8.dp),
+    )
 }
 
 /** Ce qu'un QR code lisible tient du rapport (le début : version, appareil, erreur). */

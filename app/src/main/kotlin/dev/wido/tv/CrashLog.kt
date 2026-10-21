@@ -17,22 +17,35 @@ import java.util.Locale
 object CrashLog {
     private const val MAX_CHARS = 6_000
     private const val MAX_EVENTS = 30
+    private const val MAX_TRACE = 400
+    /** Taille maximale d'un rapport envoyé (le relais en refuse au-delà de 8 000 signes). */
+    private const val SEND_MAX = 7_500
 
     private lateinit var dir: File
     private val lastFile get() = File(dir, "last-crash.txt")
     private val eventsFile get() = File(dir, "events.txt")
     private val seenFile get() = File(dir, "seen")
     private val exitsFile get() = File(dir, "exits-checked")
+    private val traceFile get() = File(dir, "trace.txt")
+
+    /** Journal détaillé activé (Réglages → Général) : les gestes et décisions de l'appli sont notés, sans noms de sites. */
+    @Volatile var tracing = false
+
+    private val trace = ArrayDeque<String>()
+    private var flushScheduled = false
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
     fun install(context: Context) {
         dir = File(context.filesDir, "crash").apply { mkdirs() }
         runCatching { readExitReasons(context) }
+        runCatching { traceFile.takeIf { it.exists() }?.readLines()?.takeLast(MAX_TRACE)?.let { synchronized(trace) { trace.addAll(it) } } }
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             runCatching {
                 val trace = error.stackTraceToString().take(MAX_CHARS)
                 lastFile.writeText(header() + "Fil : ${thread.name}\n\n$trace")
                 seenFile.delete()
+                flushTrace()
             }
             previous?.uncaughtException(thread, error)
         }
@@ -124,16 +137,71 @@ object CrashLog {
         }
     }
 
-    /** Le rapport complet, ou null s'il n'y a rien. */
-    fun report(): String? {
+    /**
+     * Note un geste ou une décision de l'appli, si le journal détaillé est activé. Jamais de nom de site ni
+     * d'adresse : seulement ce qui s'est passé (touche, cible du curseur, état du lecteur, mémoire).
+     */
+    fun trace(what: String) {
+        if (!tracing || !::dir.isInitialized) return
+        val line = "${SimpleDateFormat("HH:mm:ss.SSS", Locale.ROOT).format(Date())}  $what"
+        synchronized(trace) {
+            trace.addLast(line)
+            while (trace.size > MAX_TRACE) trace.removeFirst()
+        }
+        if (!flushScheduled) {
+            flushScheduled = true
+            handler.postDelayed({
+                flushScheduled = false
+                kotlin.concurrent.thread { flushTrace() }
+            }, 4_000)
+        }
+    }
+
+    private fun flushTrace() {
+        runCatching {
+            val lines = synchronized(trace) { trace.toList() }
+            if (lines.isNotEmpty()) traceFile.writeText(lines.joinToString("\n"))
+        }
+    }
+
+    /** Mémoire du moment : l'appli (PSS), le tas, ce qui reste à l'appareil. */
+    fun memoryLine(context: Context): String {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val info = android.app.ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+        val pss = runCatching { am.getProcessMemoryInfo(intArrayOf(android.os.Process.myPid()))[0].totalPss / 1024 }.getOrDefault(-1)
+        val rt = Runtime.getRuntime()
+        return "mémoire : appli ${pss} Mo, tas ${(rt.totalMemory() - rt.freeMemory()) / 1_048_576}/${rt.maxMemory() / 1_048_576} Mo, libre ${info.availMem / 1_048_576} Mo" +
+            (if (info.lowMemory) " (FAIBLE)" else "")
+    }
+
+    /**
+     * Le rapport complet, ou null s'il n'y a rien. `forSend` : tient dans la limite d'un envoi (les lignes les
+     * plus récentes du journal détaillé sont gardées).
+     */
+    fun report(forSend: Boolean = false): String? {
         if (!::dir.isInitialized) return null
         val crash = lastFile.takeIf { it.exists() }?.readText()
         val events = eventsFile.takeIf { it.exists() }?.readText()?.takeIf { it.isNotBlank() }
-        if (crash == null && events == null) return null
-        return buildString {
+        val lines = synchronized(trace) { trace.toList() }
+        if (crash == null && events == null && lines.isEmpty()) return null
+        val base = buildString {
             append(crash ?: header())
             if (events != null) append("\n\nDerniers événements :\n").append(events)
         }
+        if (lines.isEmpty()) return base
+        val title = "\n\nJournal détaillé (le plus récent en bas) :\n"
+        if (!forSend) return base + title + lines.joinToString("\n")
+        // Envoi : on garde les lignes les plus récentes qui tiennent.
+        val room = SEND_MAX - base.length - title.length
+        if (room <= 0) return base.take(SEND_MAX)
+        val kept = ArrayDeque<String>()
+        var used = 0
+        for (line in lines.asReversed()) {
+            if (used + line.length + 1 > room) break
+            kept.addFirst(line)
+            used += line.length + 1
+        }
+        return base + title + kept.joinToString("\n")
     }
 
     /** Une erreur que l'utilisateur n'a pas encore vue (pour le signaler une fois au démarrage). */
@@ -148,6 +216,8 @@ object CrashLog {
         lastFile.delete()
         eventsFile.delete()
         seenFile.delete()
+        traceFile.delete()
+        synchronized(trace) { trace.clear() }
     }
 
     private fun stamp(time: Long = System.currentTimeMillis()) = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).format(Date(time))

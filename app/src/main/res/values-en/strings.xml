@@ -488,4 +488,6 @@
     <string name="pair_address">Address: %1$s</string>
     <string name="pair_unknown">If you don\'t recognize this device, refuse.</string>
     <string name="osd_pair_waiting">A device asks to link: pause to answer</string>
+    <string name="s_detailed_log">Detailed log</string>
+    <string name="s_detailed_log_note">Records WiDo\'s gestures and decisions (keys, backs, player, memory), never site names or addresses. It is added to the crash report to help understand a problem.</string>
 </resources>

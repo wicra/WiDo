@@ -85,6 +85,11 @@ class Settings(private val context: Context) {
         get() = state.getString("open_page", null)
         set(v) = state.edit().putString("open_page", v).apply()
 
+    /** Journal détaillé : les gestes et décisions de l'appli sont notés sur l'appareil (sans noms de sites). */
+    var detailedLog: Boolean
+        get() = prefs.getBoolean("detailed_log", false)
+        set(v) = prefs.edit().putBoolean("detailed_log", v).apply()
+
     /** Deux appuis rapides sur Retour dans le lecteur : retour direct aux sites (sinon : reculer de page en page). */
     var doubleBackToSites: Boolean
         get() = prefs.getBoolean("double_back", true)

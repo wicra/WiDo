@@ -488,4 +488,6 @@
     <string name="pair_address">Adresse : %1$s</string>
     <string name="pair_unknown">Si tu ne reconnais pas cet appareil, refuse.</string>
     <string name="osd_pair_waiting">Un appareil demande à se lier : mets en pause pour répondre</string>
+    <string name="s_detailed_log">Journal détaillé</string>
+    <string name="s_detailed_log_note">Enregistre les gestes et décisions de WiDo (touches, retours, lecteur, mémoire), jamais les noms ou adresses de sites. Il s\'ajoute au rapport de plantage pour aider à comprendre un problème.</string>
 </resources>

@@ -2,7 +2,13 @@
 
 ## 0.9.1
 
+### Ajouté
+- **Journal détaillé** (Réglages › Général, désactivé par défaut) : enregistre les gestes et décisions de WiDo (touches, retours, lecteur, mémoire toutes les 30 s), jamais les noms ou adresses de sites. Il s'ajoute au rapport de plantage.
+
 ### Corrigé
+- **Réglages** : ▼ depuis l'onglet « Réglages » arrive sur le thème choisi (colonne de gauche), plus sur le premier réglage.
+- **Écran de pause** : même fond que WiDo, dans le site et dans le lecteur léger.
+- **Rapport de plantage** : le texte à côté du QR code défile avec ▲ ▼ et s'affiche en entier.
 - **Liaison : protection contre les demandes en rafale.** Un appareil du réseau ne peut plus faire défiler les fenêtres de confirmation sur la TV : 2 demandes en attente par adresse, 4 par minute au total, 5 minutes de silence après un refus. La fenêtre montre l'adresse de l'appareil et un nom nettoyé, et ne s'affiche pas par-dessus un film qui joue.
 - Les décisions de liaison récentes ne sont plus effacées en bloc (seules les plus anciennes partent).
 - **Réglages (TV) en deux niveaux** : ▲ ▼ changent de thème, OK ou ▶ entrent dans ses réglages, ◀ ou Retour reviennent à la liste ; aux bords de la liste, le focus ne saute plus vers les onglets du haut.

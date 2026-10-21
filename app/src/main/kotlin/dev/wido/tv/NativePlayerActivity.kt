@@ -144,6 +144,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         player.setMediaItem(item)
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
+                CrashLog.trace("natif : erreur ${error.errorCodeName}")
                 Toast.makeText(this@NativePlayerActivity, R.string.native_failed, Toast.LENGTH_LONG).show()
                 finish()
             }
@@ -164,6 +165,9 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            CrashLog.trace("natif : touche ${KeyEvent.keyCodeToString(code).removePrefix("KEYCODE_")}, lecture=${player.isPlaying}, position=${player.currentPosition / 1000} s")
+        }
         lastInputAt = SystemClock.uptimeMillis()
         // Écran de pause : OK ou lecture relance ; toute autre touche ne fait que le retirer (le volume reste utilisable).
         if (swallowUp == code && event.action == KeyEvent.ACTION_UP) {
@@ -317,6 +321,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     private fun showPauseScreen() {
+        CrashLog.trace("natif : écran de pause demandé")
         if (pauseView != null || panel != null || isFinishing) return
         val paused = !player.playWhenReady && player.playbackState == Player.STATE_READY
         if (!paused) return
@@ -348,10 +353,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             addView(text(getString(R.string.native_pause_hint), 14f, 0x99FFFFFF.toInt(), 600, 18))
         }
         val screen = FrameLayout(this).apply {
-            background = android.graphics.drawable.GradientDrawable(
-                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0x33000000, 0x99000000.toInt(), 0xE6000000.toInt()),
-            )
+            background = PauseBackdrop.drawable(resources)
             val pad = (56 * density).toInt()
             addView(
                 column,
@@ -465,6 +467,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     override fun onPause() {
+        CrashLog.trace("natif : en pause (${CrashLog.memoryLine(this)})")
         if (::player.isInitialized) {
             captureFrame()
             view.removeCallbacks(publish)
