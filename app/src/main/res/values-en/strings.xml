@@ -443,4 +443,10 @@
     <string name="osd_page_reloaded">Page reloaded at %1$s: press OK to resume</string>
     <string name="native_back_site">← Site</string>
     <string name="native_hint">Back: return to the site · ◀ ▶ seek · ▲ ▼ volume</string>
+    <string name="confirm_remove">Confirm: remove</string>
+    <string name="confirm_reset">Confirm reset</string>
+    <string name="confirm_forget">Confirm: forget</string>
+    <string name="confirm_clear">Confirm: clear</string>
+    <string name="move_hint">◀ ▶ to move · OK confirms · Back cancels</string>
+    <string name="home_hint_tv">Hold OK or Menu: site options</string>
 </resources>

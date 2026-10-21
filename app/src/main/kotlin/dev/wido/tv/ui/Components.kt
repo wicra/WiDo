@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -271,6 +272,8 @@ fun DialogFrame(
     onDismiss: () -> Unit,
     width: Dp = 720.dp,
     buttons: @Composable RowScope.() -> Unit = {},
+    /** Faux : la fenêtre place elle-même le focus (sinon il va au premier élément, sur TV). */
+    autoFocus: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val phone = LocalPhone.current
@@ -281,9 +284,18 @@ fun DialogFrame(
         } else {
             Modifier.width(width).heightIn(max = 480.dp)
         }
+        // Sur TV, une fenêtre s'ouvre avec le focus sur son premier élément : le premier appui n'est pas perdu.
+        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+        if (autoFocus && !phone) {
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(80)
+                runCatching { focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Enter) }
+            }
+        }
         Column(
             size
                 .glassPanel(Palette.PanelSolid, elevation = 30.dp)
+                .focusGroup()
                 .padding(horizontal = if (phone) 20.dp else 30.dp, vertical = if (phone) 20.dp else 26.dp),
         ) {
             DialogBody(title, buttons, content = content)
@@ -347,4 +359,53 @@ fun glyphLabel(glyph: Glyph): String? = when (glyph) {
 fun Modifier.describedAs(label: String?): Modifier = if (label == null) this else semantics {
     contentDescription = label
     role = Role.Button
+}
+
+/**
+ * Bouton qui demande confirmation au second appui (pendant 4 s) : un OK de trop n'efface plus rien.
+ * Le libellé devient `confirmLabel` ; sans second appui il revient seul.
+ */
+@Composable
+fun ConfirmActionButton(
+    label: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier,
+    primary: Boolean = false,
+    glyph: Glyph? = null,
+    idleText: Color = Palette.TextPrimary,
+) {
+    var armed by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(armed) {
+        if (armed) {
+            kotlinx.coroutines.delay(4_000)
+            armed = false
+        }
+    }
+    ActionButton(
+        if (armed) confirmLabel else label,
+        { if (armed) { armed = false; onConfirm() } else armed = true },
+        modifier,
+        primary = primary,
+        idleText = if (armed) Palette.Warning else idleText,
+        glyph = if (armed) Glyph.Warning else glyph,
+    )
+}
+
+/** Comme [ConfirmActionButton], en pastille. */
+@Composable
+fun ConfirmChip(label: String, confirmLabel: String, onConfirm: () -> Unit, modifier: Modifier = Modifier, idleText: Color = Color.White.copy(alpha = 0.6f)) {
+    var armed by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(armed) {
+        if (armed) {
+            kotlinx.coroutines.delay(4_000)
+            armed = false
+        }
+    }
+    Chip(
+        if (armed) confirmLabel else label,
+        { if (armed) { armed = false; onConfirm() } else armed = true },
+        modifier,
+        idleText = if (armed) Palette.Warning else idleText,
+    )
 }

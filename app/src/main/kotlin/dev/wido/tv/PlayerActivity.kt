@@ -1206,6 +1206,35 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val reveal = RevealView(this, intent.getIntExtra(EXTRA_COLOR, 0xFF1E5BFF.toInt()))
         overlay.addView(reveal, FrameLayout.LayoutParams(MATCH, MATCH))
         content.alpha = 0f
+        if (intent.getBooleanExtra(EXTRA_TILE, false)) {
+            // Vignette de Reprendre : la vignette elle-même s'agrandit (rectangle aux coins arrondis qui se
+            // redresse) jusqu'à l'écran, sur le fond de l'appli ; pas de disque qui sortirait d'un rectangle.
+            reveal.post {
+                val density = resources.displayMetrics.density
+                val w = reveal.width.toFloat()
+                val h = reveal.height.toFloat()
+                ValueAnimator.ofFloat(0f, 1f).apply {
+                    duration = 620
+                    interpolator = android.view.animation.PathInterpolator(0.35f, 0f, 0.1f, 1f)
+                    addUpdateListener {
+                        val f = it.animatedValue as Float
+                        reveal.setTile(
+                            origin[0] * (1 - f), origin[1] * (1 - f),
+                            origin[2] + (w - origin[2]) * f, origin[3] + (h - origin[3]) * f,
+                            (18 * density) * (1 - f),
+                        )
+                    }
+                    doOnEnd {
+                        shot?.let { overlay.removeView(it) }
+                        snapshot?.recycle()
+                        content.animate().alpha(1f).setDuration(350).start()
+                        reveal.animate().alpha(0f).setDuration(420).withEndAction { overlay.removeView(reveal) }.start()
+                    }
+                    start()
+                }
+            }
+            return
+        }
         site?.let { current ->
             lifecycleScope.launch { (application as WiDoApp).favicons.load(current)?.let { reveal.logo = it.image.asAndroidBitmap() } }
         }
@@ -1295,6 +1324,19 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 invalidate()
             }
 
+        private val tileRect = android.graphics.RectF()
+        private val tilePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF0B0B12.toInt() }
+        private var tileCorner = 0f
+        private var tileMode = false
+
+        /** Ouverture depuis une vignette rectangulaire : un rectangle à coins arrondis qui grandit. */
+        fun setTile(l: Float, t: Float, r: Float, b: Float, corner: Float) {
+            tileMode = true
+            tileRect.set(l, t, r, b)
+            tileCorner = corner
+            invalidate()
+        }
+
         fun set(x: Float, y: Float, r: Float, labelR: Float, angle: Float) {
             cx = x
             cy = y
@@ -1305,6 +1347,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
 
         override fun onDraw(canvas: android.graphics.Canvas) {
+            if (tileMode) {
+                canvas.drawRoundRect(tileRect, tileCorner, tileCorner, tilePaint)
+                return
+            }
             if (radius <= 0) return
             placement.setScale(radius, radius)
             placement.postTranslate(cx, cy)
@@ -2140,6 +2186,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         /** Ouverture depuis l'accueil : position (gauche, haut, droite, bas) et couleur du cercle sélectionné. */
         const val EXTRA_ORIGIN = "origin"
         const val EXTRA_COLOR = "origin_color"
+        const val EXTRA_TILE = "origin_tile"
         private const val AUTO_POLL_MS = 800L
         private const val AUTO_ATTEMPTS = 30
         /** Le bouton plein écran visible du lecteur de la page (au premier plan à cet endroit), en fractions de l'écran. */

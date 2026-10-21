@@ -48,6 +48,7 @@ fun CatalogDialog(
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
 
     DialogFrame(
+        autoFocus = false,
         title = stringResource(R.string.catalog_title),
         onDismiss = onDismiss,
         width = 820.dp,

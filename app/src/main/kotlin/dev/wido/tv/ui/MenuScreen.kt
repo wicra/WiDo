@@ -22,6 +22,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -58,6 +59,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -156,6 +158,13 @@ fun MenuScreen(
     // Le disque tiré du bac (dernier focalisé) : ses voisins s'écartent en vague.
     var rackIndex by remember { mutableIntStateOf(-1) }
     var refocusSites by remember { mutableIntStateOf(0) }
+    // Positions gardées quand on passe par un autre onglet : on retrouve la rangée et la grille où on les a laissées.
+    val rowState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    val sitesScroll = rememberScrollState()
+    // Déplacer un site : sa place de départ, pour que Retour l'y remette.
+    var moveStart by remember { mutableIntStateOf(-1) }
+    val context = LocalContext.current
     fun backToSites() {
         tab = Tab.Sites
         refocusSites++
@@ -166,6 +175,7 @@ fun MenuScreen(
         val id = movingId ?: return@LaunchedEffect
         delay(120)
         runCatching { cardFocus[id]?.requestFocus() }
+        android.widget.Toast.makeText(context, R.string.move_hint, android.widget.Toast.LENGTH_LONG).show()
     }
     androidx.activity.compose.BackHandler(enabled = tab != Tab.Sites && editor == null && actionsFor == null && !showCatalog) {
         UiSound.back()
@@ -208,7 +218,7 @@ fun MenuScreen(
                       runCatching { (currentId?.let { cardFocus[it] } ?: firstCard).requestFocus() }
                   }
                   Column(
-                    Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = viewport),
+                    Modifier.fillMaxWidth().verticalScroll(sitesScroll).heightIn(min = viewport),
                     verticalArrangement = Arrangement.SpaceBetween,
                   ) {
                   Column {
@@ -230,10 +240,22 @@ fun MenuScreen(
                   }
                   Column {
                     LazyRow(
+                        state = rowState,
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.Bottom,
                         contentPadding = PaddingValues(start = 44.dp, end = 52.dp, top = 22.dp),
-                        modifier = Modifier.fillMaxWidth().height(180.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            // Venir d'en haut (onglets, Ouvrir) : le focus tombe sur le dernier disque choisi.
+                            .focusProperties {
+                                enter = {
+                                    val last = currentId
+                                    val visible = rowState.layoutInfo.visibleItemsInfo.any { it.key == last }
+                                    if (last != null && visible) cardFocus[last] ?: FocusRequester.Default else FocusRequester.Default
+                                }
+                            }
+                            .focusGroup(),
                     ) {
                         itemsIndexed(sites, key = { _, it -> it.site.id }) { index, entry ->
                             val focus = cardFocus.getOrPut(entry.site.id) { if (index == 0) firstCard else FocusRequester() }
@@ -245,6 +267,12 @@ fun MenuScreen(
                                 moving = movingId == entry.site.id,
                                 onMove = { delta -> vm.move(entry.site.id, delta) },
                                 onMoveDone = { movingId = null },
+                                onMoveCancel = {
+                                    // Retour : le site retourne à sa place d'avant.
+                                    val now = sites.indexOfFirst { it.site.id == entry.site.id }
+                                    if (moveStart >= 0 && now >= 0 && now != moveStart) vm.move(entry.site.id, moveStart - now)
+                                    movingId = null
+                                },
                                 onFocus = { color ->
                                     currentId = entry.site.id
                                     addFocused = false
@@ -268,13 +296,14 @@ fun MenuScreen(
                             )
                         }
                     }
-                    Footer(update, remember(state) { settings.blockedThisMonth() })
+                    Footer(update, remember(state) { settings.blockedThisMonth() }, hint = stringResource(R.string.home_hint_tv))
                   }
                   }
                 }
                 Tab.Continue -> ContinuePane(
                     entries = watching,
                     sites = sites,
+                    gridState = gridState,
                     onFocus = { entry ->
                         focusedWatch = entry
                         sites.firstOrNull { it.site.id == entry.siteId }?.let { m ->
@@ -294,15 +323,15 @@ fun MenuScreen(
         val siteName = sites.firstOrNull { it.site.id == entry.siteId }?.site?.name ?: Hosts.of(entry.url)?.removePrefix("www.").orEmpty()
         DialogFrame(title = entry.title, onDismiss = { watchActions = null }, width = 560.dp) {
             ActionButton(stringResource(R.string.action_resume), { watchActions = null; onOpenWatch(entry) }, Modifier.fillMaxWidth(), glyph = Glyph.Play)
-            ActionButton(
+            ConfirmActionButton(
                 stringResource(R.string.action_remove),
+                stringResource(R.string.confirm_remove),
                 {
                     vm.removeWatch(entry.url)
                     if (focusedWatch?.url == entry.url) focusedWatch = null
                     watchActions = null
                 },
                 Modifier.fillMaxWidth(),
-                primary = false,
                 glyph = Glyph.Close,
             )
             sites.firstOrNull { it.site.id == entry.siteId }?.let { m ->
@@ -329,7 +358,11 @@ fun MenuScreen(
             local = sites.firstOrNull { it.site.id == site.id }?.local == true,
             pins = pins.filter { it.siteId == site.id },
             onOpen = { actionsFor = null; onOpen(site) },
-            onMove = { actionsFor = null; movingId = site.id },
+            onMove = {
+                actionsFor = null
+                moveStart = sites.indexOfFirst { it.site.id == site.id }
+                movingId = site.id
+            },
             onEdit = { actionsFor = null; editor = Editor.Edit(site) },
             onDelete = { vm.removeSite(site.id); actionsFor = null },
             onRemovePin = vm::removePin,
@@ -576,6 +609,8 @@ internal fun SiteCard(
     moving: Boolean,
     onMove: (Int) -> Unit,
     onMoveDone: () -> Unit,
+    /** Retour pendant un déplacement : annule (par défaut, comme OK). */
+    onMoveCancel: () -> Unit = onMoveDone,
     onFocus: (Color) -> Unit,
     /** Écart avec le disque sélectionné (0 = lui), null si aucun : règle la vague. */
     distance: Int? = null,
@@ -602,7 +637,8 @@ internal fun SiteCard(
             when (native.keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT -> { if (down) onMove(-1); true }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> { if (down) onMove(1); true }
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BACK -> { if (!down) onMoveDone(); true }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { if (!down) onMoveDone(); true }
+                KeyEvent.KEYCODE_BACK -> { if (!down) onMoveCancel(); true }
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> true
                 else -> false
             }
@@ -804,10 +840,15 @@ object LaunchOrigin {
     @Volatile var color: Int = 0xFF1E5BFF.toInt()
         private set
 
-    fun remember(coordinates: androidx.compose.ui.layout.LayoutCoordinates, color: Color) {
+    /** Vrai : une vignette rectangulaire (Reprendre), dont la page s'agrandit en rectangle, pas en disque. */
+    @Volatile var tile: Boolean = false
+        private set
+
+    fun remember(coordinates: androidx.compose.ui.layout.LayoutCoordinates, color: Color, tile: Boolean = false) {
         val r = coordinates.boundsInWindow()
         bounds = android.graphics.Rect(r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt())
         this.color = color.toArgb()
+        this.tile = tile
     }
 }
 
@@ -851,7 +892,7 @@ private fun Backdrop(entry: WatchEntry?) {
 
 /** Une seule ligne discrète : la version à gauche, l'état de la mise à jour à droite. */
 @Composable
-private fun Footer(update: UpdateUi, blocked: Int) {
+private fun Footer(update: UpdateUi, blocked: Int, hint: String = "") {
     val (status, color) = when (update) {
         UpdateUi.Checking -> stringResource(R.string.update_checking) to Palette.TextMuted
         UpdateUi.UpToDate -> stringResource(R.string.update_uptodate) to Palette.TextMuted
@@ -867,6 +908,8 @@ private fun Footer(update: UpdateUi, blocked: Int) {
             Text(stringResource(R.string.stats_total, java.text.NumberFormat.getIntegerInstance().format(blocked)), color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
         }
         Spacer(Modifier.weight(1f))
+        if (hint.isNotEmpty()) Text(hint, color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        if (hint.isNotEmpty() && status.isNotEmpty()) Spacer(Modifier.width(24.dp))
         if (status.isNotEmpty()) Text(status, color = color, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
@@ -885,6 +928,7 @@ internal fun parseColor(hex: String?): Color? = hex?.let {
 private fun ContinuePane(
     entries: List<WatchEntry>,
     sites: List<MenuSite>,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     onFocus: (WatchEntry) -> Unit,
     onOpen: (WatchEntry) -> Unit,
     onRemove: (WatchEntry) -> Unit,
@@ -915,6 +959,7 @@ private fun ContinuePane(
             Text(stringResource(R.string.continue_hint_tv), color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
         }
         androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            state = gridState,
             columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
             contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 22.dp, bottom = 48.dp),
             horizontalArrangement = Arrangement.spacedBy(28.dp),
@@ -952,7 +997,7 @@ private fun WatchTile(entry: WatchEntry, site: Site?, onClick: () -> Unit, onRem
                     menu
                 }
                 .liftEffect(focused, CardShape, focusScale = 1.06f, lift = 22.dp)
-                .onGloballyPositioned { if (focused) LaunchOrigin.remember(it, Palette.Accent) }
+                .onGloballyPositioned { if (focused) LaunchOrigin.remember(it, Palette.Accent, tile = true) }
                 .clip(CardShape)
                 .background(Palette.Glass)
                 .then(if (focused) Modifier.border(3.dp, Color.White, CardShape) else Modifier)

@@ -103,6 +103,7 @@ class MainActivity : ComponentActivity(), RemoteTarget {
         }
         intent.putExtra(PlayerActivity.EXTRA_ORIGIN, intArrayOf(from.left, from.top, from.right, from.bottom))
             .putExtra(PlayerActivity.EXTRA_COLOR, dev.wido.tv.ui.LaunchOrigin.color)
+            .putExtra(PlayerActivity.EXTRA_TILE, dev.wido.tv.ui.LaunchOrigin.tile)
         LaunchSnapshot.capture(this) {
             startActivity(intent)
             @Suppress("DEPRECATION")

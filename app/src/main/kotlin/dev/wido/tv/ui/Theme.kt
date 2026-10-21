@@ -246,6 +246,21 @@ fun Modifier.dpadLongPress(onLongPress: (() -> Unit)?, onClick: () -> Unit): Mod
     }
 }
 
+/**
+ * OK maintenu : l'action se répète (un cran de réglage tous les trois signaux de répétition de la
+ * télécommande). Un appui bref reste un clic normal.
+ */
+fun Modifier.dpadRepeat(onRepeat: () -> Unit): Modifier = onPreviewKeyEvent { e ->
+    val native = e.nativeKeyEvent
+    val ok = native.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || native.keyCode == android.view.KeyEvent.KEYCODE_ENTER
+    if (ok && native.action == android.view.KeyEvent.ACTION_DOWN && native.repeatCount > 0) {
+        if (native.repeatCount % 3 == 0) onRepeat()
+        true
+    } else {
+        false
+    }
+}
+
 private const val LONG_PRESS_MS = 550L
 
 /**

@@ -58,6 +58,7 @@ fun PairPrompt(pending: PairingDesk.Pending, onDecide: (approved: Boolean, level
     LaunchedEffect(pending) { runCatching { guest.requestFocus() } }
     val device = pending.request.device
     DialogFrame(
+        autoFocus = false,
         title = stringResource(R.string.pair_title),
         onDismiss = { onDecide(false, LinkLevel.GUEST) },
         width = 640.dp,
@@ -113,7 +114,7 @@ fun LinkedDevices(peers: List<Peer>, onLevel: (Peer, String) -> Unit, onForget: 
             val mine = stringResource(if (tvSide) R.string.level_mine_phone else R.string.level_mine_screen)
             Chip(mine, { onLevel(peer, LinkLevel.MINE) }, selected = peer.level == LinkLevel.MINE)
             Chip(stringResource(R.string.level_guest), { onLevel(peer, LinkLevel.GUEST) }, selected = peer.level == LinkLevel.GUEST)
-            Chip(stringResource(R.string.link_forget), { onForget(peer) }, idleText = Color.White.copy(alpha = 0.6f))
+            ConfirmChip(stringResource(R.string.link_forget), stringResource(R.string.confirm_forget), { onForget(peer) })
         }
     }
 }

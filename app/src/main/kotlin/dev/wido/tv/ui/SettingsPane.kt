@@ -297,12 +297,17 @@ fun SettingsPane(
                 Text(stringResource(R.string.crash_none), color = Palette.TextSecondary, fontSize = 14.sp)
             } else {
                 Chip(stringResource(R.string.crash_show), { showCrash = true }, glyph = Glyph.Warning)
-                Chip(stringResource(R.string.crash_clear), { changed { dev.wido.tv.CrashLog.clear() } }, idleText = Color.White.copy(alpha = 0.6f))
+                ConfirmChip(stringResource(R.string.crash_clear), stringResource(R.string.confirm_clear), { changed { dev.wido.tv.CrashLog.clear() } })
             }
         }
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            ActionButton(stringResource(R.string.settings_reset), { changed { settings.resetComfort() } }, primary = false, idleText = Color.White.copy(alpha = 0.7f))
+            ConfirmActionButton(
+                stringResource(R.string.settings_reset),
+                stringResource(R.string.confirm_reset),
+                { changed { settings.resetComfort() } },
+                idleText = Color.White.copy(alpha = 0.7f),
+            )
             Text(stringResource(R.string.settings_hint), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
         }
     }
@@ -604,9 +609,10 @@ private fun Segmented(labels: List<String>, selected: Int, onSelect: (Int) -> Un
 /** `◀  valeur  ▶` pour les réglages à nombreuses valeurs : les deux flèches sont de vrais boutons. */
 @Composable
 private fun Stepper(value: String, onStep: (Int) -> Unit) {
-    Chip("◀", { onStep(-1) })
+    // OK maintenu : le réglage défile (zoom de 100 à 200 % sans dix appuis).
+    Chip("◀", { onStep(-1) }, Modifier.dpadRepeat { onStep(-1) })
     Box(Modifier.widthIn(min = 150.dp).padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
         Text(value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, textAlign = TextAlign.Center)
     }
-    Chip("▶", { onStep(1) })
+    Chip("▶", { onStep(1) }, Modifier.dpadRepeat { onStep(1) })
 }

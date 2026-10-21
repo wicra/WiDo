@@ -71,6 +71,7 @@ private fun SharePrompt(from: String, sites: List<SharedSite>, onAccept: (List<S
     val add = remember { FocusRequester() }
     LaunchedEffect(sites) { runCatching { add.requestFocus() } }
     DialogFrame(
+        autoFocus = false,
         title = stringResource(R.string.share_prompt_title),
         onDismiss = onRefuse,
         width = 720.dp,
