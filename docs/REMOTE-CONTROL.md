@@ -14,7 +14,7 @@ En haut, les onglets **Sites** et **Réglages** ([SETTINGS](SETTINGS.md)) : un o
 | Flèches (maintenues) | Déplacement **libre** du curseur, de plus en plus rapide. Au bord de l'écran, la page défile. |
 | **OK** | Clic à la position du curseur. Sur un champ de saisie, le clavier de la TV s'ouvre. |
 | **Retour** | Plein écran vidéo → quitte le plein écran ; sinon page précédente ; sinon retour au menu. |
-| **Retour, deux fois vite** | Retour direct aux sites, d'où qu'on soit dans la page. |
+| **Retour, deux fois vite** | Retour direct aux sites, d'où qu'on soit dans la page (désactivable : Réglages → Général → Double Retour). |
 | **Retour** (appui long) ou **Menu** | **Menu rapide**. |
 | Lecture/pause, ▶, ❚❚ | Agit sur la vidéo de la page (le lecteur du site montre sa propre barre). |
 | Avance / recul rapide | Saute de 10 s (réglable) ; plus loin si la touche est maintenue. |
@@ -33,7 +33,7 @@ WiDo n'ajoute pas de barre de lecture par-dessus celle du site : quand tu avance
 
 Le volume et le zoom ont leur propre indicateur, qui disparaît seul.
 
-**Écran de pause** : une vidéo en pause depuis environ une seconde assombrit la page et affiche son titre, le site, le temps restant et l'heure de fin. **OK** (ou lecture) relance la vidéo ; toute autre touche retire simplement l'écran.
+**Écran de pause** : une vidéo en pause depuis environ une seconde assombrit la page et affiche son titre, le site, le temps restant et l'heure de fin. **OK** (ou lecture) relance la vidéo ; toute autre touche retire simplement l'écran, sans agir en plus (Retour ne quitte pas la page). L'écran n'apparaît pas pendant qu'on utilise la télécommande (choix d'un épisode…).
 
 **Page qui ne s'ouvre pas** : WiDo affiche son propre écran (pas de connexion, site introuvable, site qui ne répond pas) avec **Réessayer**, **Retour** et, pour un site perso dont l'adresse ne répond plus, **Modifier l'adresse**.
 
@@ -65,6 +65,9 @@ Sur une **vidéo**, le menu commence par ses commandes : Lecture/Pause, **Suivan
 - Après une redirection refusée, elle s'affiche en tête du plateau avec **Ouvrir une fois**, **Toujours autoriser** et **Ignorer** (voir [BLOCKING](BLOCKING.md))
 
 ## Lire dans WiDo (lecteur natif)
+
+**Touches du lecteur léger** : barre cachée, **◀ ▶** avancent ou reculent (de plus en plus loin si la touche est maintenue), **▲ ▼** règlent le volume, **OK** affiche la barre, dont les boutons (sous-titres, vitesse…) se parcourent alors aux flèches. **← Site** (en haut à gauche de la barre) ou **Retour** revient à la page, à la même seconde ; la page rechargée attend ton OK pour reprendre.
+
 
 Quand WiDo repère dans la page un flux vidéo qu'il sait lire (HLS `.m3u8`, DASH `.mpd`, fichier `.mp4`/`.webm`), il l'annonce (« Vidéo détectée »). Menu rapide → **▶ Lire dans WiDo** (ou une touche de couleur réglée sur « Lire dans WiDo ») : la vidéo s'ouvre dans le lecteur natif d'Android.
 

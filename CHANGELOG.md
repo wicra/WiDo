@@ -3,6 +3,20 @@
 ## 0.9.1
 
 ### Corrigé
+- **Navigation à la télécommande, reprise de l'audit :**
+  - **Écran de pause** : la touche qui le ferme n'agit plus en plus (Retour ne quitte plus la page) ; il n'apparaît pas pendant qu'on navigue.
+  - **Page qui ne s'ouvre pas** : la touche Retour fait ce que dit le bouton « Retour » (plus de page noire).
+  - **En pause plein écran**, un message explique comment reprendre (OK clique ; Menu → Lecture).
+  - **Lecteur léger** : ◀ ▶ avancent/reculent, ▲ ▼ règlent le volume, un bouton **← Site** ramène à la page, rappel des touches au démarrage et message à la réouverture de la page.
+  - **Double Retour** : réglable (Réglages → Général).
+  - **Avance rapide** : les flèches accélèrent comme les touches média.
+  - **Menu rapide** : toutes les pastilles visibles sur une ou deux lignes (plus de défilement), « Sites » en dernier, l'étiquette de Veille se met à jour, les messages s'affichent au-dessus du menu.
+  - **Touche rouge « Menu »** renommée « Retour aux sites » (elle n'ouvre pas le menu rapide).
+  - **Déplacer un site** : Retour annule (le site retrouve sa place), OK valide ; rappel des touches.
+  - **Confirmation en deux temps** sur TV pour Retirer (Reprendre), Réinitialiser, Oublier un appareil et Effacer le rapport.
+  - **Fenêtres** : le focus est placé sur le premier élément à l'ouverture.
+  - **Onglets** : la rangée de vinyles et la grille de Reprendre gardent leur position ; revenir sur les sites ramène sur le dernier disque choisi.
+  - **Indice** sur l'accueil (OK maintenu ou Menu) ; **OK maintenu** fait défiler les réglages à valeurs multiples (zoom…) ; l'ouverture depuis une vignette de Reprendre agrandit la vignette au lieu d'un disque.
 - **Clés TV d'1 Go : WiDo fermé pendant un film, même avec des listes plus légères** (le rapport montrait 238 Mo, quasi inchangé : ce sont la page du site et son lecteur qui pèsent). Pendant la lecture dans « Lire dans WiDo », la page restait chargée derrière : elle est maintenant **vidée pendant le film** sur ces appareils et rechargée à la bonne seconde au retour. Nouveau réglage **Lecteur léger automatique** (Réglages → Lecture, activé d'office sur les appareils à peu de mémoire) : dès qu'un film de plus de 10 minutes est détecté, WiDo passe seul au lecteur intégré (une seule tentative par page, jamais pour une pub).
 - **Clés TV à peu de mémoire : moins de mémoire pour les listes de blocage.** Les noms de domaine bloqués sont gardés sous forme compacte (environ dix fois moins de place) et les listes sont relues ligne à ligne au lieu d'être chargées d'un bloc ; les listes inutilisées sont libérées. Nouveau réglage **Taille des listes** (Réglages → Blocage) : **Légères** (filtre DNS d'AdGuard et correctifs d'uBlock, sans EasyList, liste française ni filtres d'uBlock : moins de masquage de bandeaux, mêmes domaines de pubs bloqués) ou **Complètes** ; activé d'office sur les appareils à peu de mémoire.
 - **Reprendre restait sur l'épisode précédent.** La position était parfois enregistrée sous la mauvaise page au moment de passer à l'épisode suivant, et un épisode servi par un autre domaine que celui du site n'était pas enregistré du tout. Désormais la position est notée sous la page où la vidéo jouait, juste avant de la quitter, et ces épisodes entrent aussi dans Reprendre.
