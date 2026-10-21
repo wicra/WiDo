@@ -134,6 +134,14 @@ class Settings(private val context: Context) {
 
     // --- Blocage ----------------------------------------------------------------------------
     /**
+     * Lecteur léger automatique : quand un film est détecté, WiDo passe seul au lecteur intégré (bien
+     * moins gourmand que la page du site). Par défaut, activé sur les appareils à peu de mémoire.
+     */
+    var autoNative: Boolean
+        get() = prefs.getBoolean("auto_native", DeviceMemory.isLow(context))
+        set(v) = prefs.edit().putBoolean("auto_native", v).apply()
+
+    /**
      * Listes légères : seulement le filtre DNS d'AdGuard et les correctifs d'uBlock (peu de mémoire), sans
      * EasyList, la liste française ni les filtres d'uBlock. Par défaut, activé sur les appareils à peu de mémoire.
      */

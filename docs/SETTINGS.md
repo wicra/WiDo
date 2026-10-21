@@ -19,6 +19,7 @@ Menu principal → onglet **Réglages**, en haut de l'écran. Les réglages sont
 | Touches rouge, verte, jaune, bleue | Voir la liste ci-dessous | Menu, Recharger, Texte +, Texte − | Raccourcis des touches de couleur. |
 | Ambiance | Bleu / Violet / Ambre / Noir | Bleu | Couleur des halos et de la lumière de l'appli. « Noir » : fond noir pur et lumière très discrète, pour un projecteur dans une pièce sombre. Les sites gardent leur couleur. |
 | Sons de l'interface | Désactivé / Doux / Normal | Normal | TV : un tic au passage du focus, un « toc » à la validation, un claquement de doigts (avec son écho) à l'ouverture d'un site, deux notes au retour. Sons système : ils ne coupent jamais la vidéo. |
+| Lecteur léger automatique | Activé / Désactivé | Activé sur les appareils à peu de mémoire | Un film de plus de 10 minutes détecté dans la page passe seul dans le lecteur intégré (« Lire dans WiDo »), bien moins gourmand ; la page est vidée pendant le film et rechargée au retour. Voir [REMOTE-CONTROL](REMOTE-CONTROL.md). |
 | Taille de l'interface | Normale / Grande / Très grande | Normale | Tout l'accueil, les menus et les messages du lecteur grandissent (projecteur regardé de loin). Le zoom du texte des pages reste à part. |
 | Présentation | Revoir | — | Rejoue les trois écrans du premier lancement (sites, téléphone, gestes). |
 | Au démarrage | Afficher le menu / Rouvrir le dernier site | Afficher le menu | Au lancement depuis l'accueil de la TV. |

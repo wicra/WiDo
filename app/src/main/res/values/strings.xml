@@ -429,4 +429,6 @@
     <string name="s_light_lists">Taille des listes</string>
     <string name="v_lists_full">Complètes</string>
     <string name="v_lists_light">Légères (peu de mémoire)</string>
+    <string name="s_auto_native">Lecteur léger automatique</string>
+    <string name="osd_auto_native">Film détecté : passage au lecteur léger (économise la mémoire de la TV)</string>
 </resources>

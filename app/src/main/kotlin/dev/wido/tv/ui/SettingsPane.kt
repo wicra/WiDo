@@ -141,6 +141,9 @@ fun SettingsPane(
                 changed { settings.osdSeconds = OSDS[it] }
             }
         }
+        SettingRow(stringResource(R.string.s_auto_native)) {
+            Segmented(listOf(on, off), if (settings.autoNative) 0 else 1) { changed { settings.autoNative = it == 0 } }
+        }
         SettingRow(stringResource(R.string.s_auto_fullscreen)) {
             Segmented(listOf(on, off), if (settings.autoFullscreen) 0 else 1) { changed { settings.autoFullscreen = it == 0 } }
         }

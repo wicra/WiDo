@@ -68,6 +68,8 @@ Sur une **vidéo**, le menu commence par ses commandes : Lecture/Pause, **Suivan
 
 Quand WiDo repère dans la page un flux vidéo qu'il sait lire (HLS `.m3u8`, DASH `.mpd`, fichier `.mp4`/`.webm`), il l'annonce (« Vidéo détectée »). Menu rapide → **▶ Lire dans WiDo** (ou une touche de couleur réglée sur « Lire dans WiDo ») : la vidéo s'ouvre dans le lecteur natif d'Android.
 
+**Appareils à peu de mémoire** (clés TV d'1 Go) : la page du site et son lecteur pèsent plus de 300 Mo et Android finit par fermer WiDo pendant un film. Sur ces appareils, WiDo passe **automatiquement** au lecteur intégré dès qu'un film de plus de 10 minutes est détecté (réglage **Lecteur léger automatique**, Réglages → Lecture), vide la page pendant le film et la recharge, à la bonne seconde, quand tu reviens. Une seule tentative par page : si le flux ne se lit pas, WiDo ne boucle pas.
+
 - Décodage matériel, avance instantanée, **vitesse** et **sous-titres** dans les réglages du lecteur (roue dentée), sous-titres grands sur fond noir.
 - **Menu** : cadrage de l'image (adaptée, zoomée pour remplir l'écran, étirée).
 - Reprise à la seconde près, et la vidéo apparaît dans « Reprendre ».

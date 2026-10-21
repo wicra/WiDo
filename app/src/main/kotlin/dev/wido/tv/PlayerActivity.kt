@@ -764,6 +764,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         mediaAt = SystemClock.elapsedRealtime()
         if (backgrounded) BackgroundBridge.update(playbackInfo(state))
         applyAutoStart(state)
+        maybeAutoNative()
         schedulePauseScreen(state)
         if (pauseCursor && !state.paused) {
             pauseCursor = false
@@ -1810,10 +1811,36 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         streamHinted = true
         // Peu de mémoire : le lecteur natif consomme bien moins que la page, il évite les fermetures.
         val app = application as WiDoApp
+        if (settings.autoNative && maybeAutoNative()) return
         osd.showText(getString(if (app.lowMemory) R.string.osd_native_found_low else R.string.osd_native_found))
     }
 
     /** « Lire dans WiDo » : le flux repéré s'ouvre dans le lecteur natif, la page se met en pause. */
+    /** Page déjà confiée au lecteur léger automatiquement (une seule tentative : pas de boucle si le flux ne passe pas). */
+    private var autoNativeTried: String? = null
+
+    /** Page quittée pour le lecteur léger (appareil à peu de mémoire) : elle est rechargée au retour. */
+    private var nativeReturnUrl: String? = null
+    private var nativeStartPosition = 0.0
+
+    /**
+     * Film en cours de lecture dans la page, flux repéré : on passe au lecteur léger, sans que l'utilisateur
+     * ait à ouvrir le menu. Renvoie vrai si le passage est lancé. Pas pour une pub (vidéo courte).
+     */
+    private fun maybeAutoNative(): Boolean {
+        if (!settings.autoNative || nativeReturnUrl != null || client?.stream == null) return false
+        val state = mediaState.value ?: return false
+        val page = webView?.url ?: return false
+        if (state.paused || state.duration < AUTO_NATIVE_MIN_SECONDS || page == autoNativeTried) return false
+        autoNativeTried = page
+        osd.showText(getString(R.string.osd_auto_native), OsdView.Kind.Info)
+        root.postDelayed({
+            val now = mediaState.value
+            if (!isFinishing && nativeReturnUrl == null && now != null && !now.paused && webView?.url == page) openNative()
+        }, 1_800)
+        return true
+    }
+
     private fun openNative() {
         val current = site ?: return
         val wv = webView ?: return
@@ -1826,17 +1853,35 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val start = currentPosition()
         media("pause")
         val cookies = runCatching { android.webkit.CookieManager.getInstance().getCookie(stream.url) }.getOrNull()
+        val lowMemory = (application as WiDoApp).lowMemory
+        val page = wv.url
         nativeLauncher.launch(
             NativePlayerActivity.intent(
                 this, stream, current.id, ResumeUrl.toRemember(current, wv.url), wv.title, pageImage, wv.url, cookies,
                 wv.settings.userAgentString, start,
             ),
         )
+        if (lowMemory && page != null) {
+            // La page (et son lecteur) pèse plus de 300 Mo : on la vide pendant le film, on la rechargera au retour.
+            nativeReturnUrl = page
+            nativeStartPosition = start
+            root.postDelayed({ if (nativeReturnUrl != null) webView?.loadUrl("about:blank") }, 600)
+        }
     }
 
     /** Retour du lecteur natif : la vidéo de la page se cale sur la seconde où on l'a quitté (une seule entrée dans Reprendre). */
     private val nativeLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
         val position = result.data?.getDoubleExtra(NativePlayerActivity.RESULT_POSITION, -1.0) ?: -1.0
+        val back = nativeReturnUrl
+        if (back != null) {
+            // La page avait été vidée : on la recharge à la seconde où le film s'est arrêté, la lecture reste à toi (OK).
+            nativeReturnUrl = null
+            pendingSeek = if (position >= 0) position else nativeStartPosition
+            autoStart = false
+            webView?.loadUrl(back)
+            startResumeSeek()
+            return@registerForActivityResult
+        }
         if (position < 0) return@registerForActivityResult
         mediaState.value?.let {
             mediaState.value = it.copy(time = position, paused = true)
@@ -2083,6 +2128,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val FRAME_EVERY_MS = 90_000L
         private const val PAUSE_SCREEN_MS = 1_200L
         private const val DOUBLE_BACK_MS = 450L
+        /** En dessous (pub, bande-annonce), on ne quitte pas la page pour le lecteur léger. */
+        private const val AUTO_NATIVE_MIN_SECONDS = 600.0
         private const val STATE_URL = "state_url"
         private const val STATE_POSITION = "state_position"
         /** Étiquette du vinyle de l'accueil, rapportée au rayon du disque (50 dp sur 86 dp au focus). */

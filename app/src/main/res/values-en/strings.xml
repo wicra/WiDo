@@ -429,4 +429,6 @@
     <string name="s_light_lists">List size</string>
     <string name="v_lists_full">Full</string>
     <string name="v_lists_light">Light (low memory)</string>
+    <string name="s_auto_native">Light player automatically</string>
+    <string name="osd_auto_native">Movie detected: switching to the light player (saves the TV\'s memory)</string>
 </resources>
