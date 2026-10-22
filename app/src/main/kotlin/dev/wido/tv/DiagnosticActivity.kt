@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -376,6 +377,23 @@ class DiagnosticActivity : ComponentActivity() {
             val size = player.videoSize
             line("Image : ${size.width}×${size.height} · ${"%.1f".format(fps)} images/s affichées · $lost perdues · ${counters?.maxConsecutiveDroppedBufferCount ?: 0} perdues d'affilée au pire")
             line("Rechargements pendant la lecture : $rebuffers")
+            // Les qualités du flux, celles que l'appareil sait lire, et ce que le lecteur a choisi : de quoi dire
+            // pourquoi l'image reste en basse qualité (débit estimé trop bas, décodeur qui refuse un profil…).
+            val variants = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO }
+                .flatMap { group -> (0 until group.length).map { group.getTrackFormat(it) to group.isTrackSupported(it) } }
+                .sortedByDescending { it.first.height }
+            if (variants.isNotEmpty()) {
+                line(
+                    "Qualités du flux : " + variants.joinToString(" · ") { (format, ok) ->
+                        "${format.height}p" + (if (format.bitrate > 0) " ${"%.1f".format(format.bitrate / 1e6)} Mb/s" else "") + if (ok) "" else " (non lisible)"
+                    },
+                )
+                val playable = variants.filter { it.second }.map { it.first.height }
+                val target = playable.filter { it <= 1080 }.maxOrNull() ?: 0
+                if (size.height in 1 until 720 && target >= 720) warn("restée en ${size.height}p alors que le ${target}p est lisible")
+                if (playable.isEmpty()) warn("aucune qualité du flux n'est lisible par les décodeurs")
+            }
+            app.settings.lastBitrate.takeIf { it > 0 }?.let { line("Débit estimé par le lecteur : ${"%.1f".format(it * 4 / 3 / 1e6)} Mb/s") }
             if (frozenSeconds > 0) fail("image figée pendant $frozenSeconds s alors que le son avançait")
             val ratio = if (shown + lost > 0) lost * 100.0 / (shown + lost) else 0.0
             when {

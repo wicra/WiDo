@@ -1,5 +1,10 @@
 # Changelog
 
+## Non publié (test de la 1.0.8)
+
+- **Lecteur léger : montée en qualité plus rapide** (dès 5 s de vidéo d'avance au lieu de 10) : avec les tampons réduits des clés d'1 Go, l'image restait longtemps dans la qualité de départ (512×288 pendant tout le test).
+- **Test complet** : la lecture liste les qualités du flux (et celles que les décodeurs refusent), le débit estimé par le lecteur, et signale une image restée en basse qualité alors qu'une meilleure est lisible.
+
 ## Non publié (suite au test complet)
 
 ### Corrigé
