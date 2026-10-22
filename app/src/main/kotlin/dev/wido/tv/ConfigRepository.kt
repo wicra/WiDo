@@ -120,9 +120,18 @@ class ConfigRepository(private val context: Context, private val settings: Setti
 
     /** Retient où en est une vidéo (lecteur de la page ou lecteur natif). */
     @Synchronized
-    fun recordProgress(siteId: String, url: String, title: String?, image: String?, positionSeconds: Double, durationSeconds: Double) {
+    fun recordProgress(
+        siteId: String,
+        url: String,
+        title: String?,
+        image: String?,
+        positionSeconds: Double,
+        durationSeconds: Double,
+        /** La vidéo enregistrée juste avant dans la même séance sur ce site (épisode précédent), qui cède sa place. */
+        replaces: String? = null,
+    ) {
         val entry = WatchEntry(siteId, url, title.orEmpty(), image, positionSeconds, durationSeconds, System.currentTimeMillis())
-        saveWatching(ContinueWatching.record(_watching.value, entry))
+        saveWatching(ContinueWatching.record(_watching.value, entry, replaces))
     }
 
     @Synchronized

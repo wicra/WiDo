@@ -85,6 +85,16 @@ class Settings(private val context: Context) {
         get() = state.getString("open_page", null)
         set(v) = state.edit().putString("open_page", v).apply()
 
+    /**
+     * Un site est en train de s'ouvrir (lecteur créé, page pas encore affichée). Encore là au démarrage
+     * suivant : l'appli a été arrêtée pendant l'ouverture, l'accueil le dit au lieu de rien expliquer.
+     */
+    var openingSite: Boolean
+        get() = state.getBoolean("opening_site", false)
+        set(v) {
+            state.edit().putBoolean("opening_site", v).commit()
+        }
+
     /** Journal détaillé : les gestes et décisions de l'appli sont notés sur l'appareil (sans noms de sites). */
     var detailedLog: Boolean
         get() = prefs.getBoolean("detailed_log", false)

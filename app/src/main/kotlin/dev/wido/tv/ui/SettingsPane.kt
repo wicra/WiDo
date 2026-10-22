@@ -370,7 +370,7 @@ fun SettingsPane(
         SettingsSection(R.string.sec_general, Glyph.Sites, general),
     )
 
-    if (showCrash) dev.wido.tv.CrashLog.report()?.let { CrashReportDialog(it) { showCrash = false } }
+    if (showCrash) dev.wido.tv.CrashLog.report()?.let { CrashReportDialog(it, onDismiss = { showCrash = false }) }
 
     if (phone) {
         // Téléphone : tous les thèmes à la suite, dans une seule liste.

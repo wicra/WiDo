@@ -104,6 +104,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private val mediaState = mutableStateOf<MediaState?>(null)
     private var passivePoll = false
 
+    /** Création du lecteur, pour mesurer le temps d'ouverture du site. */
+    private var createdAt = 0L
+
     /** État gardé par Android quand il a fermé l'appli en arrière-plan (page et position du moment). */
     private var restored: Bundle? = null
 
@@ -117,6 +120,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         super.onCreate(savedInstanceState)
         restored = savedInstanceState
         settings = (application as WiDoApp).settings
+        createdAt = SystemClock.elapsedRealtime()
+        settings.openingSite = true
+        CrashLog.trace("site : lecteur créé (${CrashLog.memoryLine(this)})")
         if (tv) UiSound.init(this, settings.uiSounds)
         audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -149,6 +155,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             this@PlayerActivity.site = site
             if (site == null) {
                 Toast.makeText(this@PlayerActivity, getString(R.string.player_unknown_site, siteId), Toast.LENGTH_LONG).show()
+                CrashLog.trace("site : introuvable dans la configuration")
                 close("site inconnu")
                 return@launch
             }
@@ -173,6 +180,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                     },
                     onPageVisible = {
                         runOnUiThread {
+                            if (settings.openingSite) {
+                                settings.openingSite = false
+                                CrashLog.trace("site : page affichée en ${SystemClock.elapsedRealtime() - createdAt} ms (${CrashLog.memoryLine(this@PlayerActivity)})")
+                            }
                             hideOverlay()
                             captureMeta()
                             startResumeSeek()
@@ -896,6 +907,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         publishNowPlaying(state)
         if (!state.paused) captureFrame()
         applyPendingSeek(state)
+        rememberProgressWhilePlaying(state)
         // Pas de barre de lecture par-dessus celle du site : seulement le saut demandé (« +30 s »).
         if (!passive) osd.showSeek()
     }
@@ -1497,10 +1509,35 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val state = mediaState.value ?: return
         val url = mediaPage ?: return
         if (state.duration <= 0) return
+        // Un aperçu qui se lance seul (muet) sur la page d'accueil du site n'est pas une vidéo regardée.
+        if (state.volume <= 0f) return
+        // La page n'est pas encore à la bonne seconde (reprise, retour du lecteur léger) : sa position mentirait.
+        if (pendingSeek > 0 || SystemClock.elapsedRealtime() < progressHoldUntil) return
         val page = ResumeUrl.toRemember(current, url)
             ?: url.takeIf { (Hosts.schemeOf(it) == "https" || (Hosts.schemeOf(it) == "http" && current.allowInsecure)) && Hosts.of(it) != null }
             ?: return
-        (application as WiDoApp).repository.recordProgress(current.id, page, mediaTitle ?: webView?.title, pageImage, state.time, state.duration)
+        lastProgressAt = SystemClock.elapsedRealtime()
+        (application as WiDoApp).repository.recordProgress(
+            current.id, page, mediaTitle ?: webView?.title, pageImage, state.time, state.duration,
+            replaces = sessionWatch?.takeIf { it != page },
+        )
+        if (state.time >= dev.wido.core.ContinueWatching.MIN_POSITION && state.duration >= dev.wido.core.ContinueWatching.MIN_DURATION) sessionWatch = page
+    }
+
+    /**
+     * La vidéo que cette séance a mise dans Reprendre : en passant à l'épisode suivant du même site, le nouveau
+     * prend sa place (Reprendre montre où on en est, pas chaque épisode traversé).
+     */
+    private var sessionWatch: String? = null
+    private var lastProgressAt = 0L
+    /** Jusque-là, la position de la page n'est pas fiable (retour du lecteur léger, recherche en cours). */
+    private var progressHoldUntil = 0L
+
+    /** Pendant la lecture, Reprendre est tenu à jour toutes les 30 s : rien n'est perdu si Android ferme WiDo. */
+    private fun rememberProgressWhilePlaying(state: MediaState) {
+        if (state.paused || state.duration <= 0) return
+        if (SystemClock.elapsedRealtime() - lastProgressAt < PROGRESS_SAVE_MS) return
+        rememberProgress()
     }
 
     // --- Télécommande sur téléphone ----------------------------------------------------------
@@ -1609,6 +1646,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private var errorBack: (() -> Unit)? = null
 
     private fun showPageError(code: Int, failed: String) {
+        CrashLog.trace("site : la page ne s'ouvre pas (erreur $code)")
+        settings.openingSite = false
         hideOverlay()
         hidePanel()
         val current = site
@@ -1956,6 +1995,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val page = wv.url
         nativeActive = true
         nativeStartPosition = start
+        // Le lecteur léger enregistre cette page dans Reprendre : c'est la vidéo de la séance.
+        ResumeUrl.toRemember(current, page)?.let { sessionWatch = it }
         nativeLauncher.launch(
             NativePlayerActivity.intent(
                 this, stream, current.id, ResumeUrl.toRemember(current, wv.url), wv.title, pageImage, wv.url, cookies,
@@ -2040,6 +2081,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             return@registerForActivityResult
         }
         if (position < 0) return@registerForActivityResult
+        // Le lecteur léger vient d'enregistrer la bonne position : la page, encore à l'ancienne, ne l'écrase pas.
+        progressHoldUntil = SystemClock.elapsedRealtime() + 8_000
         mediaState.value?.let {
             mediaState.value = it.copy(time = position, paused = true)
             mediaAt = SystemClock.elapsedRealtime()
@@ -2203,6 +2246,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     override fun onDestroy() {
+        // Fermé avant d'afficher la page (Retour pendant le chargement…) : ce n'est pas une ouverture interrompue.
+        if (isFinishing) settings.openingSite = false
         if (nativeActive) NativeHandoff.releasePage = null
         resumeTimers()
         if (backgrounded) BackgroundPlayService.stop(this)
@@ -2265,6 +2310,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val AUTO_POLL_MS = 800L
         private const val AUTO_ATTEMPTS = 30
         private const val PROGRESS_POLL_MS = 10_000L
+        private const val PROGRESS_SAVE_MS = 30_000L
         private const val FOLLOW_POLL_MS = 2_000L
         private const val FRAME_EVERY_MS = 90_000L
         private const val PAUSE_SCREEN_MS = 1_200L

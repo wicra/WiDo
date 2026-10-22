@@ -486,6 +486,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
     // --- Lien avec les autres écrans : télécommande, « En cours sur la TV » ---
 
     private var ticks = 0
+    private var saves = 0
 
     private val publish = object : Runnable {
         override fun run() {
@@ -493,6 +494,8 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             // Toutes les ~45 s de lecture : l'image de la vidéo pour « Reprendre ».
             // Pas sur les clés d'1 Go : la copie de l'image vidéo prend de la mémoire au décodeur (elle se fait en quittant).
             if (player.isPlaying && !(application as WiDoApp).lowMemory && ++ticks % 22 == 0) captureFrame()
+            // Reprendre à jour toutes les 30 s de lecture : rien n'est perdu si Android ferme WiDo pendant le film.
+            if (player.isPlaying && ++saves % 15 == 0) savePosition()
             view.postDelayed(this, PUBLISH_MS)
         }
     }

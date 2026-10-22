@@ -2,6 +2,16 @@
 
 ## Non publié
 
+### Reprendre, revu
+- **Tenu à jour pendant la lecture** (toutes les 30 s, dans la page comme dans le lecteur léger) : plus d'entrée manquante ou en retard quand Android ferme WiDo pendant un film.
+- **Plus d'entrées au hasard** : les vidéos de moins de 3 min (pubs, bandes-annonces) et les aperçus muets qui se lancent seuls sur l'accueil d'un site n'y entrent plus.
+- **Une série, une entrée** : dans une même séance sur un site, l'épisode suivant (même dossier dans l'adresse, ou titre qui commence pareil) prend la place du précédent ; un autre film du même site garde sa propre entrée.
+- Au retour du lecteur léger, la page (encore à l'ancienne seconde) n'écrase plus la position qu'il vient d'enregistrer.
+
+### Ouverture d'un site
+- Si Android ferme WiDo pendant l'ouverture d'un site, l'accueil le dit au redémarrage (au lieu d'un retour muet) et le rapport le note.
+- Journal détaillé : chaque étape de l'ouverture (accueil, lecteur créé, page affichée en N ms ou erreur, mémoire) et la cause de l'arrêt précédent, juste avant le redémarrage.
+
 ### Ajouté
 - **Test complet** (Réglages → Test) : environ une minute pour examiner l'appareil et WiDo de bout en bout (mémoire, réseau et débit, décodeurs vidéo, vraie lecture d'un flux de test dans le lecteur léger avec images perdues et image figée, recherche, réactivité des pages et du curseur, configuration, serveur local). Chaque étape est notée OK / à surveiller / échec et le rapport, propre et complet, se lit à l'écran, s'ouvre sur le téléphone par QR code ou s'envoie au projet.
 - **Écran de veille WiDo** (Réglages → Apparence → Écran de veille) : halos de verre bleu (ou de l'ambiance choisie), heure et date sur une plaque de verre qui change de place chaque minute, à la place de l'arc-en-ciel du système.

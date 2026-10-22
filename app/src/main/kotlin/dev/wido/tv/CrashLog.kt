@@ -37,8 +37,9 @@ object CrashLog {
 
     fun install(context: Context) {
         dir = File(context.filesDir, "crash").apply { mkdirs() }
-        runCatching { readExitReasons(context) }
         runCatching { traceFile.takeIf { it.exists() }?.readLines()?.takeLast(MAX_TRACE)?.let { synchronized(trace) { trace.addAll(it) } } }
+        // Après le journal de la séance précédente : la cause de son arrêt vient juste à la suite.
+        runCatching { readExitReasons(context) }
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             // Mémoire pleine : d'abord une ligne minuscule, la pile complète demande de la place qui manque.
@@ -90,6 +91,8 @@ object CrashLog {
                 (if (exit.pss > 0) " · mémoire ${exit.pss / 1024} Mo" else "") +
                 (exit.description?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
             eventAt(exit.timestamp, line)
+            // Aussi dans le journal détaillé, à sa place juste avant le redémarrage.
+            trace("arrêt précédent : $line")
             if (crashed) {
                 // Trace du plantage natif ou de l'ANR quand Android la fournit.
                 val trace = runCatching { exit.traceInputStream?.bufferedReader()?.use { it.readText() } }.getOrNull()
