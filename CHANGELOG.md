@@ -6,6 +6,7 @@
 - **Journal détaillé** (Réglages › Général, désactivé par défaut) : enregistre les gestes et décisions de WiDo (touches, retours, lecteur, mémoire toutes les 30 s), jamais les noms ou adresses de sites. Il s'ajoute au rapport de plantage.
 
 ### Corrigé
+- **Fermetures sur petite TV** : l'appli peut utiliser un tas mémoire plus grand (`largeHeap`), et une mémoire épuisée est notée en une ligne dans le rapport même quand la pile complète ne peut plus être écrite.
 - **Réglages** : ▼ depuis l'onglet « Réglages » arrive sur le thème choisi (colonne de gauche), plus sur le premier réglage.
 - **Écran de pause** : même fond que WiDo, dans le site et dans le lecteur léger.
 - **Rapport de plantage** : le texte à côté du QR code défile avec ▲ ▼ et s'affiche en entier.

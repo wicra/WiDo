@@ -41,6 +41,10 @@ object CrashLog {
         runCatching { traceFile.takeIf { it.exists() }?.readLines()?.takeLast(MAX_TRACE)?.let { synchronized(trace) { trace.addAll(it) } } }
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            // Mémoire pleine : d'abord une ligne minuscule, la pile complète demande de la place qui manque.
+            if (error is OutOfMemoryError) runCatching {
+                lastFile.writeText("Mémoire de l'appli épuisée (OutOfMemoryError) sur le fil ${thread.name}\n${error.message}\n")
+            }
             runCatching {
                 val trace = error.stackTraceToString().take(MAX_CHARS)
                 lastFile.writeText(header() + "Fil : ${thread.name}\n\n$trace")
