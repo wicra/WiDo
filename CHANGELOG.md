@@ -1,5 +1,12 @@
 # Changelog
 
+## Non publié (test de la 1.0.8)
+
+- **« Masquer un élément » ne revient plus en naviguant sur le site** : le masquage est aussi posé sur l'élément lui-même (un site qui force `display:block !important` l'emportait sur la feuille de style), et l'élément est enregistré sous plusieurs signatures pour être retrouvé sur les autres pages : son sélecteur unique, ses propres classes quand elles suffisent à le désigner, et pour une pub en iframe, les iframes du même domaine tiers (jamais une grande iframe, qui peut être le lecteur vidéo).
+- **Accueil : ▲ vers les onglets arrive sur l'onglet affiché.** Depuis les réglages, on tombait sur « Sites » (l'onglet le plus proche à l'écran), qui s'ouvrait aussitôt ; puis le focus descendait tout seul sur les disques. Il reste maintenant sur l'onglet, le temps de choisir ; il ne redescend sur les disques qu'après Retour (ou double Retour dans un site).
+- **Lecteur léger : montée en qualité plus rapide** (dès 5 s de vidéo d'avance au lieu de 10) : avec les tampons réduits des clés d'1 Go, l'image restait longtemps dans la qualité de départ (512×288 pendant tout le test).
+- **Test complet** : la lecture liste les qualités du flux (et celles que les décodeurs refusent), le débit estimé par le lecteur, et signale une image restée en basse qualité alors qu'une meilleure est lisible.
+
 ## Non publié (suite au test complet)
 
 ### Corrigé

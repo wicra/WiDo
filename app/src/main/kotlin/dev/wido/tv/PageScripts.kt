@@ -120,11 +120,30 @@ internal object PageScripts {
     }
     return sel.length <= 300 ? sel : null;
   }
-  var s = selector(target);
-  if (!s) return null;
+  // Plusieurs signatures du même élément, pour le retrouver sur les autres pages du site, où ses voisins changent :
+  // 1. le sélecteur unique de cette page ; 2. ses propres classes seules, si elles suffisent déjà à le désigner ;
+  // 3. une iframe (pub) : celles du même domaine tiers, où qu'elles soient dans la page.
+  var out = [];
+  function add(sel) { if (sel && sel.length <= 300 && out.indexOf(sel) < 0) out.push(sel); }
+  add(selector(target));
+  var own = part(target);
+  if (own.charAt(0) !== '#' && own.indexOf('.') > 0 && own.indexOf(':nth-of-type') < 0) {
+    try { if (document.querySelectorAll(own).length === 1) add(own); } catch (err) { /* ignoré */ }
+  }
+  var frames = target.tagName === 'IFRAME' ? [target] : Array.prototype.slice.call(target.querySelectorAll('iframe'), 0, 3);
+  frames.forEach(function (f) {
+    // Pas une grande iframe (le lecteur vidéo du site peut être dans la fenêtre qu'on masque) : seulement les pubs.
+    var r = f.getBoundingClientRect();
+    if (r.width * r.height > 0.4 * innerWidth * innerHeight) return;
+    try {
+      var host = new URL(f.src, location.href).hostname;
+      if (host && host !== location.hostname && /^[a-z0-9.-]+$/.test(host)) add('iframe[src*="' + host + '"]');
+    } catch (err) { /* ignoré */ }
+  });
+  if (!out.length) return null;
   target.style.setProperty('display', 'none', 'important');
   document.documentElement.style.overflow = '';
   if (document.body) document.body.style.overflow = '';
-  return s;
+  return JSON.stringify(out);
 }"""
 }

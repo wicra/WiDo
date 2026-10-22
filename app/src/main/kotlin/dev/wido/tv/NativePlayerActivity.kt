@@ -660,7 +660,10 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             val meter = androidx.media3.exoplayer.upstream.DefaultBandwidthMeter.Builder(context)
                 .apply { settings.lastBitrate.takeIf { it > 0 }?.let { setInitialBitrateEstimate(it) } }
                 .build()
-            val selector = DefaultTrackSelector(context).apply {
+            // Montée en qualité dès 5 s d'avance (au lieu de 10) : avec les tampons réduits des clés d'1 Go, la
+            // vidéo restait longtemps dans la qualité de départ.
+            val adaptive = androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection.Factory(5_000, 25_000, 20_000, 0.7f)
+            val selector = DefaultTrackSelector(context, adaptive).apply {
                 if (lowMemory) setParameters(buildUponParameters().setMaxVideoSize(1920, 1080))
             }
             val player = ExoPlayer.Builder(context, renderers)

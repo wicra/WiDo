@@ -1133,14 +1133,18 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val fx = cursor.px / wv.width
         val fy = cursor.py / wv.height
         wv.evaluateJavascript("(${PageScripts.HIDE})($fx,$fy)") { raw ->
-            val selector = unquote(raw)
-            if (selector == null) {
+            // Plusieurs signatures du même élément (voir PageScripts.HIDE), pour le retrouver sur les autres pages.
+            val selectors = unquote(raw)?.let { text ->
+                runCatching { org.json.JSONArray(text).let { a -> (0 until a.length()).map { a.getString(it) } } }.getOrNull()
+            }.orEmpty().filter { it.isNotBlank() }
+            if (selectors.isEmpty()) {
                 osd.showText(getString(R.string.osd_pick_nothing), OsdView.Kind.Warning)
             } else {
-                (application as WiDoApp).repository.addHide(current.id, selector)
-                CrashLog.trace("site : élément masqué (${selector.length} signes)")
+                val repository = (application as WiDoApp).repository
+                selectors.forEach { repository.addHide(current.id, it) }
+                CrashLog.trace("site : élément masqué (${selectors.size} signatures)")
                 // Masqué tout de suite sur les pages suivantes de cette séance (pas seulement à la prochaine ouverture).
-                val script = injector?.addHide(selector).orEmpty()
+                val script = injector?.addHides(selectors).orEmpty()
                 if (script.isNotEmpty() && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
                     runCatching { WebViewCompat.addDocumentStartJavaScript(wv, "if (window.top === window) {\n$script\n}", setOf("*")) }
                 }
