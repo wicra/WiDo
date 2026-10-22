@@ -45,8 +45,9 @@ class WiDoApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        CrashLog.install(this)
+        // Journal détaillé actif avant l'installation : la cause de l'arrêt précédent y est aussi notée.
         CrashLog.tracing = settings.detailedLog
+        CrashLog.install(this)
         if (settings.detailedLog) {
             CrashLog.trace("démarrage : WebView ${runCatching { android.webkit.WebView.getCurrentWebViewPackage()?.versionName }.getOrNull()}, ${memoryLine()}")
             val sampler = object : Runnable {

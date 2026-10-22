@@ -152,11 +152,14 @@ data class WatchEntry(
 
 /**
  * « Reprendre » : les dernières vidéos regardées, tous sites confondus. Une vidéo à peine commencée
- * (moins de 10 s) n'y entre pas ; une vidéo finie (moins de 30 s restantes) en sort.
+ * (moins de 10 s) n'y entre pas, ni une vidéo courte (pub, bande-annonce, aperçu qui se lance seul) ;
+ * une vidéo finie (moins de 30 s restantes) en sort.
  */
 object ContinueWatching {
     const val MAX = 12
     const val MIN_POSITION = 10.0
+    /** En dessous (pub, bande-annonce, aperçu), une vidéo n'a rien à faire dans Reprendre. */
+    const val MIN_DURATION = 180.0
     const val END_MARGIN = 30.0
     const val MAX_TITLE = 80
 
@@ -203,11 +206,17 @@ object ContinueWatching {
         return base.substring(0, q) + (if (kept.isEmpty()) "" else "?" + kept.joinToString("&")) + fragment
     }
 
-    /** Met à jour la liste avec la position d'une vidéo (la plus récente en tête). */
-    fun record(entries: List<WatchEntry>, raw: WatchEntry): List<WatchEntry> {
+    /**
+     * Met à jour la liste avec la position d'une vidéo (la plus récente en tête). `replaces` : la vidéo que
+     * cette séance de navigation avait enregistrée juste avant sur le même site (épisode précédent) ; elle
+     * cède sa place, pour que Reprendre montre où on en est, pas chaque étape du chemin.
+     */
+    fun record(entries: List<WatchEntry>, raw: WatchEntry, replaces: String? = null): List<WatchEntry> {
         if (!valid(raw.url)) return entries
+        if (raw.duration > 0 && raw.duration < MIN_DURATION) return entries
         val entry = raw.copy(url = canonical(raw.url))
-        val others = entries.filterNot { it.url == entry.url }
+        val replaced = replaces?.let(::canonical)?.takeIf { it != entry.url }
+        val others = entries.filterNot { it.url == entry.url || (it.url == replaced && it.siteId == entry.siteId && sameSeries(it, entry)) }
         val finished = entry.duration > 0 && entry.position > entry.duration - END_MARGIN
         if (finished) return others
         if (entry.position < MIN_POSITION) return entries
@@ -215,6 +224,21 @@ object ContinueWatching {
         // YouTube : la miniature se déduit de la vidéo (l'image de la page peut être celle de la vidéo précédente).
         val image = youtubeThumbnail(entry.url) ?: entry.image?.takeIf { Hosts.schemeOf(it) == "https" }
         return (listOf(entry.copy(title = title, image = image)) + others).take(MAX)
+    }
+
+    /**
+     * Deux vidéos de la même série (épisodes) : même dossier dans l'adresse (`/serie/ep1`, `/serie/ep2`) ou
+     * titres qui commencent pareil (« Ma série – Épisode 1 », « Ma série – Épisode 2 »). Deux films différents
+     * du même site ne le sont pas : chacun garde sa place dans Reprendre.
+     */
+    fun sameSeries(a: WatchEntry, b: WatchEntry): Boolean {
+        fun folder(url: String) = runCatching { URI(url).path }.getOrNull().orEmpty().trimEnd('/').substringBeforeLast('/', "")
+        val fa = folder(a.url)
+        if (fa.isNotEmpty() && fa == folder(b.url) && Hosts.of(a.url) == Hosts.of(b.url)) return true
+        val ta = a.title.trim().lowercase()
+        val tb = b.title.trim().lowercase()
+        val common = ta.commonPrefixWith(tb).trimEnd().length
+        return common >= 8 && common >= minOf(ta.length, tb.length) * 0.4
     }
 
     fun remove(entries: List<WatchEntry>, url: String): List<WatchEntry> = canonical(url).let { key -> entries.filterNot { it.url == key } }

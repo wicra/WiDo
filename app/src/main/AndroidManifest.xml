@@ -77,6 +77,24 @@
             android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation|smallestScreenSize|screenLayout|uiMode"
             android:screenOrientation="sensorLandscape" />
 
+        <!-- Réglages → Test : test complet de l'appareil et de WiDo, avec rapport. -->
+        <activity
+            android:name=".DiagnosticActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation|smallestScreenSize|screenLayout|uiMode" />
+
+        <!-- Écran de veille WiDo (Android → Écran de veille), aux couleurs de l'appli. -->
+        <service
+            android:name=".WiDoDream"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
         <!-- Téléphone : la TV qui lit une vidéo, pilotée depuis une notification. -->
         <service
             android:name=".TvRemoteService"

@@ -45,6 +45,13 @@ class MainActivity : ComponentActivity(), RemoteTarget {
         if (savedInstanceState == null && CrashLog.hasUnseenCrash()) {
             CrashLog.markSeen()
             android.widget.Toast.makeText(this, R.string.crash_toast, android.widget.Toast.LENGTH_LONG).show()
+        } else if (savedInstanceState == null && settings.openingSite) {
+            // Arrêtée pendant l'ouverture d'un site (souvent la mémoire) : on le dit, au lieu d'un retour muet à l'accueil.
+            android.widget.Toast.makeText(this, R.string.open_interrupted, android.widget.Toast.LENGTH_LONG).show()
+        }
+        if (savedInstanceState == null && settings.openingSite) {
+            settings.openingSite = false
+            CrashLog.event("Ouverture d'un site interrompue : WiDo s'est arrêté avant l'affichage de la page")
         }
         if (app.isTv) UiSound.init(this, settings.uiSounds)
         if (app.isTv && !launched && savedInstanceState == null && intent.action == Intent.ACTION_MAIN && settings.startupLastSite) {
@@ -95,6 +102,7 @@ class MainActivity : ComponentActivity(), RemoteTarget {
      * agrandit le cercle sélectionné jusqu'à remplir l'écran, sur le fond de l'appli.
      */
     private fun openPlayer(intent: Intent) {
+        CrashLog.trace("accueil : ouverture d'un site (${CrashLog.memoryLine(this)})")
         val from = if (app.isTv) dev.wido.tv.ui.LaunchOrigin.bounds else null
         if (app.isTv) UiSound.open()
         if (from == null) {
@@ -136,9 +144,12 @@ class MainActivity : ComponentActivity(), RemoteTarget {
         super.onStop()
     }
 
+    private val debounce = KeyDebounce()
+
     /** Téléphone, onglet TV affiché : les touches de volume règlent le son de la TV. */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
+        if (app.isTv && debounce.isBounce(event)) return true
         if (!app.isTv && app.link.volumeToTv && app.link.selectedOnline &&
             (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN)
         ) {

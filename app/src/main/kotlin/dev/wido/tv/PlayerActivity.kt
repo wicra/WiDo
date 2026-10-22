@@ -104,6 +104,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private val mediaState = mutableStateOf<MediaState?>(null)
     private var passivePoll = false
 
+    /** Création du lecteur, pour mesurer le temps d'ouverture du site. */
+    private var createdAt = 0L
+
     /** État gardé par Android quand il a fermé l'appli en arrière-plan (page et position du moment). */
     private var restored: Bundle? = null
 
@@ -117,6 +120,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         super.onCreate(savedInstanceState)
         restored = savedInstanceState
         settings = (application as WiDoApp).settings
+        createdAt = SystemClock.elapsedRealtime()
+        settings.openingSite = true
+        CrashLog.trace("site : lecteur créé (${CrashLog.memoryLine(this)})")
         if (tv) UiSound.init(this, settings.uiSounds)
         audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -149,6 +155,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             this@PlayerActivity.site = site
             if (site == null) {
                 Toast.makeText(this@PlayerActivity, getString(R.string.player_unknown_site, siteId), Toast.LENGTH_LONG).show()
+                CrashLog.trace("site : introuvable dans la configuration")
                 close("site inconnu")
                 return@launch
             }
@@ -173,6 +180,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                     },
                     onPageVisible = {
                         runOnUiThread {
+                            if (settings.openingSite) {
+                                settings.openingSite = false
+                                CrashLog.trace("site : page affichée en ${SystemClock.elapsedRealtime() - createdAt} ms (${CrashLog.memoryLine(this@PlayerActivity)})")
+                            }
                             hideOverlay()
                             captureMeta()
                             startResumeSeek()
@@ -184,7 +195,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                         // On quitte la page (épisode suivant…) : sa position est enregistrée avant d'être oubliée.
                         runOnUiThread { rememberProgress() }
                         cinema = false
-                        runOnUiThread { hidePauseScreen() }
+                        runOnUiThread {
+                            hidePauseScreen()
+                            forgetSnapAhead()
+                        }
                         bridge?.reset()
                         mediaState.value = null
                         streamHinted = false
@@ -272,7 +286,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
         injector?.includeInternal = !bridged
         // Téléphone, lecture en arrière-plan : la page se croit toujours visible (sinon beaucoup de sites coupent la vidéo).
-        if (documentStart && !tv && settings.backgroundPlay) WebViewCompat.addDocumentStartJavaScript(wv, KEEP_VISIBLE_SCRIPT, setOf("*"))
+        if (documentStart && !tv && settings.backgroundPlay) WebViewCompat.addDocumentStartJavaScript(wv, PageScripts.KEEP_VISIBLE, setOf("*"))
         // Protections (masquage, YouTube) avant le moindre script de la page, quand la WebView le permet.
         val early = injector?.early.orEmpty()
         if (documentStart && early.isNotBlank()) {
@@ -371,8 +385,11 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     // --- Télécommande -----------------------------------------------------------------------
 
+    private val debounce = KeyDebounce()
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (webView == null) return super.dispatchKeyEvent(event)
+        if (tv && debounce.isBounce(event)) return true
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             CrashLog.trace("site : touche ${KeyEvent.keyCodeToString(event.keyCode).removePrefix("KEYCODE_")}, curseur=$cursorMode, cinéma=$cinema")
         }
@@ -397,7 +414,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             when (code) {
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY -> {
                     swallowUp = code
-                    media("play")
+                    playMedia()
                     return true
                 }
                 KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> Unit
@@ -603,6 +620,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         if (settings.snapNavigation && event.repeatCount == 0 && customView == null) {
             snap(dirX, dirY)
         } else {
+            snapQueue.clear()
             freeMove(event.repeatCount, dirX, dirY)
         }
         return true
@@ -655,10 +673,33 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
     }
 
+    /** Une demande au curseur aimanté est en cours (la page répond en quelques dizaines de ms, plus sur une clé lente). */
+    private var snapPending = false
+    /** Flèches appuyées pendant ce temps : jouées dans l'ordre à la réponse, au lieu de partir de l'ancienne position. */
+    private val snapQueue = ArrayDeque<Pair<Int, Int>>()
+    private var snapAt = 0L
+
+    /**
+     * Cibles suivantes calculées par la page avec sa dernière réponse (même règle que [snap]), depuis la cible
+     * où se trouve le curseur : le prochain appui y va tout de suite, la page confirme ensuite. Valables tant
+     * que le curseur, la page et son défilement n'ont pas bougé.
+     */
+    private class SnapAhead(val x: Float, val y: Float, val scrollY: Int, val at: Long, val next: Map<String, Pair<Float, Float>>)
+    private var snapAhead: SnapAhead? = null
+
+    private fun forgetSnapAhead() {
+        snapAhead = null
+    }
+
     /** Demande à la page le lien ou bouton le plus naturel dans cette direction ; sinon déplacement libre. */
     private fun snap(dirX: Int, dirY: Int) {
         val wv = webView ?: return
         if (wv.width == 0 || wv.height == 0) return
+        // Une réponse qui ne vient pas (page qui se recharge) ne bloque pas le curseur plus d'un instant.
+        if (snapPending && SystemClock.uptimeMillis() - snapAt < SNAP_TIMEOUT_MS) {
+            if (snapQueue.size < SNAP_QUEUE) snapQueue.addLast(dirX to dirY)
+            return
+        }
         val dir = when {
             dirX < 0 -> "left"
             dirX > 0 -> "right"
@@ -667,17 +708,52 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
         val fx = cursor.px / wv.width
         val fy = cursor.py / wv.height
+        // Cible déjà connue : le curseur y va sans attendre ; la réponse de la page la confirme (ou la corrige).
+        val ahead = snapAhead?.takeIf {
+            SystemClock.uptimeMillis() - it.at < SNAP_AHEAD_MS && wv.scrollY == it.scrollY &&
+                kotlin.math.abs(it.x - cursor.px) < 2f && kotlin.math.abs(it.y - cursor.py) < 2f
+        }?.next?.get(dir)
+        snapAhead = null
+        if (ahead != null) cursor.moveTo(ahead.first * wv.width, ahead.second * wv.height)
+        snapPending = true
+        snapAt = SystemClock.uptimeMillis()
         wv.evaluateJavascript("window.__widoSnap?window.__widoSnap('$dir',$fx,$fy):null") { raw ->
-            val target = parseSnapTarget(raw)
-            if (target != null) {
-                cursor.moveTo(target.first * wv.width, target.second * wv.height)
+            snapPending = false
+            val result = parseSnap(raw)
+            if (result != null) {
+                val x = result.first.first * wv.width
+                val y = result.first.second * wv.height
+                // Déjà dessus (cible annoncée) : rien ne bouge ; sinon (page changée entre-temps), le curseur se corrige.
+                if (kotlin.math.abs(cursor.px - x) > 2f || kotlin.math.abs(cursor.py - y) > 2f) cursor.moveTo(x, y)
+                snapAhead = SnapAhead(cursor.px, cursor.py, wv.scrollY, SystemClock.uptimeMillis(), result.second)
+            } else if (ahead != null) {
+                // La cible annoncée n'existe plus : retour au point de départ, puis le comportement habituel.
+                cursor.moveTo(fx * wv.width, fy * wv.height)
+                if (dirY != 0) scrollUnderCursor(dirY) else freeMove(0, dirX, dirY)
             } else if (dirY != 0) {
                 // Rien dans cette direction : on défile (la fenêtre surgissante ou la page), comme au doigt.
                 scrollUnderCursor(dirY)
             } else {
                 freeMove(0, dirX, dirY)
             }
+            snapQueue.removeFirstOrNull()?.let { (x, y) -> snap(x, y) }
         }
+    }
+
+    /** Réponse de `__widoSnap` : la cible (fractions de l'écran) et les cibles suivantes par direction. */
+    private fun parseSnap(raw: String?): Pair<Pair<Float, Float>, Map<String, Pair<Float, Float>>>? {
+        val text = unquote(raw) ?: return null
+        return runCatching {
+            val o = JSONObject(text)
+            val next = o.optJSONObject("next")
+            val ahead = buildMap {
+                next?.keys()?.forEach { key ->
+                    val p = next.optJSONArray(key) ?: return@forEach
+                    put(key, p.getDouble(0).toFloat() to p.getDouble(1).toFloat())
+                }
+            }
+            (o.getDouble("x").toFloat() to o.getDouble("y").toFloat()) to ahead
+        }.getOrNull()
     }
 
     private fun parseSnapTarget(raw: String?): Pair<Float, Float>? {
@@ -701,6 +777,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             KeyEvent.ACTION_UP -> {
                 cursor.pressedState = false
                 sendTouch(target, MotionEvent.ACTION_UP)
+                // Un clic peut tout changer dans la page (menu, onglet) : les cibles annoncées sont oubliées.
+                forgetSnapAhead()
             }
         }
         cursor.wake()
@@ -724,11 +802,11 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private fun mediaKey(keyCode: Int, repeat: Int) {
         val seek = settings.seekSeconds.toDouble()
         when (keyCode) {
-            KeyEvent.KEYCODE_MEDIA_PLAY -> media("play")
+            KeyEvent.KEYCODE_MEDIA_PLAY -> playMedia()
             KeyEvent.KEYCODE_MEDIA_PAUSE -> media("pause")
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> seekBy(seek * (1 + minOf(repeat, 4)))
             KeyEvent.KEYCODE_MEDIA_REWIND -> seekBy(-seek * (1 + minOf(repeat, 4)))
-            else -> if (repeat == 0) media("toggle")
+            else -> if (repeat == 0) toggleMedia()
         }
     }
 
@@ -738,7 +816,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(-seek * (1 + minOf(event.repeatCount / 4, 4)))
             KeyEvent.KEYCODE_DPAD_RIGHT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(seek * (1 + minOf(event.repeatCount / 4, 4)))
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) media("toggle")
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) toggleMedia()
             else -> return false
         }
         return true
@@ -754,7 +832,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                 // Curseur pas encore sorti : OK relance simplement la vidéo.
                 if (cursor.visibility == View.VISIBLE) return tap(event)
-                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) media("toggle")
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) toggleMedia()
                 return true
             }
             else -> return false
@@ -829,6 +907,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         publishNowPlaying(state)
         if (!state.paused) captureFrame()
         applyPendingSeek(state)
+        rememberProgressWhilePlaying(state)
         // Pas de barre de lecture par-dessus celle du site : seulement le saut demandé (« +30 s »).
         if (!passive) osd.showSeek()
     }
@@ -864,7 +943,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         if (panelView != null || panelPending) return
         val wv = webView ?: return buildPanel(hasNext = false)
         panelPending = true
-        wv.evaluateJavascript("($NEXT_SCRIPT)(false)") { raw ->
+        wv.evaluateJavascript("(${PageScripts.NEXT})(false)") { raw ->
             panelPending = false
             buildPanel(hasNext = raw == "true")
         }
@@ -912,7 +991,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val actions = if (media != null) {
             listOfNotNull(
                 toTv,
-                action(getString(if (media.paused) R.string.tile_play else R.string.tile_pause), if (media.paused) Glyph.Play else Glyph.Pause) { media("toggle") },
+                action(getString(if (media.paused) R.string.tile_play else R.string.tile_pause), if (media.paused) Glyph.Play else Glyph.Pause) { toggleMedia() },
                 next,
                 native,
                 action(getString(R.string.tile_restart), Glyph.Restart) { cancelSeekGuard(); mediaJson(JSONObject().put("cmd", "seekTo").put("to", 0).toString()) },
@@ -968,7 +1047,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     /** « Épisode suivant » : clique le bouton de la page qui mène à l'épisode suivant. */
     private fun nextEpisode() {
-        webView?.evaluateJavascript("($NEXT_SCRIPT)(true)") { raw ->
+        webView?.evaluateJavascript("(${PageScripts.NEXT})(true)") { raw ->
             osd.showText(getString(if (raw == "true") R.string.osd_next_episode else R.string.osd_next_none), if (raw == "true") OsdView.Kind.Success else OsdView.Kind.Warning)
         }
     }
@@ -1053,7 +1132,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         if (wv.width == 0 || wv.height == 0) return
         val fx = cursor.px / wv.width
         val fy = cursor.py / wv.height
-        wv.evaluateJavascript("($HIDE_SCRIPT)($fx,$fy)") { raw ->
+        wv.evaluateJavascript("(${PageScripts.HIDE})($fx,$fy)") { raw ->
             val selector = unquote(raw)
             if (selector == null) {
                 osd.showText(getString(R.string.osd_pick_nothing), OsdView.Kind.Warning)
@@ -1323,111 +1402,6 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
     }
 
-    /**
-     * Le vinyle de l'ouverture : disque noir, sillons, reflets qui tournent, anneau à la couleur du site
-     * et étiquette blanche avec le logo, comme sur l'accueil. Dessiné directement (fluide sur une clé TV).
-     */
-    private class RevealView(context: Context, color: Int) : View(context) {
-        // Dégradés créés une seule fois (rayon 1, centre 0,0), placés à chaque image par une matrice :
-        // aucune allocation pendant l'animation.
-        private val placement = android.graphics.Matrix()
-        private val discShader = android.graphics.RadialGradient(
-            0f, 0f, 1f, intArrayOf(0xFF1E1E24.toInt(), 0xFF0B0B0E.toInt()), null, android.graphics.Shader.TileMode.CLAMP,
-        )
-        private val sheenShader = android.graphics.SweepGradient(
-            0f, 0f,
-            intArrayOf(0, 0x26FFFFFF, 0, 0, 0x26FFFFFF, 0, 0),
-            floatArrayOf(0f, 0.07f, 0.11f, 0.5f, 0.57f, 0.61f, 1f),
-        )
-        private val disc = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { shader = discShader }
-        private val groove = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            style = android.graphics.Paint.Style.STROKE
-            this.color = Color.WHITE
-            strokeWidth = 1.5f
-        }
-        private val sheen = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { shader = sheenShader }
-        private val ring = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            style = android.graphics.Paint.Style.STROKE
-            this.color = color
-        }
-        private val label = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = 0xF7FFFFFF.toInt() }
-        private val picture = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG)
-        private val dest = android.graphics.RectF()
-        private var cx = 0f
-        private var cy = 0f
-        private var radius = 0f
-        private var labelRadius = 0f
-        private var spin = 0f
-
-        /** Opacité du logo (il s'efface pendant l'ouverture). */
-        var logoAlpha = 1f
-
-        /** Logo du site sur l'étiquette (dès qu'il est chargé). */
-        var logo: android.graphics.Bitmap? = null
-            set(v) {
-                field = v
-                invalidate()
-            }
-
-        private val tileRect = android.graphics.RectF()
-        private val tilePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = 0xFF0B0B12.toInt() }
-        private var tileCorner = 0f
-        private var tileMode = false
-
-        /** Ouverture depuis une vignette rectangulaire : un rectangle à coins arrondis qui grandit. */
-        fun setTile(l: Float, t: Float, r: Float, b: Float, corner: Float) {
-            tileMode = true
-            tileRect.set(l, t, r, b)
-            tileCorner = corner
-            invalidate()
-        }
-
-        fun set(x: Float, y: Float, r: Float, labelR: Float, angle: Float) {
-            cx = x
-            cy = y
-            radius = r
-            labelRadius = labelR
-            spin = angle
-            invalidate()
-        }
-
-        override fun onDraw(canvas: android.graphics.Canvas) {
-            if (tileMode) {
-                canvas.drawRoundRect(tileRect, tileCorner, tileCorner, tilePaint)
-                return
-            }
-            if (radius <= 0) return
-            placement.setScale(radius, radius)
-            placement.postTranslate(cx, cy)
-            discShader.setLocalMatrix(placement)
-            canvas.drawCircle(cx, cy, radius, disc)
-            // Sillons : de l'anneau au bord, un trait fin tous les 14 px environ.
-            val inner = labelRadius * 1.12f
-            val outer = radius * 0.95f
-            if (outer > inner) {
-                val count = ((outer - inner) / 14f).toInt().coerceIn(4, 40)
-                for (i in 0..count) {
-                    groove.alpha = if (i % 2 == 0) 0x2A else 0x14
-                    canvas.drawCircle(cx, cy, inner + (outer - inner) * i / count, groove)
-                }
-            }
-            placement.setRotate(spin)
-            placement.postTranslate(cx, cy)
-            sheenShader.setLocalMatrix(placement)
-            canvas.drawCircle(cx, cy, radius * 0.95f, sheen)
-            ring.strokeWidth = maxOf(3f, labelRadius * 0.06f)
-            canvas.drawCircle(cx, cy, labelRadius * 1.06f, ring)
-            canvas.drawCircle(cx, cy, labelRadius, label)
-            logo?.let { bitmap ->
-                val half = labelRadius * 0.62f
-                val ratio = bitmap.height.toFloat() / bitmap.width.coerceAtLeast(1)
-                dest.set(cx - half, cy - half * ratio, cx + half, cy + half * ratio)
-                picture.alpha = (logoAlpha * 255).toInt()
-                if (picture.alpha > 0) canvas.drawBitmap(bitmap, null, dest, picture)
-            }
-        }
-    }
-
     /** Ferme le lecteur en notant pourquoi (fil d'événements du rapport de plantage). */
     private fun close(why: String) {
         CrashLog.event("Lecteur fermé : $why")
@@ -1535,10 +1509,35 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val state = mediaState.value ?: return
         val url = mediaPage ?: return
         if (state.duration <= 0) return
+        // Un aperçu qui se lance seul (muet) sur la page d'accueil du site n'est pas une vidéo regardée.
+        if (state.volume <= 0f) return
+        // La page n'est pas encore à la bonne seconde (reprise, retour du lecteur léger) : sa position mentirait.
+        if (pendingSeek > 0 || SystemClock.elapsedRealtime() < progressHoldUntil) return
         val page = ResumeUrl.toRemember(current, url)
             ?: url.takeIf { (Hosts.schemeOf(it) == "https" || (Hosts.schemeOf(it) == "http" && current.allowInsecure)) && Hosts.of(it) != null }
             ?: return
-        (application as WiDoApp).repository.recordProgress(current.id, page, mediaTitle ?: webView?.title, pageImage, state.time, state.duration)
+        lastProgressAt = SystemClock.elapsedRealtime()
+        (application as WiDoApp).repository.recordProgress(
+            current.id, page, mediaTitle ?: webView?.title, pageImage, state.time, state.duration,
+            replaces = sessionWatch?.takeIf { it != page },
+        )
+        if (state.time >= dev.wido.core.ContinueWatching.MIN_POSITION && state.duration >= dev.wido.core.ContinueWatching.MIN_DURATION) sessionWatch = page
+    }
+
+    /**
+     * La vidéo que cette séance a mise dans Reprendre : en passant à l'épisode suivant du même site, le nouveau
+     * prend sa place (Reprendre montre où on en est, pas chaque épisode traversé).
+     */
+    private var sessionWatch: String? = null
+    private var lastProgressAt = 0L
+    /** Jusque-là, la position de la page n'est pas fiable (retour du lecteur léger, recherche en cours). */
+    private var progressHoldUntil = 0L
+
+    /** Pendant la lecture, Reprendre est tenu à jour toutes les 30 s : rien n'est perdu si Android ferme WiDo. */
+    private fun rememberProgressWhilePlaying(state: MediaState) {
+        if (state.paused || state.duration <= 0) return
+        if (SystemClock.elapsedRealtime() - lastProgressAt < PROGRESS_SAVE_MS) return
+        rememberProgress()
     }
 
     // --- Télécommande sur téléphone ----------------------------------------------------------
@@ -1601,7 +1600,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private var pageImage: String? = null
 
     private fun captureMeta() {
-        webView?.evaluateJavascript(META_SCRIPT) { raw ->
+        webView?.evaluateJavascript(PageScripts.META) { raw ->
             pageImage = unquote(raw)?.takeIf { it.startsWith("https://") }
             refreshOsdInfo()
         }
@@ -1647,6 +1646,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private var errorBack: (() -> Unit)? = null
 
     private fun showPageError(code: Int, failed: String) {
+        CrashLog.trace("site : la page ne s'ouvre pas (erreur $code)")
+        settings.openingSite = false
         hideOverlay()
         hidePanel()
         val current = site
@@ -1699,6 +1700,24 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private var rendererLost = false
 
     private fun onRendererGone() {
+        // Page arrêtée par Android pendant le lecteur léger (mémoire) : rien à montrer, elle sera rouverte au retour.
+        if (nativeActive) {
+            CrashLog.event("Page arrêtée pendant le lecteur léger (mémoire), rouverte au retour")
+            val dead = webView
+            if (nativeReturnUrl == null) {
+                nativeReturnUrl = dead?.url
+                nativeStartPosition = currentPosition()
+            }
+            webView = null
+            pageLost = true
+            dead?.let {
+                root.removeView(it)
+                runCatching { it.destroy() }
+            }
+            WebViewPool.clear()
+            NativeHandoff.releasePage = null
+            return
+        }
         rendererLost = true
         val current = site
         CrashLog.event("Page arrêtée (moteur du navigateur) : ${current?.name.orEmpty()} ${Hosts.of(webView?.url.orEmpty()).orEmpty()}")
@@ -1754,9 +1773,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     /** Vidéo en pause depuis quelques secondes : la page s'assombrit, titre et temps restant en bas. */
     private fun schedulePauseScreen(state: MediaState) {
-        root.removeCallbacks(showPause)
         if (!tv) return
-        if (state.paused && state.duration > 0) root.postDelayed(showPause, PAUSE_SCREEN_MS) else hidePauseScreen()
+        val paused = state.paused && state.duration > 0
+        // Déjà affiché (le relevé de la position revient toutes les 10 s) : rien à refaire.
+        if (paused && pauseView != null) return
+        root.removeCallbacks(showPause)
+        if (paused) root.postDelayed(showPause, PAUSE_SCREEN_MS) else hidePauseScreen()
     }
 
     /** Dernière touche de la télécommande (l'écran de pause n'interrompt pas quelqu'un qui navigue). */
@@ -1764,7 +1786,6 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     private fun showPauseScreen() {
         val state = mediaState.value ?: return
-        if (state.paused) CrashLog.trace("site : écran de pause demandé")
         if (!state.paused || pauseView != null || panelView != null || helpView != null || picking) return
         if (SystemClock.uptimeMillis() - lastInputAt < PAUSE_IDLE_MS) {
             // Quelqu'un vient d'utiliser la télécommande (choisir un épisode…) : on attend le calme.
@@ -1772,49 +1793,17 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             root.postDelayed(showPause, 1_500)
             return
         }
-        val density = resources.displayMetrics.density
-        val scale = settings.uiScale
         val left = (state.duration - state.time).coerceAtLeast(0.0)
         val end = android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date(System.currentTimeMillis() + (left * 1000).toLong()))
-        val title = TextView(this).apply {
-            text = webView?.title?.takeIf { it.isNotBlank() && it != webView?.url } ?: site?.name.orEmpty()
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 34f * scale
-            maxLines = 2
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            letterSpacing = -0.02f
-            useJakarta(800)
-        }
-        val detail = TextView(this).apply {
-            text = listOfNotNull(site?.name, getString(R.string.osd_remaining, dev.wido.core.PlayerFormat.time(left), end)).joinToString("  ·  ")
-            setTextColor(0xCCFFFFFF.toInt())
-            textSize = 17f * scale
-            useJakarta(600)
-            setPadding(0, (10 * density).toInt(), 0, 0)
-        }
-        val hint = TextView(this).apply {
-            setText(R.string.pause_hint)
-            setTextColor(0x99FFFFFF.toInt())
-            textSize = 14f * scale
-            useJakarta(600)
-            setPadding(0, (18 * density).toInt(), 0, 0)
-        }
-        val column = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(title)
-            addView(detail)
-            addView(hint)
-        }
-        val view = FrameLayout(this).apply {
-            background = PauseBackdrop.drawable(resources)
-            val pad = (56 * density).toInt()
-            addView(column, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
-                setMargins(pad, 0, pad, (48 * density).toInt())
-            })
-            alpha = 0f
-            isFocusable = false
-        }
+        val view = PauseScreen.build(
+            this,
+            title = webView?.title?.takeIf { it.isNotBlank() && it != webView?.url } ?: site?.name.orEmpty(),
+            detail = listOfNotNull(site?.name, getString(R.string.osd_remaining, dev.wido.core.PlayerFormat.time(left), end)).joinToString("  ·  "),
+            hint = getString(R.string.pause_hint),
+            scale = settings.uiScale,
+        )
         pauseView = view
+        CrashLog.trace("site : écran de pause affiché")
         root.addView(view, FrameLayout.LayoutParams(MATCH, MATCH))
         view.bringToFront()
         view.animate().alpha(1f).setDuration(450).start()
@@ -1866,7 +1855,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private fun enterFullscreen() {
         val wv = webView ?: return
         if (customView != null || cinema) return
-        wv.evaluateJavascript(FULLSCREEN_BUTTON_SCRIPT) { raw ->
+        wv.evaluateJavascript(PageScripts.FULLSCREEN_BUTTON) { raw ->
             val target = parseSnapTarget(raw)
             if (target != null) {
                 tapAt(target.first * wv.width, target.second * wv.height)
@@ -1956,7 +1945,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
      * ait à ouvrir le menu. Renvoie vrai si le passage est lancé. Pas pour une pub (vidéo courte).
      */
     private fun maybeAutoNative(): Boolean {
-        if (!settings.autoNative || nativeReturnUrl != null || client?.stream == null) return false
+        if (!settings.autoNative || nativeActive || nativeReturnUrl != null || client?.stream == null) return false
         val state = mediaState.value ?: return false
         val page = webView?.url ?: return false
         if (state.paused || state.duration < AUTO_NATIVE_MIN_SECONDS || page == autoNativeTried) return false
@@ -1965,12 +1954,32 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         root.postDelayed({
             val now = mediaState.value
             if (!isFinishing && nativeReturnUrl == null && now != null && !now.paused && webView?.url == page) openNative()
-        }, 1_800)
+        }, AUTO_NATIVE_DELAY_MS)
         return true
+    }
+
+    /**
+     * Lecture demandée à la télécommande (OK, ▶, menu) : un film dont le flux est connu part directement dans
+     * le lecteur léger, sans démarrer d'abord dans la page. Sinon, la page joue.
+     */
+    private fun playMedia() {
+        val state = mediaState.value
+        if (settings.autoNative && !nativeActive && client?.stream != null && state != null && state.duration >= AUTO_NATIVE_MIN_SECONDS) {
+            openNative()
+        } else {
+            media("play")
+        }
+    }
+
+    /** Lecture / pause : la reprise passe par [playMedia]. */
+    private fun toggleMedia() {
+        if (mediaState.value?.paused == true) playMedia() else media("toggle")
     }
 
     private fun openNative() {
         CrashLog.trace("lecteur natif : ouverture demandée")
+        // Déjà ouvert (passage automatique et menu presque en même temps) : un seul lecteur.
+        if (nativeActive) return
         val current = site ?: return
         val wv = webView ?: return
         val stream = client?.stream
@@ -1984,23 +1993,80 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val cookies = runCatching { android.webkit.CookieManager.getInstance().getCookie(stream.url) }.getOrNull()
         val lowMemory = (application as WiDoApp).lowMemory
         val page = wv.url
+        nativeActive = true
+        nativeStartPosition = start
+        // Le lecteur léger enregistre cette page dans Reprendre : c'est la vidéo de la séance.
+        ResumeUrl.toRemember(current, page)?.let { sessionWatch = it }
         nativeLauncher.launch(
             NativePlayerActivity.intent(
                 this, stream, current.id, ResumeUrl.toRemember(current, wv.url), wv.title, pageImage, wv.url, cookies,
                 wv.settings.userAgentString, start,
             ),
         )
+        // Les scripts de la page (pubs, mesures d'audience) s'arrêtent pendant le film : le processeur reste au décodage.
+        wv.pauseTimers()
+        timersPaused = true
         if (lowMemory && page != null) {
-            // La page (et son lecteur) pèse plus de 300 Mo : on la vide pendant le film, on la rechargera au retour.
-            nativeReturnUrl = page
-            nativeStartPosition = start
-            root.postDelayed({ if (nativeReturnUrl != null) webView?.loadUrl("about:blank") }, 600)
+            // La page (et son lecteur) pèse plus de 300 Mo. Elle reste chargée derrière le film, en pause : le retour
+            // au site est instantané. Elle n'est vidée (puis rechargée au retour) que si la mémoire vient à manquer.
+            NativeHandoff.releasePage = { why -> releasePageForNative(page, why) }
+            // Page cachée derrière le film : son moteur passe après le reste. Si la mémoire manque, Android arrête
+            // la page (rouverte au retour) plutôt que WiDo et le film.
+            runCatching { wv.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true) }
+        }
+    }
+
+    /** Le lecteur léger est à l'écran, ouvert depuis cette page. */
+    private var nativeActive = false
+    /** Minuteries JavaScript arrêtées pendant le lecteur léger (réglage global à toutes les WebView : à rétablir sans faute). */
+    private var timersPaused = false
+
+    private fun resumeTimers() {
+        if (!timersPaused) return
+        timersPaused = false
+        val wv = webView
+        if (wv != null) wv.resumeTimers() else runCatching { WebView(this).apply { resumeTimers(); destroy() } }
+    }
+    /** La page a été arrêtée par Android pendant le lecteur léger : une page neuve est ouverte au retour. */
+    private var pageLost = false
+
+    /** Mémoire qui manque pendant le lecteur léger : la page derrière est vidée, elle sera rechargée au retour. */
+    private fun releasePageForNative(page: String, why: String) {
+        if (!nativeActive || nativeReturnUrl != null) return
+        CrashLog.event("Page vidée pendant le lecteur léger ($why)")
+        NativeHandoff.releasePage = null
+        nativeReturnUrl = page
+        webView?.loadUrl("about:blank")
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (nativeActive && level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            NativeHandoff.requestRelease("mémoire faible, niveau $level")
         }
     }
 
     /** Retour du lecteur natif : la vidéo de la page se cale sur la seconde où on l'a quitté (une seule entrée dans Reprendre). */
     private val nativeLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
         val position = result.data?.getDoubleExtra(NativePlayerActivity.RESULT_POSITION, -1.0) ?: -1.0
+        val failed = result.data?.getBooleanExtra(NativePlayerActivity.RESULT_FAILED, false) == true
+        nativeActive = false
+        NativeHandoff.releasePage = null
+        resumeTimers()
+        webView?.let { runCatching { it.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false) } }
+        // Retour normal (← Site, Retour) : si on relance le film dans la page, il repart dans le lecteur léger,
+        // comme le veut le réglage. Après un échec du flux, on n'y renvoie pas (pas de boucle).
+        if (!failed) autoNativeTried = null
+        if (pageLost) {
+            // Page arrêtée par Android pendant le film : une page neuve, à la seconde où le film s'est arrêté.
+            pageLost = false
+            val current = site
+            val url = nativeReturnUrl
+            nativeReturnUrl = null
+            if (current != null) startActivity(intent(this, current.id, url, if (position >= 0) position else nativeStartPosition))
+            close("page rouverte après le lecteur léger")
+            return@registerForActivityResult
+        }
         val back = nativeReturnUrl
         if (back != null) {
             // La page avait été vidée : on la recharge à la seconde où le film s'est arrêté, la lecture reste à toi (OK).
@@ -2015,6 +2081,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             return@registerForActivityResult
         }
         if (position < 0) return@registerForActivityResult
+        // Le lecteur léger vient d'enregistrer la bonne position : la page, encore à l'ancienne, ne l'écrase pas.
+        progressHoldUntil = SystemClock.elapsedRealtime() + 8_000
         mediaState.value?.let {
             mediaState.value = it.copy(time = position, paused = true)
             mediaAt = SystemClock.elapsedRealtime()
@@ -2049,7 +2117,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val loc = IntArray(2)
         wv.getLocationInWindow(loc)
         val full = android.graphics.Rect(loc[0], loc[1], loc[0] + wv.width, loc[1] + wv.height)
-        wv.evaluateJavascript(VIDEO_RECT_SCRIPT) { raw ->
+        wv.evaluateJavascript(PageScripts.VIDEO_RECT) { raw ->
             val rect = runCatching {
                 val o = JSONObject(unquote(raw) ?: return@runCatching null)
                 android.graphics.Rect(
@@ -2178,6 +2246,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     override fun onDestroy() {
+        // Fermé avant d'afficher la page (Retour pendant le chargement…) : ce n'est pas une ouverture interrompue.
+        if (isFinishing) settings.openingSite = false
+        if (nativeActive) NativeHandoff.releasePage = null
+        resumeTimers()
         if (backgrounded) BackgroundPlayService.stop(this)
         if (BackgroundBridge.controller != null) BackgroundBridge.controller = null
         overlayAnimator?.cancel()
@@ -2237,91 +2309,30 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         const val EXTRA_TILE = "origin_tile"
         private const val AUTO_POLL_MS = 800L
         private const val AUTO_ATTEMPTS = 30
-        /** Le bouton plein écran visible du lecteur de la page (au premier plan à cet endroit), en fractions de l'écran. */
-        private const val FULLSCREEN_BUTTON_SCRIPT = """(function () {
-  var re = /(plein[ -]?(é|e)cran|full ?screen)/i;
-  var els = document.querySelectorAll('button,[role=button],a,[class*=fullscreen],[class*=Fullscreen]');
-  for (var i = 0; i < els.length; i++) {
-    var e = els[i];
-    var cls = typeof e.className === 'string' ? e.className : '';
-    var label = (e.getAttribute('aria-label') || '') + ' ' + (e.getAttribute('title') || '') + ' ' + (e.getAttribute('data-title-no-tooltip') || '') + ' ' + cls;
-    if (!re.test(label) || /(exit|quitter|sortir)/i.test(label)) continue;
-    var r = e.getBoundingClientRect();
-    if (r.width < 8 || r.height < 8) continue;
-    var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    if (cx < 0 || cy < 0 || cx > innerWidth || cy > innerHeight) continue;
-    var top = document.elementFromPoint(cx, cy);
-    if (!top || !(top === e || e.contains(top))) continue;
-    return JSON.stringify({ x: cx / innerWidth, y: cy / innerHeight });
-  }
-  return null;
-})()"""
         private const val PROGRESS_POLL_MS = 10_000L
+        private const val PROGRESS_SAVE_MS = 30_000L
         private const val FOLLOW_POLL_MS = 2_000L
         private const val FRAME_EVERY_MS = 90_000L
         private const val PAUSE_SCREEN_MS = 1_200L
         private const val PAUSE_IDLE_MS = 4_000L
+        /** Flèches gardées en attente au plus (au-delà, l'appui maintenu prend le relais). */
+        private const val SNAP_QUEUE = 3
+        private const val SNAP_TIMEOUT_MS = 600L
+        /** Au-delà, les cibles annoncées sont trop anciennes (la page a pu changer) : on redemande. */
+        private const val SNAP_AHEAD_MS = 2_500L
         private const val DOUBLE_BACK_MS = 450L
         private const val EXIT_CONFIRM_MS = 2_500L
         /** En dessous (pub, bande-annonce), on ne quitte pas la page pour le lecteur léger. */
-        private const val AUTO_NATIVE_MIN_SECONDS = 600.0
+        private const val AUTO_NATIVE_MIN_SECONDS = 240.0
+        /** Le temps de lire « Film détecté » avant le passage au lecteur léger. */
+        private const val AUTO_NATIVE_DELAY_MS = 700L
         private const val STATE_URL = "state_url"
         private const val STATE_POSITION = "state_position"
         /** Étiquette du vinyle de l'accueil, rapportée au rayon du disque (50 dp sur 86 dp au focus). */
         private const val LABEL_RATIO = 0.58f
-        private const val KEEP_VISIBLE_SCRIPT = """(function () {
-  try {
-    Object.defineProperty(document, 'hidden', { get: function () { return false; } });
-    Object.defineProperty(document, 'visibilityState', { get: function () { return 'visible'; } });
-    Object.defineProperty(document, 'webkitHidden', { get: function () { return false; } });
-  } catch (e) {}
-  ['visibilitychange', 'webkitvisibilitychange', 'blur'].forEach(function (t) {
-    window.addEventListener(t, function (e) { e.stopImmediatePropagation(); }, true);
-    document.addEventListener(t, function (e) { e.stopImmediatePropagation(); }, true);
-  });
-})()"""
-        /**
-         * Trouve (et clique si `go`) le lien ou bouton « épisode suivant » de la page : par son texte,
-         * son libellé d'accessibilité ou son titre. Renvoie vrai s'il existe.
-         */
-        private const val NEXT_SCRIPT = """function (go) {
-  var re = /((é|e)pisode suivant|next episode|prochain (é|e)pisode|next up)/i;
-  var els = document.querySelectorAll('a,button,[role=button]');
-  for (var i = 0; i < els.length; i++) {
-    var e = els[i];
-    var t = ((e.getAttribute('aria-label') || '') + ' ' + (e.getAttribute('title') || '') + ' ' + (e.textContent || '')).replace(/\s+/g, ' ');
-    if (t.length > 120 || !re.test(t)) continue;
-    var r = e.getBoundingClientRect();
-    if (r.width === 0 && r.height === 0 && !e.href) continue;
-    if (go) e.click();
-    return true;
-  }
-  return false;
-}"""
-        /** La plus grande vidéo visible (sinon la plus grande iframe, où se cache souvent le lecteur), en fractions de l'écran. */
-        private const val VIDEO_RECT_SCRIPT = """(function () {
-  var best = null, area = 0;
-  function visible(r) { return Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)); }
-  document.querySelectorAll('video').forEach(function (v) { var r = v.getBoundingClientRect(), a = visible(r); if (a > area) { area = a; best = r; } });
-  if (!best) document.querySelectorAll('iframe').forEach(function (f) { var r = f.getBoundingClientRect(), a = visible(r); if (a > area) { area = a; best = r; } });
-  if (!best || area < 20000) return null;
-  return JSON.stringify({ x: Math.max(0, best.left) / innerWidth, y: Math.max(0, best.top) / innerHeight, r: Math.min(innerWidth, best.right) / innerWidth, b: Math.min(innerHeight, best.bottom) / innerHeight });
-})()"""
         private const val RESUME_POLL_MS = 1_500L
         private const val RESUME_ATTEMPTS = 40
         private const val SEEK_GUARD_MS = 20_000L
-        /** Image de la page : og:image, twitter:image, image_src, thumbnailUrl, puis l'affiche du lecteur (`poster`). */
-        private const val META_SCRIPT = """(function () {
-  function abs(u) { try { return u ? new URL(u, location.href).href : null; } catch (e) { return null; } }
-  var m = document.querySelector('meta[property="og:image"],meta[property="og:image:url"],meta[name="twitter:image"],meta[itemprop="thumbnailUrl"],link[itemprop="thumbnailUrl"],link[rel="image_src"]');
-  var u = m ? (m.content || m.href) : null;
-  if (!u) document.querySelectorAll('script[type="application/ld+json"]').forEach(function (s) {
-    if (u) return;
-    try { var j = JSON.parse(s.textContent); var t = (Array.isArray(j) ? j[0] : j).thumbnailUrl; u = Array.isArray(t) ? t[0] : t; } catch (e) {}
-  });
-  if (!u) { var v = document.querySelector('video[poster]'); u = v ? v.getAttribute('poster') : null; }
-  return abs(u);
-})()"""
         /** Valeur spéciale de l'extra `site` : rouvre le dernier site ouvert. */
         const val LAST_SITE = "last"
         private const val FIELD_CARD_GRACE_MS = 1_500L
@@ -2332,38 +2343,6 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val HELP_TIMEOUT_MS = 15_000L
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val LONG_PRESS_MS = 600L
-        /**
-         * Masque l'élément sous le curseur, ou le calque qui le contient (position fixe, z-index élevé),
-         * et renvoie un sélecteur CSS qui le retrouvera aux prochaines visites.
-         */
-        private const val HIDE_SCRIPT = """function (fx, fy) {
-  var el = document.elementFromPoint(fx * innerWidth, fy * innerHeight);
-  if (!el || el === document.body || el === document.documentElement) return null;
-  var target = el;
-  for (var cur = el; cur && cur !== document.body; cur = cur.parentElement) {
-    var cs = getComputedStyle(cur);
-    if (cs.position === 'fixed' || cs.position === 'sticky' || (parseInt(cs.zIndex, 10) || 0) >= 100) target = cur;
-  }
-  function selector(e) {
-    var parts = [];
-    while (e && e.nodeType === 1 && e !== document.body && parts.length < 5) {
-      if (e.id && /^[A-Za-z][\w-]*$/.test(e.id)) { parts.unshift('#' + e.id); break; }
-      var part = e.tagName.toLowerCase();
-      var cls = Array.prototype.filter.call(e.classList, function (c) { return /^[A-Za-z][\w-]{0,39}$/.test(c); }).slice(0, 2);
-      if (cls.length) part += '.' + cls.join('.');
-      else if (e.parentElement) part += ':nth-child(' + (Array.prototype.indexOf.call(e.parentElement.children, e) + 1) + ')';
-      parts.unshift(part);
-      e = e.parentElement;
-    }
-    return parts.join(' > ');
-  }
-  var s = selector(target);
-  if (!s) return null;
-  target.style.setProperty('display', 'none', 'important');
-  document.documentElement.style.overflow = '';
-  if (document.body) document.body.style.overflow = '';
-  return s;
-}"""
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 

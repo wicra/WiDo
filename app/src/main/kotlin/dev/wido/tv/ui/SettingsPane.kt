@@ -230,6 +230,17 @@ fun SettingsPane(
             SettingRow(stringResource(R.string.s_snap)) {
                 Segmented(listOf(on, off), if (settings.snapNavigation) 0 else 1) { changed { settings.snapNavigation = it == 0 } }
             }
+            SettingRow(stringResource(R.string.s_screensaver)) {
+                // Android ne laisse pas une appli se choisir elle-même : on ouvre son réglage d'écran de veille.
+                val context = LocalContext.current
+                Chip(stringResource(R.string.v_screensaver_choose), {
+                    val opened = runCatching {
+                        context.startActivity(android.content.Intent(android.provider.Settings.ACTION_DREAM_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }.isSuccess
+                    if (!opened) android.widget.Toast.makeText(context, R.string.screensaver_manual, android.widget.Toast.LENGTH_LONG).show()
+                }, glyph = Glyph.Tv)
+            }
+            Text(stringResource(R.string.s_screensaver_note), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
             SettingRow(stringResource(R.string.s_help)) {
                 // Le tutoriel fait essayer les touches ; la présentation rejoue les écrans du premier lancement.
                 Chip(stringResource(R.string.v_tutorial), onTutorial, glyph = Glyph.Help)
@@ -340,16 +351,26 @@ fun SettingsPane(
         }
     }
 
+    val test: @Composable () -> Unit = {
+        val context = LocalContext.current
+        Text(stringResource(R.string.s_test_note), color = Palette.TextSecondary, fontSize = 14.sp)
+        Spacer(Modifier.height(4.dp))
+        SettingRow(stringResource(R.string.s_test_run)) {
+            Chip(stringResource(R.string.v_test_start), { context.startActivity(android.content.Intent(context, dev.wido.tv.DiagnosticActivity::class.java)) }, glyph = Glyph.Check)
+        }
+    }
+
     val sections = listOfNotNull(
         SettingsSection(R.string.sec_blocking, Glyph.Blocked, blocking),
         SettingsSection(R.string.sec_player, Glyph.Play, player),
         SettingsSection(R.string.sec_look, Glyph.ZoomIn, look),
         if (phone) null else SettingsSection(R.string.sec_keys, Glyph.Menu, keys),
         SettingsSection(if (phone) R.string.sec_device else R.string.sec_screens, if (phone) Glyph.Phone else Glyph.Tv, screens),
+        SettingsSection(R.string.sec_test, Glyph.Check, test),
         SettingsSection(R.string.sec_general, Glyph.Sites, general),
     )
 
-    if (showCrash) dev.wido.tv.CrashLog.report()?.let { CrashReportDialog(it) { showCrash = false } }
+    if (showCrash) dev.wido.tv.CrashLog.report()?.let { CrashReportDialog(it, onDismiss = { showCrash = false }) }
 
     if (phone) {
         // Téléphone : tous les thèmes à la suite, dans une seule liste.
@@ -432,14 +453,38 @@ fun SettingsPane(
  * transmettre sans câble). Sur téléphone : copier ou partager.
  */
 @Composable
-private fun CrashReportDialog(report: String, onDismiss: () -> Unit) {
+internal fun CrashReportDialog(
+    report: String,
+    onDismiss: () -> Unit,
+    /** Titre de la fenêtre (le rapport de plantage par défaut ; le test complet a le sien). */
+    title: String? = null,
+    /** Ce qui part avec « Envoyer » (par défaut : le rapport de plantage dans la limite d'un envoi). */
+    sendText: (() -> String)? = null,
+) {
     val context = LocalContext.current
     val phone = LocalPhone.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var sending by remember { mutableStateOf(false) }
     var sent by remember { mutableStateOf(false) }
+    // TV : le QR code ouvre le rapport complet sur le téléphone (page servie par la TV tant que la fenêtre est ouverte).
+    var reportUrl by remember { mutableStateOf<String?>(null) }
+    if (!phone) {
+        val pageTitle = title ?: stringResource(R.string.s_crash_report)
+        val copy = stringResource(R.string.crash_copy)
+        val share = stringResource(R.string.crash_share)
+        val latest by androidx.compose.runtime.rememberUpdatedState(report)
+        // Une seule adresse tant que la fenêtre est ouverte : le QR code scanné reste valable.
+        androidx.compose.runtime.DisposableEffect(Unit) {
+            val link = dev.wido.tv.ReportLink({ latest }, pageTitle, copy, share)
+            reportUrl = link.start()
+            onDispose {
+                link.stop()
+                reportUrl = null
+            }
+        }
+    }
     DialogFrame(
-        title = stringResource(R.string.s_crash_report),
+        title = title ?: stringResource(R.string.s_crash_report),
         onDismiss = onDismiss,
         buttons = {
             if (dev.wido.tv.CrashReporter.canSend) {
@@ -450,7 +495,7 @@ private fun CrashReportDialog(report: String, onDismiss: () -> Unit) {
                         if (!sending && !sent) {
                             sending = true
                             scope.launch {
-                                val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { dev.wido.tv.CrashReporter.send(dev.wido.tv.CrashLog.report(forSend = true) ?: report) }
+                                val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { dev.wido.tv.CrashReporter.send(sendText?.invoke() ?: dev.wido.tv.CrashLog.report(forSend = true) ?: report) }
                                 sending = false
                                 sent = result == dev.wido.tv.CrashReporter.Result.Sent
                                 android.widget.Toast.makeText(context, if (sent) R.string.crash_send_ok else R.string.crash_send_failed, android.widget.Toast.LENGTH_LONG).show()
@@ -482,8 +527,13 @@ private fun CrashReportDialog(report: String, onDismiss: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             if (!phone) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.clip(RoundedCornerShape(14.dp)).background(Color.White).padding(10.dp)) { QrCode(report.take(QR_CHARS), 220.dp) }
-                    Text(stringResource(R.string.crash_scan), color = Palette.TextSecondary, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.width(240.dp))
+                    val url = reportUrl
+                    // Sans réseau local, le QR code ne porte que le début du rapport (c'est tout ce qu'il peut tenir).
+                    Box(Modifier.clip(RoundedCornerShape(14.dp)).background(Color.White).padding(10.dp)) { QrCode(url ?: report.take(QR_CHARS), 220.dp) }
+                    Text(
+                        stringResource(if (url != null) R.string.crash_scan else R.string.crash_scan_partial),
+                        color = Palette.TextSecondary, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.width(240.dp),
+                    )
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -532,7 +582,7 @@ private fun ScrollableReport(report: String) {
     )
 }
 
-/** Ce qu'un QR code lisible tient du rapport (le début : version, appareil, erreur). */
+/** Sans réseau : ce qu'un QR code lisible tient du rapport (le début : version, appareil, erreur). */
 private const val QR_CHARS = 1_200
 
 /** Un thème des réglages : titre, icône et contenu. */

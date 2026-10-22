@@ -144,6 +144,24 @@ class MediaDetectorTest {
 }
 
 class ContinueWatchingTest {
+    @Test
+    fun `reprendre ignore les vidéos courtes et remplace l'épisode précédent de la séance`() {
+        // Pub ou bande-annonce : jamais dans Reprendre.
+        assertEquals(emptyList<WatchEntry>(), ContinueWatching.record(emptyList(), e("https://s.com/pub", 30.0, 90.0)))
+        var list = ContinueWatching.record(emptyList(), e("https://s.com/autre", 100.0))
+        list = ContinueWatching.record(list, e("https://s.com/serie/ep1", 100.0))
+        // Épisode suivant dans la même séance : il prend la place du précédent, l'autre vidéo reste.
+        list = ContinueWatching.record(list, e("https://s.com/serie/ep2", 50.0), replaces = "https://s.com/serie/ep1")
+        assertEquals(listOf("https://s.com/serie/ep2", "https://s.com/autre"), list.map { it.url })
+        // Une même vidéo ne se remplace pas elle-même.
+        list = ContinueWatching.record(list, e("https://s.com/serie/ep2", 80.0), replaces = "https://s.com/serie/ep2")
+        assertEquals(listOf("https://s.com/serie/ep2", "https://s.com/autre"), list.map { it.url })
+        // Un autre film du même site, juste après, ne remplace pas l'épisode : chacun garde sa place.
+        val film = WatchEntry("s", "https://s.com/film-b", "Un tout autre film", null, 100.0, 600.0, 1)
+        list = ContinueWatching.record(list, film, replaces = "https://s.com/serie/ep2")
+        assertEquals(listOf("https://s.com/film-b", "https://s.com/serie/ep2", "https://s.com/autre"), list.map { it.url })
+    }
+
     private fun e(url: String, pos: Double, dur: Double = 600.0) = WatchEntry("s", url, "Titre", null, pos, dur, 1)
 
     @Test fun recordsMostRecentFirstAndDropsFinished() {

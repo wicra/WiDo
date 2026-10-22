@@ -101,7 +101,15 @@
     }
     if (index < 0) return null;
     mark(items[index].el);
-    return JSON.stringify({ x: items[index].x / window.innerWidth, y: items[index].y / window.innerHeight });
+    // Les cibles suivantes depuis celle-ci, dans les 4 directions, avec la même règle : l'appli s'y place
+    // aussitôt au prochain appui (sans attendre la page), puis vérifie par cette même fonction.
+    var t = items[index], iw = window.innerWidth, ih = window.innerHeight;
+    var next = {};
+    ['left', 'right', 'up', 'down'].forEach(function (d) {
+      var j = window.__widoPick(d, t.x, t.y, items);
+      if (j >= 0) next[d] = [items[j].x / iw, items[j].y / ih];
+    });
+    return JSON.stringify({ x: t.x / iw, y: t.y / ih, next: next });
   };
   window.__widoUnmark = unmark;
 

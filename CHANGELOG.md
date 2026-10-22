@@ -1,5 +1,36 @@
 # Changelog
 
+## Non publié
+
+### Reprendre, revu
+- **Tenu à jour pendant la lecture** (toutes les 30 s, dans la page comme dans le lecteur léger) : plus d'entrée manquante ou en retard quand Android ferme WiDo pendant un film.
+- **Plus d'entrées au hasard** : les vidéos de moins de 3 min (pubs, bandes-annonces) et les aperçus muets qui se lancent seuls sur l'accueil d'un site n'y entrent plus.
+- **Une série, une entrée** : dans une même séance sur un site, l'épisode suivant (même dossier dans l'adresse, ou titre qui commence pareil) prend la place du précédent ; un autre film du même site garde sa propre entrée.
+- Au retour du lecteur léger, la page (encore à l'ancienne seconde) n'écrase plus la position qu'il vient d'enregistrer.
+
+### Ouverture d'un site
+- Si Android ferme WiDo pendant l'ouverture d'un site, l'accueil le dit au redémarrage (au lieu d'un retour muet) et le rapport le note.
+- Journal détaillé : chaque étape de l'ouverture (accueil, lecteur créé, page affichée en N ms ou erreur, mémoire) et la cause de l'arrêt précédent, juste avant le redémarrage.
+
+### Ajouté
+- **Test complet** (Réglages → Test) : environ une minute pour examiner l'appareil et WiDo de bout en bout (mémoire, réseau et débit, décodeurs vidéo, vraie lecture d'un flux de test dans le lecteur léger avec images perdues et image figée, recherche, réactivité des pages et du curseur, configuration, serveur local). Chaque étape est notée OK / à surveiller / échec et le rapport, propre et complet, se lit à l'écran, s'ouvre sur le téléphone par QR code ou s'envoie au projet.
+- **Écran de veille WiDo** (Réglages → Apparence → Écran de veille) : halos de verre bleu (ou de l'ambiance choisie), heure et date sur une plaque de verre qui change de place chaque minute, à la place de l'arc-en-ciel du système.
+
+### Modifié
+- **Le lecteur léger devient le chemin normal des films**, sur tous les appareils : « Lecteur léger automatique » est activé d'office, un film de plus de 4 minutes (au lieu de 10) y passe en 0,7 s, et Lecture (OK, ▶, menu, écran de pause) sur un film dont le flux est repéré l'ouvre directement dans le lecteur léger, sans démarrer d'abord dans la page.
+- **Mode mixte** : la fenêtre publicitaire se ferme 2 s après son chargement (au lieu de 5).
+- **Curseur aimanté plus vif** : avec chaque réponse, la page calcule aussi les cibles suivantes dans les 4 directions (même règle) ; le prochain appui y va tout de suite, sans attendre la page, qui confirme ou corrige aussitôt. Les cibles sont oubliées après un clic, un défilement ou un changement de page.
+- Code du lecteur : scripts de page, animation d'ouverture et écran de pause (commun au site et au lecteur léger) sortis de `PlayerActivity` ; le lecteur léger et le test complet partagent le même réglage du lecteur vidéo.
+
+### Corrigé
+- **Lecteur léger : image figée alors que le son continue.** Sur les clés d'1 Go, le lecteur gardait jusqu'à 50 s de vidéo d'avance (plus de 100 Mo pour un flux 1080p) : la mémoire manquait au décodeur. Tampons réduits (15 à 30 s, 24 Mo), pas de 4K, décodeur de secours si le décodeur matériel refuse le flux, plus de copie de l'image vidéo toutes les 45 s. Une image qui reste figée plus de 3 s pendant que le son avance est détectée : le décodeur est relancé à la même seconde, la page laissée derrière est libérée, et si cela recommence, la qualité baisse d'un cran. Coupure réseau ou décodeur qui cale : reprise seule à la même seconde (2 fois) au lieu de fermer le lecteur. Roue d'attente pendant le chargement.
+- **Retour au site depuis le lecteur léger** : la page n'est plus rechargée à chaque fois. Elle reste en pause derrière le film (scripts arrêtés) et n'est vidée que si Android manque de mémoire ; s'il l'arrête lui-même, il arrête la page et non plus WiDo, et une page neuve s'ouvre au retour, à la bonne seconde.
+- **Lecteur léger automatique contourné** : après un retour au site, relancer le film le jouait dans la page (plus de 300 Mo, fermeture par Android). Il repart maintenant dans le lecteur léger, sauf si le flux venait d'échouer.
+- **Rapport de plantage : le QR code donne le rapport complet** (il ne contenait que les 1 200 premiers signes). Il ouvre sur le téléphone une page servie par la TV sur le réseau local, avec Copier et Partager, tant que la fenêtre est ouverte ; sans réseau, il garde le début du rapport.
+- **Journal détaillé** : « écran de pause demandé » n'est plus répété toutes les 10 s pendant une pause (le journal en était rempli) ; le lecteur léger y note son décodeur, la taille de l'image, les images sautées et les erreurs avec la mémoire du moment.
+- **Télécommande** : un appui doublé par la télécommande (deux Retour à 48 ms dans le journal) n'est plus compté deux fois ; les flèches appuyées vite sur un site ne se perdent plus pendant que la page répond (elles sont jouées dans l'ordre).
+- Le rappel des touches du lecteur léger ne parle plus du volume aux flèches.
+
 ## 0.9.1
 
 ### Ajouté

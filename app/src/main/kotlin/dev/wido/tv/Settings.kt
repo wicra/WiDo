@@ -85,6 +85,16 @@ class Settings(private val context: Context) {
         get() = state.getString("open_page", null)
         set(v) = state.edit().putString("open_page", v).apply()
 
+    /**
+     * Un site est en train de s'ouvrir (lecteur créé, page pas encore affichée). Encore là au démarrage
+     * suivant : l'appli a été arrêtée pendant l'ouverture, l'accueil le dit au lieu de rien expliquer.
+     */
+    var openingSite: Boolean
+        get() = state.getBoolean("opening_site", false)
+        set(v) {
+            state.edit().putBoolean("opening_site", v).commit()
+        }
+
     /** Journal détaillé : les gestes et décisions de l'appli sont notés sur l'appareil (sans noms de sites). */
     var detailedLog: Boolean
         get() = prefs.getBoolean("detailed_log", false)
@@ -145,10 +155,11 @@ class Settings(private val context: Context) {
     // --- Blocage ----------------------------------------------------------------------------
     /**
      * Lecteur léger automatique : quand un film est détecté, WiDo passe seul au lecteur intégré (bien
-     * moins gourmand que la page du site). Par défaut, activé sur les appareils à peu de mémoire.
+     * moins gourmand que la page du site, décodage matériel, reprise à la seconde). C'est le chemin normal :
+     * activé par défaut partout ; la page sert à choisir le film.
      */
     var autoNative: Boolean
-        get() = prefs.getBoolean("auto_native", DeviceMemory.isLow(context))
+        get() = prefs.getBoolean("auto_native", true)
         set(v) = prefs.edit().putBoolean("auto_native", v).apply()
 
     /**
