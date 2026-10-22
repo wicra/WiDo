@@ -113,11 +113,14 @@ class ScriptInjector(private val context: Context, private val site: Site) {
         return "(function(){var css=${JSONObject.quote(css)};var sels=$list;var key='wido-hide-${css.hashCode().toUInt()}';var t=0;" +
             "function put(){t=0;if(!document.getElementById(key)){var s=document.createElement('style');s.id=key;" +
             "s.textContent=css;(document.head||document.documentElement).appendChild(s);}" +
-            "sels.forEach(function(q){try{document.querySelectorAll(q).forEach(function(e){" +
+            "sels.forEach(function(q){try{document.querySelectorAll(q).forEach(hide);}catch(err){}});}" +
+            // Le style de chaque élément masqué est surveillé, lui seul : jamais toute la page (sur YouTube, la barre de
+            // lecture change de style à chaque image, surveiller tout le document ralentirait la vidéo).
+            "var seen=window.WeakSet?new WeakSet():null;function hide(e){" +
             "if(e.style.getPropertyValue('display')!=='none'||e.style.getPropertyPriority('display')!=='important')e.style.setProperty('display','none','important');" +
-            "});}catch(err){}});}" +
+            "if(seen&&!seen.has(e)&&window.MutationObserver){seen.add(e);new MutationObserver(function(){hide(e);}).observe(e,{attributes:true,attributeFilter:['style','class']});}}" +
             "put();if(window.MutationObserver)new MutationObserver(function(){if(!t)t=setTimeout(put,150);})" +
-            ".observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['style','class']});})();"
+            ".observe(document.documentElement,{childList:true,subtree:true});})();"
     }
 
     private companion object {
