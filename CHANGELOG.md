@@ -1,5 +1,17 @@
 # Changelog
 
+## Non publié (suite au test complet)
+
+### Corrigé
+- **Retour du lecteur léger sans rechargement du site** : la page n'est plus vidée au moindre signal « mémoire faible » d'Android (sur une clé d'1 Go il arrive sans cesse, même avec 350 Mo libres). Elle reste en pause derrière le film ; elle n'est rechargée que si l'image du film se fige ou si Android a dû arrêter la page.
+- **« Masquer un élément » tient vraiment** : l'élément reste masqué sur les pages suivantes de la même visite (avant : seulement à la prochaine ouverture du site), et il est retrouvé aux visites suivantes : sélecteur le plus court qui ne désigne que lui, sans les noms générés à chaque version du site (`css-1x9f2k`, identifiants à chiffres) ni la position parmi tous les éléments ; style remis si le site le retire ; sélecteurs jusqu'à 300 signes (ils étaient coupés à 200).
+- **Mode mixte** : la fenêtre publicitaire se ferme bien 2 s après son chargement (8 s au plus si elle ne charge pas, au lieu de 20 s) ; le message disait encore « 5 s ».
+- **Rapport de plantage** : la pile d'une erreur de WiDo n'est plus effacée au redémarrage par la cause donnée par Android (le plantage de l'ouverture d'un site n'avait laissé aucune trace) ; elle figure aussi dans le rapport du test complet.
+- **Mémoire de l'appli dans le journal** : mesurée au moment même (Android ne renouvelait la valeur précédente que toutes les 5 minutes environ : « appli 12 Mo » pendant une lecture).
+
+### Amélioré
+- **Lecteur léger : bonne qualité dès le début** : il démarre avec le débit mesuré à la lecture précédente au lieu de la qualité la plus basse.
+
 ## Non publié
 
 ### Reprendre, revu

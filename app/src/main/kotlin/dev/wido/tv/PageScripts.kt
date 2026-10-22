@@ -88,18 +88,37 @@ internal object PageScripts {
     var cs = getComputedStyle(cur);
     if (cs.position === 'fixed' || cs.position === 'sticky' || (parseInt(cs.zIndex, 10) || 0) >= 100) target = cur;
   }
+  // Un nom fait pour durer : pas les noms générés à chaque version du site (css-1x9f2k, jsx-482913, ad_8f3k2…).
+  function stable(n) {
+    if (!/^[A-Za-z][\w-]{0,39}$/.test(n)) return false;
+    if (/^(css|sc|jsx|svelte|emotion|styled|tw)-/i.test(n)) return false;
+    return (n.replace(/[^0-9]/g, '').length < 2) || n.length < 6;
+  }
+  function part(e) {
+    if (e.id && stable(e.id)) return '#' + e.id;
+    var tag = e.tagName.toLowerCase();
+    var cls = Array.prototype.filter.call(e.classList, stable).slice(0, 3);
+    if (cls.length) return tag + '.' + cls.join('.');
+    var role = e.getAttribute('role');
+    if (role && /^[a-z]{2,20}$/.test(role)) return tag + '[role="' + role + '"]';
+    // En dernier recours, le rang parmi les éléments du même type (plus stable que le rang parmi tous).
+    var n = 1;
+    for (var sib = e.previousElementSibling; sib; sib = sib.previousElementSibling) if (sib.tagName === e.tagName) n++;
+    return tag + ':nth-of-type(' + n + ')';
+  }
+  // Le sélecteur le plus court qui ne désigne que cet élément : on remonte d'un parent tant qu'il en désigne plusieurs.
   function selector(e) {
-    var parts = [];
-    while (e && e.nodeType === 1 && e !== document.body && parts.length < 5) {
-      if (e.id && /^[A-Za-z][\w-]*$/.test(e.id)) { parts.unshift('#' + e.id); break; }
-      var part = e.tagName.toLowerCase();
-      var cls = Array.prototype.filter.call(e.classList, function (c) { return /^[A-Za-z][\w-]{0,39}$/.test(c); }).slice(0, 2);
-      if (cls.length) part += '.' + cls.join('.');
-      else if (e.parentElement) part += ':nth-child(' + (Array.prototype.indexOf.call(e.parentElement.children, e) + 1) + ')';
-      parts.unshift(part);
-      e = e.parentElement;
+    var sel = part(e);
+    var cur = e;
+    for (var depth = 0; depth < 6; depth++) {
+      var count = 0;
+      try { count = document.querySelectorAll(sel).length; } catch (err) { return null; }
+      if (count === 1 || sel.charAt(0) === '#') break;
+      cur = cur.parentElement;
+      if (!cur || cur === document.body || cur === document.documentElement) break;
+      sel = part(cur) + ' ' + sel;
     }
-    return parts.join(' > ');
+    return sel.length <= 300 ? sel : null;
   }
   var s = selector(target);
   if (!s) return null;

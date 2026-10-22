@@ -85,6 +85,11 @@ class Settings(private val context: Context) {
         get() = state.getString("open_page", null)
         set(v) = state.edit().putString("open_page", v).apply()
 
+    /** Débit (bit/s) estimé par le lecteur léger à sa dernière lecture : la suivante démarre dans la bonne qualité. */
+    var lastBitrate: Long
+        get() = state.getLong("last_bitrate", 0L)
+        set(v) = state.edit().putLong("last_bitrate", v).apply()
+
     /**
      * Un site est en train de s'ouvrir (lecteur créé, page pas encore affichée). Encore là au démarrage
      * suivant : l'appli a été arrêtée pendant l'ouverture, l'accueil le dit au lieu de rien expliquer.

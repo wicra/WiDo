@@ -82,7 +82,7 @@ C'est le filtre le plus efficace contre les redirections publicitaires, et il ne
 
 En `relaxed`, une redirection vers une régie **présente dans les listes** reste refusée ; une régie inconnue des listes passerait : choisis `relaxed` quand `strict` casse le site, et `mixed` quand le site exige de voir la pub.
 
-En `mixed`, la page du site ne change pas : la redirection ou la pop-up (`window.open`) s'ouvre par-dessus, marquée « Publicité · fermeture dans 2 s », puis se ferme seule (au plus 20 secondes si elle ne finit pas de charger). **Retour** la ferme tout de suite. Cette fenêtre n'est pas filtrée, mais ne peut ouvrir ni application ni autre fenêtre. Le blocage des pop-ups est désactivé pour ces sites, puisque la pop-up doit pouvoir s'ouvrir.
+En `mixed`, la page du site ne change pas : la redirection ou la pop-up (`window.open`) s'ouvre par-dessus, marquée « Publicité · fermeture dans 2 s », puis se ferme seule (au plus 8 secondes si elle ne finit pas de charger). **Retour** la ferme tout de suite. Cette fenêtre n'est pas filtrée, mais ne peut ouvrir ni application ni autre fenêtre. Le blocage des pop-ups est désactivé pour ces sites, puisque la pop-up doit pouvoir s'ouvrir.
 
 ### Pop-ups
 

@@ -281,7 +281,7 @@
     <string name="share_here">Ici</string>
     <string name="share_sending">Envoi vers %1$s…</string>
     <string name="share_no_link">Aucun lien dans ce partage.</string>
-    <string name="osd_ad_background">Pub ouverte en arrière-plan, fermée dans 5 s</string>
+    <string name="osd_ad_background">Pub ouverte en arrière-plan, fermée dans 2 s</string>
     <string name="watch_left">il reste %1$d min</string>
     <string name="action_resume">Reprendre</string>
     <string name="action_remove">Retirer</string>
