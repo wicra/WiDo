@@ -132,7 +132,7 @@ class AdWindow(
     private companion object {
         const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         /** Secondes pendant lesquelles la pub reste affichée une fois chargée. */
-        const val VISIBLE_SECONDS = 5
+        const val VISIBLE_SECONDS = 2
         /** Fermeture de toute façon, même si la pub ne finit jamais de charger. */
         const val MAX_OPEN_MS = 20_000L
         /** Coupe le son de tout média de la pub, y compris ceux ajoutés ensuite. */

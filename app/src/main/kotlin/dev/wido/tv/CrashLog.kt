@@ -208,6 +208,15 @@ object CrashLog {
         return base + title + kept.joinToString("\n")
     }
 
+    /** Les derniers événements (fermetures, mémoire faible…), pour le rapport du test complet. */
+    fun recentEvents(): String? = if (!::dir.isInitialized) null else eventsFile.takeIf { it.exists() }?.readText()?.takeIf { it.isNotBlank() }
+
+    /** Les `count` dernières lignes du journal détaillé. */
+    fun recentTrace(count: Int): List<String> = synchronized(trace) { trace.toList().takeLast(count) }
+
+    /** En-tête commun des rapports : version, appareil, date. */
+    fun reportHeader(): String = header()
+
     /** Une erreur que l'utilisateur n'a pas encore vue (pour le signaler une fois au démarrage). */
     fun hasUnseenCrash(): Boolean = ::dir.isInitialized && lastFile.exists() && !seenFile.exists()
 

@@ -145,10 +145,11 @@ class Settings(private val context: Context) {
     // --- Blocage ----------------------------------------------------------------------------
     /**
      * Lecteur léger automatique : quand un film est détecté, WiDo passe seul au lecteur intégré (bien
-     * moins gourmand que la page du site). Par défaut, activé sur les appareils à peu de mémoire.
+     * moins gourmand que la page du site, décodage matériel, reprise à la seconde). C'est le chemin normal :
+     * activé par défaut partout ; la page sert à choisir le film.
      */
     var autoNative: Boolean
-        get() = prefs.getBoolean("auto_native", DeviceMemory.isLow(context))
+        get() = prefs.getBoolean("auto_native", true)
         set(v) = prefs.edit().putBoolean("auto_native", v).apply()
 
     /**

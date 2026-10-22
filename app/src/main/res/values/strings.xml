@@ -494,4 +494,27 @@
     <string name="osd_pair_waiting">Un appareil demande à se lier : mets en pause pour répondre</string>
     <string name="s_detailed_log">Journal détaillé</string>
     <string name="s_detailed_log_note">Enregistre les gestes et décisions de WiDo (touches, retours, lecteur, mémoire), jamais les noms ou adresses de sites. Il s\'ajoute au rapport de plantage pour aider à comprendre un problème.</string>
+    <string name="sec_test">Test</string>
+    <string name="s_test_note">Un test complet de l\'appareil et de WiDo (environ une minute) : mémoire, réseau et débit, décodeurs vidéo, vraie lecture d\'un film de test dans le lecteur léger, réactivité des pages et du curseur, configuration. À la fin, un rapport propre à lire, à scanner avec le téléphone ou à envoyer.</string>
+    <string name="s_test_run">Test complet</string>
+    <string name="v_test_start">Lancer le test</string>
+    <string name="test_title">Test complet</string>
+    <string name="test_running">WiDo s\'examine… une vidéo de test va jouer (environ une minute).</string>
+    <string name="test_done">Terminé. Le rapport détaille chaque étape.</string>
+    <string name="test_step_running">En cours…</string>
+    <string name="test_step_device">Appareil et mémoire</string>
+    <string name="test_step_network">Réseau et débit</string>
+    <string name="test_step_codecs">Décodeurs vidéo</string>
+    <string name="test_step_playback">Lecture (lecteur léger)</string>
+    <string name="test_step_web">Pages et curseur</string>
+    <string name="test_step_app">Configuration de WiDo</string>
+    <string name="test_step_memory">Mémoire à la fin</string>
+    <string name="test_video_area">La vidéo de test s\'affichera ici</string>
+    <string name="test_show_report">Voir le rapport</string>
+    <string name="test_again">Relancer</string>
+    <string name="test_report_title">Rapport du test complet</string>
+    <string name="s_screensaver">Écran de veille</string>
+    <string name="v_screensaver_choose">Choisir WiDo</string>
+    <string name="s_screensaver_note">Remplace l\'écran de veille du système (l\'arc-en-ciel) par celui de WiDo : halos de verre bleu, heure et date. Dans le réglage qui s\'ouvre, choisis « WiDo ».</string>
+    <string name="screensaver_manual">Réglage introuvable sur cette TV : Paramètres Android → Écran de veille (ou Économiseur d\'écran) → WiDo</string>
 </resources>

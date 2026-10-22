@@ -84,20 +84,9 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             .setDefaultRequestProperties(headers)
             .apply { intent.getStringExtra(EXTRA_USER_AGENT)?.let { setUserAgent(it) } }
 
-        val lowMemory = (application as WiDoApp).lowMemory
-        // Un décodeur matériel qui refuse le flux : le suivant (logiciel au besoin) prend le relais.
-        val renderers = DefaultRenderersFactory(this).setEnableDecoderFallback(true)
-        trackSelector = DefaultTrackSelector(this).apply {
-            // Clé d'1 Go : pas de 4K (le décodage et ses tampons ne tiennent pas avec le reste).
-            if (lowMemory) setParameters(buildUponParameters().setMaxVideoSize(1920, 1080))
-        }
-        player = ExoPlayer.Builder(this, renderers)
-            .setTrackSelector(trackSelector)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(http))
-            .apply { if (lowMemory) setLoadControl(lightLoadControl()) }
-            .setSeekBackIncrementMs(settings.seekSeconds * 1000L)
-            .setSeekForwardIncrementMs(settings.seekSeconds * 1000L)
-            .build()
+        val built = buildPlayer(this, http, (application as WiDoApp).lowMemory, settings.seekSeconds * 1000L)
+        player = built.first
+        trackSelector = built.second
         player.addAnalyticsListener(diagnostics)
 
         view = PlayerView(this).apply {
@@ -205,16 +194,6 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
     private var retries = 0
     /** Le flux n'a pas pu être lu : la page ne doit pas renvoyer aussitôt vers le lecteur léger. */
     private var failed = false
-
-    /**
-     * Tampons réduits pour les clés d'1 Go : 15 à 30 s d'avance et 24 Mo au plus (au lieu de 50 s, et jusqu'à
-     * plus de 100 Mo pour un flux 1080p). C'est cette mémoire qui manquait au décodeur : l'image se figeait.
-     */
-    private fun lightLoadControl() = DefaultLoadControl.Builder()
-        .setBufferDurationsMs(15_000, 30_000, 2_000, 4_000)
-        .setTargetBufferBytes(24 * 1024 * 1024)
-        .setPrioritizeTimeOverSizeThresholds(false)
-        .build()
 
     /** Ce que le journal détaillé retient du décodage : le décodeur choisi, les images perdues. */
     private val diagnostics = object : AnalyticsListener {
@@ -460,39 +439,18 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             view.postDelayed(showPause, 1_500)
             return
         }
-        val density = resources.displayMetrics.density
-        val scale = settings.uiScale
         val left = ((player.duration - player.currentPosition) / 1000.0).coerceAtLeast(0.0)
         val end = android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date(System.currentTimeMillis() + (left * 1000).toLong()))
         val host = intent.getStringExtra(EXTRA_PAGE)?.let { dev.wido.core.Hosts.of(it)?.removePrefix("www.") }.orEmpty()
-        fun text(value: String, size: Float, color: Int, weight: Int, top: Int = 0) = TextView(this).apply {
-            this.text = value
-            setTextColor(color)
-            textSize = size * scale
-            useJakarta(weight)
-            setPadding(0, (top * density).toInt(), 0, 0)
-        }
-        val column = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            addView(text(intent.getStringExtra(EXTRA_TITLE)?.takeIf { it.isNotBlank() } ?: host, 34f, 0xFFFFFFFF.toInt(), 800).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
-            addView(
-                text(
-                    listOfNotNull(host.takeIf { it.isNotEmpty() }, if (player.duration > 0) getString(R.string.osd_remaining, dev.wido.core.PlayerFormat.time(left), end) else null).joinToString("  ·  "),
-                    17f, 0xCCFFFFFF.toInt(), 600, 10,
-                ),
-            )
-            addView(text(getString(R.string.native_pause_hint), 14f, 0x99FFFFFF.toInt(), 600, 18))
-        }
-        val screen = FrameLayout(this).apply {
-            background = PauseBackdrop.drawable(resources)
-            val pad = (56 * density).toInt()
-            addView(
-                column,
-                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, android.view.Gravity.BOTTOM)
-                    .apply { setMargins(pad, 0, pad, (48 * density).toInt()) },
-            )
-            alpha = 0f
-        }
+        val screen = PauseScreen.build(
+            this,
+            title = intent.getStringExtra(EXTRA_TITLE)?.takeIf { it.isNotBlank() } ?: host,
+            detail = listOfNotNull(host.takeIf { it.isNotEmpty() }, if (player.duration > 0) getString(R.string.osd_remaining, dev.wido.core.PlayerFormat.time(left), end) else null).joinToString("  ·  "),
+            hint = getString(R.string.native_pause_hint),
+            scale = settings.uiScale,
+        )
+        // L'image du moment pour « Reprendre » (sur les clés d'1 Go, elle n'est plus copiée pendant la lecture).
+        captureFrame()
         pauseView = screen
         CrashLog.trace("natif : écran de pause affiché")
         view.hideController()
@@ -687,6 +645,35 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         private const val EXTRA_PAGE = "page"
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_IMAGE = "image"
+
+        /**
+         * Le lecteur tel que WiDo le règle (lecteur léger et test complet) : décodeur de secours si le décodeur
+         * matériel refuse le flux ; sur une clé d'1 Go, pas de 4K et des tampons réduits.
+         */
+        fun buildPlayer(context: Context, dataSource: androidx.media3.datasource.DataSource.Factory, lowMemory: Boolean, seekMs: Long): Pair<ExoPlayer, DefaultTrackSelector> {
+            val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+            val selector = DefaultTrackSelector(context).apply {
+                if (lowMemory) setParameters(buildUponParameters().setMaxVideoSize(1920, 1080))
+            }
+            val player = ExoPlayer.Builder(context, renderers)
+                .setTrackSelector(selector)
+                .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(dataSource))
+                .apply { if (lowMemory) setLoadControl(lightLoadControl()) }
+                .setSeekBackIncrementMs(seekMs)
+                .setSeekForwardIncrementMs(seekMs)
+                .build()
+            return player to selector
+        }
+
+        /**
+         * Tampons réduits pour les clés d'1 Go : 15 à 30 s d'avance et 24 Mo au plus (au lieu de 50 s, et jusqu'à
+         * plus de 100 Mo pour un flux 1080p). C'est cette mémoire qui manquait au décodeur : l'image se figeait.
+         */
+        private fun lightLoadControl() = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(15_000, 30_000, 2_000, 4_000)
+            .setTargetBufferBytes(24 * 1024 * 1024)
+            .setPrioritizeTimeOverSizeThresholds(false)
+            .build()
 
         private val RESIZE_MODES = intArrayOf(
             AspectRatioFrameLayout.RESIZE_MODE_FIT,
