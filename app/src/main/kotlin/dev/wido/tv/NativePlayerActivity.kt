@@ -655,16 +655,28 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
          */
         fun buildPlayer(context: Context, dataSource: androidx.media3.datasource.DataSource.Factory, lowMemory: Boolean, seekMs: Long): Pair<ExoPlayer, DefaultTrackSelector> {
             val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+            // Le débit mesuré la dernière fois : la vidéo démarre dans la bonne qualité au lieu de la plus basse.
+            val settings = (context.applicationContext as WiDoApp).settings
+            val meter = androidx.media3.exoplayer.upstream.DefaultBandwidthMeter.Builder(context)
+                .apply { settings.lastBitrate.takeIf { it > 0 }?.let { setInitialBitrateEstimate(it) } }
+                .build()
             val selector = DefaultTrackSelector(context).apply {
                 if (lowMemory) setParameters(buildUponParameters().setMaxVideoSize(1920, 1080))
             }
             val player = ExoPlayer.Builder(context, renderers)
                 .setTrackSelector(selector)
+                .setBandwidthMeter(meter)
                 .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(dataSource))
                 .apply { if (lowMemory) setLoadControl(lightLoadControl()) }
                 .setSeekBackIncrementMs(seekMs)
                 .setSeekForwardIncrementMs(seekMs)
                 .build()
+            player.addAnalyticsListener(object : AnalyticsListener {
+                override fun onBandwidthEstimate(eventTime: AnalyticsListener.EventTime, totalLoadTimeMs: Int, totalBytesLoaded: Long, bitrateEstimate: Long) {
+                    // Retenu pour la prochaine lecture (un peu en dessous : une marge contre les à-coups du Wi-Fi).
+                    if (bitrateEstimate > 0) settings.lastBitrate = bitrateEstimate * 3 / 4
+                }
+            })
             return player to selector
         }
 

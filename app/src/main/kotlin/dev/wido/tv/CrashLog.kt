@@ -94,9 +94,15 @@ object CrashLog {
             // Aussi dans le journal détaillé, à sa place juste avant le redémarrage.
             trace("arrêt précédent : $line")
             if (crashed) {
-                // Trace du plantage natif ou de l'ANR quand Android la fournit.
-                val trace = runCatching { exit.traceInputStream?.bufferedReader()?.use { it.readText() } }.getOrNull()
-                lastFile.writeText(header(exit.timestamp) + line + "\n\n" + (trace?.take(MAX_CHARS) ?: memory(context)))
+                // Erreur de WiDo : la pile écrite au moment du plantage est gardée (Android n'en donne pas),
+                // la cause selon Android s'y ajoute. Sinon : la trace du plantage natif ou de l'ANR quand Android la fournit.
+                val written = lastFile.takeIf { it.exists() && it.lastModified() >= exit.timestamp - 60_000 }?.readText()
+                if (written != null) {
+                    lastFile.writeText(written.trimEnd() + "\n\n" + line + "\n" + memory(context) + "\n")
+                } else {
+                    val trace = runCatching { exit.traceInputStream?.bufferedReader()?.use { it.readText() } }.getOrNull()
+                    lastFile.writeText(header(exit.timestamp) + line + "\n\n" + (trace?.take(MAX_CHARS) ?: memory(context)))
+                }
                 seenFile.delete()
             }
         }
@@ -175,7 +181,9 @@ object CrashLog {
     fun memoryLine(context: Context): String {
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val info = android.app.ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
-        val pss = runCatching { am.getProcessMemoryInfo(intArrayOf(android.os.Process.myPid()))[0].totalPss / 1024 }.getOrDefault(-1)
+        // Debug.getPss : la mémoire du moment. (getProcessMemoryInfo n'est relu par Android que toutes les
+        // 5 minutes environ pour une appli : il donnait des chiffres figés.)
+        val pss = runCatching { android.os.Debug.getPss() / 1024 }.getOrDefault(-1L)
         val rt = Runtime.getRuntime()
         return "mémoire : appli ${pss} Mo, tas ${(rt.totalMemory() - rt.freeMemory()) / 1_048_576}/${rt.maxMemory() / 1_048_576} Mo, libre ${info.availMem / 1_048_576} Mo" +
             (if (info.lowMemory) " (FAIBLE)" else "")
@@ -210,6 +218,9 @@ object CrashLog {
         }
         return base + title + kept.joinToString("\n")
     }
+
+    /** La dernière erreur enregistrée (pile ou cause d'arrêt), pour le rapport du test complet. */
+    fun lastCrash(): String? = if (!::dir.isInitialized) null else lastFile.takeIf { it.exists() }?.readText()?.takeIf { it.isNotBlank() }
 
     /** Les derniers événements (fermetures, mémoire faible…), pour le rapport du test complet. */
     fun recentEvents(): String? = if (!::dir.isInitialized) null else eventsFile.takeIf { it.exists() }?.readText()?.takeIf { it.isNotBlank() }

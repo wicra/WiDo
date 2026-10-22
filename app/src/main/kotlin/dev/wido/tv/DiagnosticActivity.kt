@@ -154,6 +154,7 @@ class DiagnosticActivity : ComponentActivity() {
             val fail = steps.count { it.status == Status.FAIL }
             val summary = "Résumé : $ok OK · $warn à surveiller · $fail en échec · ${(SystemClock.elapsedRealtime() - started) / 1000} s"
             out.insert(out.indexOf("\n") + 1, "$summary\n")
+            CrashLog.lastCrash()?.let { out.append("\n== Dernière erreur enregistrée\n").append(it.take(3_000).trimEnd()).append('\n') }
             CrashLog.recentEvents()?.let { out.append("\n== Derniers événements\n").append(it).append('\n') }
             CrashLog.recentTrace(60).takeIf { it.isNotEmpty() }?.let { out.append("\n== Journal détaillé (60 dernières lignes)\n").append(it.joinToString("\n")).append('\n') }
             CrashLog.event("Test complet : $ok OK, $warn à surveiller, $fail en échec")

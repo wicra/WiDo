@@ -281,7 +281,7 @@
     <string name="share_here">Here</string>
     <string name="share_sending">Sending to %1$s…</string>
     <string name="share_no_link">No link in this share.</string>
-    <string name="osd_ad_background">Ad opened in the background, closed in 5 s</string>
+    <string name="osd_ad_background">Ad opened in the background, closed in 2 s</string>
     <string name="watch_left">%1$d min left</string>
     <string name="action_resume">Resume</string>
     <string name="action_remove">Remove</string>

@@ -1138,6 +1138,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 osd.showText(getString(R.string.osd_pick_nothing), OsdView.Kind.Warning)
             } else {
                 (application as WiDoApp).repository.addHide(current.id, selector)
+                CrashLog.trace("site : élément masqué (${selector.length} signes)")
+                // Masqué tout de suite sur les pages suivantes de cette séance (pas seulement à la prochaine ouverture).
+                val script = injector?.addHide(selector).orEmpty()
+                if (script.isNotEmpty() && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                    runCatching { WebViewCompat.addDocumentStartJavaScript(wv, "if (window.top === window) {\n$script\n}", setOf("*")) }
+                }
                 osd.showText(getString(R.string.osd_pick_done), OsdView.Kind.Success)
             }
         }
@@ -2030,7 +2036,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     /** La page a été arrêtée par Android pendant le lecteur léger : une page neuve est ouverte au retour. */
     private var pageLost = false
 
-    /** Mémoire qui manque pendant le lecteur léger : la page derrière est vidée, elle sera rechargée au retour. */
+    /** Image du film figée (la mémoire manque vraiment) : la page derrière est vidée, elle sera rechargée au retour. */
     private fun releasePageForNative(page: String, why: String) {
         if (!nativeActive || nativeReturnUrl != null) return
         CrashLog.event("Page vidée pendant le lecteur léger ($why)")
@@ -2041,9 +2047,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (nativeActive && level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
-            NativeHandoff.requestRelease("mémoire faible, niveau $level")
-        }
+        // Pas de page vidée sur ce seul signal : sur une clé d'1 Go, Android l'envoie sans cesse (même avec
+        // 350 Mo libres) et la page était rechargée à chaque retour du film. Pendant le film, le moteur de la
+        // page passe après tout le reste : si la mémoire manque vraiment, Android l'arrête lui-même.
+        if (nativeActive) CrashLog.trace("site : mémoire faible pendant le lecteur léger (niveau $level), page gardée")
     }
 
     /** Retour du lecteur natif : la vidéo de la page se cale sur la seconde où on l'a quitté (une seule entrée dans Reprendre). */

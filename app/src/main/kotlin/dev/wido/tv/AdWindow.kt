@@ -134,7 +134,7 @@ class AdWindow(
         /** Secondes pendant lesquelles la pub reste affichée une fois chargée. */
         const val VISIBLE_SECONDS = 2
         /** Fermeture de toute façon, même si la pub ne finit jamais de charger. */
-        const val MAX_OPEN_MS = 20_000L
+        const val MAX_OPEN_MS = 8_000L
         /** Coupe le son de tout média de la pub, y compris ceux ajoutés ensuite. */
         const val MUTE_SCRIPT = "(function(){function m(){document.querySelectorAll('video,audio').forEach(function(e){e.muted=true;});}m();setInterval(m,500);})()"
     }
