@@ -159,6 +159,8 @@ fun MenuScreen(
     // Le disque tiré du bac (dernier focalisé) : ses voisins s'écartent en vague.
     var rackIndex by remember { mutableIntStateOf(-1) }
     var refocusSites by remember { mutableIntStateOf(0) }
+    /** Dernière demande de retour aux disques déjà servie : revenir sur l'onglet Sites par les onglets ne la rejoue pas. */
+    var refocusDone by remember { mutableIntStateOf(0) }
     // Positions gardées quand on passe par un autre onglet : on retrouve la rangée et la grille où on les a laissées.
     val rowState = androidx.compose.foundation.lazy.rememberLazyListState()
     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
@@ -231,7 +233,10 @@ fun MenuScreen(
                   val viewport = maxHeight
                   // De retour sur les sites (Retour, double Retour dans le lecteur) : le focus revient au dernier disque.
                   LaunchedEffect(refocusSites) {
-                      if (refocusSites == 0) return@LaunchedEffect
+                      // Ce bloc se relance à chaque retour sur l'onglet Sites : on ne descend vers les disques que pour
+                      // une demande nouvelle (Retour, double Retour), jamais quand on parcourt les onglets en haut.
+                      if (refocusSites == 0 || refocusSites == refocusDone) return@LaunchedEffect
+                      refocusDone = refocusSites
                       androidx.compose.runtime.withFrameNanos { }
                       runCatching { (currentId?.let { cardFocus[it] } ?: firstCard).requestFocus() }
                   }
@@ -412,8 +417,12 @@ fun MenuScreen(
 }
 
 /** Le logo à gauche, la pilule d'onglets au centre, l'état et l'heure à droite. */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun TopBar(state: ConfigState, tab: Tab, settingsEntry: FocusRequester, onTab: (Tab) -> Unit, onRefresh: () -> Unit) {
+    val sitesTab = remember { FocusRequester() }
+    val continueTab = remember { FocusRequester() }
+    val settingsTab = remember { FocusRequester() }
     Box(Modifier.fillMaxWidth().padding(start = 52.dp, end = 40.dp, top = 24.dp, bottom = 8.dp)) {
         Wordmark(Modifier.align(Alignment.CenterStart))
         Row(
@@ -421,13 +430,25 @@ private fun TopBar(state: ConfigState, tab: Tab, settingsEntry: FocusRequester, 
                 .align(Alignment.Center)
                 .clip(PillShape)
                 .background(Palette.Glass)
+                // ▲ depuis la page arrive sur l'onglet affiché, pas sur le plus proche à l'écran : depuis les réglages
+                // (colonne de gauche), on tombait sur « Sites », qui s'ouvrait aussitôt.
+                .focusProperties {
+                    enter = {
+                        when (tab) {
+                            Tab.Sites -> sitesTab
+                            Tab.Continue -> continueTab
+                            Tab.Settings -> settingsTab
+                        }
+                    }
+                }
+                .focusGroup()
                 .padding(5.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            TabItem(stringResource(R.string.tab_sites), tab == Tab.Sites) { onTab(Tab.Sites) }
-            TabItem(stringResource(R.string.continue_title), tab == Tab.Continue) { onTab(Tab.Continue) }
+            TabItem(stringResource(R.string.tab_sites), tab == Tab.Sites, requester = sitesTab) { onTab(Tab.Sites) }
+            TabItem(stringResource(R.string.continue_title), tab == Tab.Continue, requester = continueTab) { onTab(Tab.Continue) }
             // ▼ depuis « Réglages » va au thème choisi (colonne de gauche), pas au premier réglage de la liste.
-            TabItem(stringResource(R.string.action_settings), tab == Tab.Settings, downTo = settingsEntry) { onTab(Tab.Settings) }
+            TabItem(stringResource(R.string.action_settings), tab == Tab.Settings, downTo = settingsEntry, requester = settingsTab) { onTab(Tab.Settings) }
         }
         StatusPill(state, onRefresh, Modifier.align(Alignment.CenterEnd))
     }
@@ -441,11 +462,12 @@ fun Wordmark(modifier: Modifier = Modifier) {
 
 /** Un onglet : il s'active dès qu'il reçoit le focus, comme sur les écrans d'accueil des TV. */
 @Composable
-private fun TabItem(label: String, selected: Boolean, downTo: FocusRequester? = null, onSelect: () -> Unit) {
+private fun TabItem(label: String, selected: Boolean, downTo: FocusRequester? = null, requester: FocusRequester, onSelect: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val background by animateColorAsState(if (selected) Color.White else Color.Transparent, label = "tab")
     Box(
         Modifier
+            .focusRequester(requester)
             .focusProperties { if (downTo != null) down = downTo }
             .tvFocusable(
                 PillShape,
