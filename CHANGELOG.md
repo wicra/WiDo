@@ -1,5 +1,16 @@
 # Changelog
 
+## Non publié
+
+### Corrigé
+- **Lecteur léger : image figée alors que le son continue.** Sur les clés d'1 Go, le lecteur gardait jusqu'à 50 s de vidéo d'avance (plus de 100 Mo pour un flux 1080p) : la mémoire manquait au décodeur. Tampons réduits (15 à 30 s, 24 Mo), pas de 4K, décodeur de secours si le décodeur matériel refuse le flux, plus de copie de l'image vidéo toutes les 45 s. Une image qui reste figée plus de 3 s pendant que le son avance est détectée : le décodeur est relancé à la même seconde, la page laissée derrière est libérée, et si cela recommence, la qualité baisse d'un cran. Coupure réseau ou décodeur qui cale : reprise seule à la même seconde (2 fois) au lieu de fermer le lecteur. Roue d'attente pendant le chargement.
+- **Retour au site depuis le lecteur léger** : la page n'est plus rechargée à chaque fois. Elle reste en pause derrière le film (scripts arrêtés) et n'est vidée que si Android manque de mémoire ; s'il l'arrête lui-même, il arrête la page et non plus WiDo, et une page neuve s'ouvre au retour, à la bonne seconde.
+- **Lecteur léger automatique contourné** : après un retour au site, relancer le film le jouait dans la page (plus de 300 Mo, fermeture par Android). Il repart maintenant dans le lecteur léger, sauf si le flux venait d'échouer.
+- **Rapport de plantage : le QR code donne le rapport complet** (il ne contenait que les 1 200 premiers signes). Il ouvre sur le téléphone une page servie par la TV sur le réseau local, avec Copier et Partager, tant que la fenêtre est ouverte ; sans réseau, il garde le début du rapport.
+- **Journal détaillé** : « écran de pause demandé » n'est plus répété toutes les 10 s pendant une pause (le journal en était rempli) ; le lecteur léger y note son décodeur, la taille de l'image, les images sautées et les erreurs avec la mémoire du moment.
+- **Télécommande** : un appui doublé par la télécommande (deux Retour à 48 ms dans le journal) n'est plus compté deux fois ; les flèches appuyées vite sur un site ne se perdent plus pendant que la page répond (elles sont jouées dans l'ordre).
+- Le rappel des touches du lecteur léger ne parle plus du volume aux flèches.
+
 ## 0.9.1
 
 ### Ajouté

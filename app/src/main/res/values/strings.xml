@@ -407,7 +407,8 @@
     <string name="crash_copy">Copier</string>
     <string name="crash_copied">Rapport copié</string>
     <string name="crash_share">Partager</string>
-    <string name="crash_scan">Scanne avec le téléphone pour récupérer le rapport</string>
+    <string name="crash_scan">Scanne avec le téléphone (même Wi-Fi) : le rapport complet s\'ouvre, à copier ou partager</string>
+    <string name="crash_scan_partial">Pas de réseau local : le QR code ne contient que le début du rapport</string>
     <string name="crash_toast">WiDo s\'est fermé sur une erreur : le rapport est dans Réglages → Général</string>
     <string name="action_close">Fermer</string>
     <string name="a11y_up">Haut</string>
@@ -442,7 +443,10 @@
     <string name="osd_paused_cursor">Curseur : OK clique · pour reprendre, Menu → Lecture</string>
     <string name="osd_page_reloaded">Page rechargée à %1$s : OK pour reprendre</string>
     <string name="native_back_site">← Site</string>
-    <string name="native_hint">Retour : revenir au site · ◀ ▶ avancer ou reculer · ▲ ▼ volume</string>
+    <string name="native_hint">Retour : revenir au site · ◀ ▶ avancer ou reculer · OK : barre de lecture · Menu : options</string>
+    <string name="native_retrying">Flux interrompu : reprise à la même seconde…</string>
+    <string name="native_frozen">Image figée : relancée à la même seconde</string>
+    <string name="native_frozen_lower">Image figée : qualité réduite pour rester fluide</string>
     <string name="confirm_remove">Confirmer : retirer</string>
     <string name="confirm_reset">Confirmer la réinitialisation</string>
     <string name="confirm_forget">Confirmer : oublier</string>

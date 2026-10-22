@@ -438,6 +438,23 @@ private fun CrashReportDialog(report: String, onDismiss: () -> Unit) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var sending by remember { mutableStateOf(false) }
     var sent by remember { mutableStateOf(false) }
+    // TV : le QR code ouvre le rapport complet sur le téléphone (page servie par la TV tant que la fenêtre est ouverte).
+    var reportUrl by remember { mutableStateOf<String?>(null) }
+    if (!phone) {
+        val title = stringResource(R.string.s_crash_report)
+        val copy = stringResource(R.string.crash_copy)
+        val share = stringResource(R.string.crash_share)
+        val latest by androidx.compose.runtime.rememberUpdatedState(report)
+        // Une seule adresse tant que la fenêtre est ouverte : le QR code scanné reste valable.
+        androidx.compose.runtime.DisposableEffect(Unit) {
+            val link = dev.wido.tv.ReportLink({ latest }, title, copy, share)
+            reportUrl = link.start()
+            onDispose {
+                link.stop()
+                reportUrl = null
+            }
+        }
+    }
     DialogFrame(
         title = stringResource(R.string.s_crash_report),
         onDismiss = onDismiss,
@@ -482,8 +499,13 @@ private fun CrashReportDialog(report: String, onDismiss: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             if (!phone) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.clip(RoundedCornerShape(14.dp)).background(Color.White).padding(10.dp)) { QrCode(report.take(QR_CHARS), 220.dp) }
-                    Text(stringResource(R.string.crash_scan), color = Palette.TextSecondary, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.width(240.dp))
+                    val url = reportUrl
+                    // Sans réseau local, le QR code ne porte que le début du rapport (c'est tout ce qu'il peut tenir).
+                    Box(Modifier.clip(RoundedCornerShape(14.dp)).background(Color.White).padding(10.dp)) { QrCode(url ?: report.take(QR_CHARS), 220.dp) }
+                    Text(
+                        stringResource(if (url != null) R.string.crash_scan else R.string.crash_scan_partial),
+                        color = Palette.TextSecondary, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.width(240.dp),
+                    )
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -532,7 +554,7 @@ private fun ScrollableReport(report: String) {
     )
 }
 
-/** Ce qu'un QR code lisible tient du rapport (le début : version, appareil, erreur). */
+/** Sans réseau : ce qu'un QR code lisible tient du rapport (le début : version, appareil, erreur). */
 private const val QR_CHARS = 1_200
 
 /** Un thème des réglages : titre, icône et contenu. */

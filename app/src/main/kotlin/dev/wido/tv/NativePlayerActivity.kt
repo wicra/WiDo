@@ -18,12 +18,19 @@ import androidx.activity.ComponentActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DecoderCounters
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
@@ -77,16 +84,28 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             .setDefaultRequestProperties(headers)
             .apply { intent.getStringExtra(EXTRA_USER_AGENT)?.let { setUserAgent(it) } }
 
-        player = ExoPlayer.Builder(this)
+        val lowMemory = (application as WiDoApp).lowMemory
+        // Un décodeur matériel qui refuse le flux : le suivant (logiciel au besoin) prend le relais.
+        val renderers = DefaultRenderersFactory(this).setEnableDecoderFallback(true)
+        trackSelector = DefaultTrackSelector(this).apply {
+            // Clé d'1 Go : pas de 4K (le décodage et ses tampons ne tiennent pas avec le reste).
+            if (lowMemory) setParameters(buildUponParameters().setMaxVideoSize(1920, 1080))
+        }
+        player = ExoPlayer.Builder(this, renderers)
+            .setTrackSelector(trackSelector)
             .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(http))
+            .apply { if (lowMemory) setLoadControl(lightLoadControl()) }
             .setSeekBackIncrementMs(settings.seekSeconds * 1000L)
             .setSeekForwardIncrementMs(settings.seekSeconds * 1000L)
             .build()
+        player.addAnalyticsListener(diagnostics)
 
         view = PlayerView(this).apply {
             setBackgroundColor(Color.BLACK)
             this.player = this@NativePlayerActivity.player
             keepScreenOn = true
+            // Flux qui se recharge : la roue tourne, plutôt qu'une image arrêtée sans explication.
+            setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
             setShowSubtitleButton(true)
             setShowNextButton(false)
             setShowPreviousButton(false)
@@ -144,12 +163,31 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         player.setMediaItem(item)
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                CrashLog.trace("natif : erreur ${error.errorCodeName}")
+                CrashLog.trace("natif : erreur ${error.errorCodeName} (${CrashLog.memoryLine(this@NativePlayerActivity)})")
+                // Coupure du réseau, décodeur qui cale, direct trop en retard : on relance à la même seconde (2 fois au plus).
+                if (error.errorCode in RETRYABLE && retries < MAX_RETRIES) {
+                    retries++
+                    CrashLog.event("Lecteur léger : ${error.errorCodeName}, relance n°$retries")
+                    if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) player.seekToDefaultPosition()
+                    player.prepare()
+                    osd.showText(getString(R.string.native_retrying), OsdView.Kind.Warning)
+                    return
+                }
+                CrashLog.event("Lecteur léger : échec ${error.errorCodeName}")
+                failed = true
                 Toast.makeText(this@NativePlayerActivity, R.string.native_failed, Toast.LENGTH_LONG).show()
                 finish()
             }
 
-            override fun onIsPlayingChanged(isPlaying: Boolean) = schedulePause()
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.height > 0) CrashLog.trace("natif : image ${videoSize.width}×${videoSize.height}")
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // La lecture repart normalement : les relances sont de nouveau permises.
+                if (isPlaying) retries = 0
+                schedulePause()
+            }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = schedulePause()
         })
@@ -163,8 +201,102 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         view.postDelayed({ if (!isFinishing) osd.showText(getString(R.string.native_hint)) }, 1_200)
     }
 
+    private lateinit var trackSelector: DefaultTrackSelector
+    private var retries = 0
+    /** Le flux n'a pas pu être lu : la page ne doit pas renvoyer aussitôt vers le lecteur léger. */
+    private var failed = false
+
+    /**
+     * Tampons réduits pour les clés d'1 Go : 15 à 30 s d'avance et 24 Mo au plus (au lieu de 50 s, et jusqu'à
+     * plus de 100 Mo pour un flux 1080p). C'est cette mémoire qui manquait au décodeur : l'image se figeait.
+     */
+    private fun lightLoadControl() = DefaultLoadControl.Builder()
+        .setBufferDurationsMs(15_000, 30_000, 2_000, 4_000)
+        .setTargetBufferBytes(24 * 1024 * 1024)
+        .setPrioritizeTimeOverSizeThresholds(false)
+        .build()
+
+    /** Ce que le journal détaillé retient du décodage : le décodeur choisi, les images perdues. */
+    private val diagnostics = object : AnalyticsListener {
+        override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
+            CrashLog.trace("natif : décodeur vidéo $decoderName")
+        }
+
+        override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
+            CrashLog.trace("natif : $droppedFrames images sautées en ${elapsedMs / 1000} s")
+        }
+    }
+
+    // --- Image figée alors que le son continue ------------------------------------------------
+
+    /**
+     * Toutes les secondes pendant la lecture : si plus aucune image n'est affichée alors que la position avance
+     * (le son continue), l'image s'est figée. On vide le décodeur (même seconde), on libère la page laissée
+     * derrière, et si cela recommence, on passe à une qualité plus légère quand le flux en propose une.
+     */
+    private val watchdog = object : Runnable {
+        override fun run() {
+            checkFrozen()
+            view.postDelayed(this, WATCHDOG_MS)
+        }
+    }
+
+    private var watchedCounters: DecoderCounters? = null
+    private var lastRendered = -1
+    private var stillSince = 0L
+    private var freezes = 0
+    private var lastFreezeAt = 0L
+
+    private fun checkFrozen() {
+        val counters = player.videoDecoderCounters
+        if (counters == null || !player.isPlaying || player.playbackState != Player.STATE_READY) {
+            lastRendered = -1
+            return
+        }
+        counters.ensureUpdated()
+        val rendered = counters.renderedOutputBufferCount
+        val position = player.currentPosition
+        if (counters !== watchedCounters || rendered != lastRendered) {
+            watchedCounters = counters
+            lastRendered = rendered
+            stillSince = position
+            return
+        }
+        if (position - stillSince < FROZEN_MS) return
+        lastRendered = -1
+        onFrozen()
+    }
+
+    private fun onFrozen() {
+        val now = SystemClock.elapsedRealtime()
+        freezes = if (now - lastFreezeAt < FREEZE_WINDOW_MS) freezes + 1 else 1
+        lastFreezeAt = now
+        CrashLog.event("Lecteur léger : image figée, son continu (n°$freezes) · ${CrashLog.memoryLine(this)}")
+        NativeHandoff.requestRelease("image figée")
+        val lowered = freezes >= 2 && lowerQuality()
+        // Une recherche à la même seconde vide le décodeur : l'image repart.
+        player.seekTo(player.currentPosition)
+        osd.showText(getString(if (lowered) R.string.native_frozen_lower else R.string.native_frozen), OsdView.Kind.Warning)
+    }
+
+    /** Limite la vidéo à la qualité juste en dessous de l'actuelle, si le flux en a une. Vrai si c'est fait. */
+    private fun lowerQuality(): Boolean {
+        val current = player.videoSize.height.takeIf { it > 0 } ?: return false
+        val lower = player.currentTracks.groups
+            .filter { it.type == C.TRACK_TYPE_VIDEO }
+            .flatMap { group -> (0 until group.length).filter { group.isTrackSupported(it) }.map { group.getTrackFormat(it).height } }
+            .filter { it in 1 until current }
+            .maxOrNull() ?: return false
+        CrashLog.event("Lecteur léger : qualité limitée à ${lower}p")
+        trackSelector.setParameters(trackSelector.buildUponParameters().setMaxVideoSize(Int.MAX_VALUE, lower))
+        return true
+    }
+
+    private val debounce = KeyDebounce()
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
+        if (tv && debounce.isBounce(event)) return true
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             CrashLog.trace("natif : touche ${KeyEvent.keyCodeToString(code).removePrefix("KEYCODE_")}, lecture=${player.isPlaying}, position=${player.currentPosition / 1000} s")
         }
@@ -321,7 +453,6 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     private fun showPauseScreen() {
-        CrashLog.trace("natif : écran de pause demandé")
         if (pauseView != null || panel != null || isFinishing) return
         val paused = !player.playWhenReady && player.playbackState == Player.STATE_READY
         if (!paused) return
@@ -363,6 +494,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             alpha = 0f
         }
         pauseView = screen
+        CrashLog.trace("natif : écran de pause affiché")
         view.hideController()
         rootFrame.addView(screen, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         screen.animate().alpha(1f).setDuration(450).start()
@@ -401,7 +533,8 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         override fun run() {
             publishNowPlaying()
             // Toutes les ~45 s de lecture : l'image de la vidéo pour « Reprendre ».
-            if (player.isPlaying && ++ticks % 22 == 0) captureFrame()
+            // Pas sur les clés d'1 Go : la copie de l'image vidéo prend de la mémoire au décodeur (elle se fait en quittant).
+            if (player.isPlaying && !(application as WiDoApp).lowMemory && ++ticks % 22 == 0) captureFrame()
             view.postDelayed(this, PUBLISH_MS)
         }
     }
@@ -464,6 +597,8 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         if (!::player.isInitialized) return
         (application as WiDoApp).remote.attach(this)
         view.post(publish)
+        view.removeCallbacks(watchdog)
+        view.postDelayed(watchdog, WATCHDOG_MS)
     }
 
     override fun onPause() {
@@ -471,6 +606,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         if (::player.isInitialized) {
             captureFrame()
             view.removeCallbacks(publish)
+            view.removeCallbacks(watchdog)
             (application as WiDoApp).remote.detach(this)
             if ((application as WiDoApp).isTv) (application as WiDoApp).link.nowPlaying.value = null
         }
@@ -479,8 +615,8 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
 
     /** La page reprend à la seconde où le lecteur natif s'est arrêté. */
     override fun finish() {
-        if (::player.isInitialized && player.currentPosition > 0) {
-            setResult(RESULT_OK, Intent().putExtra(RESULT_POSITION, player.currentPosition / 1000.0))
+        if (::player.isInitialized && (player.currentPosition > 0 || failed)) {
+            setResult(RESULT_OK, Intent().putExtra(RESULT_POSITION, player.currentPosition / 1000.0).putExtra(RESULT_FAILED, failed))
         }
         super.finish()
     }
@@ -497,6 +633,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         if (::view.isInitialized) {
             view.removeCallbacks(showPause)
             view.removeCallbacks(sleepNow)
+            view.removeCallbacks(watchdog)
         }
         if (::player.isInitialized) player.release()
         super.onDestroy()
@@ -524,6 +661,22 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         private const val PUBLISH_MS = 2_000L
         /** Position (s) où le lecteur natif s'est arrêté, rendue à la page. */
         const val RESULT_POSITION = "position"
+        /** Le flux n'a pas pu être lu (la page ne relance pas le lecteur léger d'elle-même). */
+        const val RESULT_FAILED = "failed"
+        private const val MAX_RETRIES = 2
+        private val RETRYABLE = setOf(
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+            PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+            PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
+            PlaybackException.ERROR_CODE_TIMEOUT,
+        )
+        private const val WATCHDOG_MS = 1_000L
+        /** Le son avance de 3 s sans nouvelle image : l'image est figée. */
+        private const val FROZEN_MS = 3_000L
+        /** Deux images figées en 5 min : la qualité baisse d'un cran. */
+        private const val FREEZE_WINDOW_MS = 5 * 60_000L
         private const val EXTRA_START = "start"
         private const val EXTRA_URL = "url"
         private const val EXTRA_KIND = "kind"

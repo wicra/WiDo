@@ -371,8 +371,11 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     // --- Télécommande -----------------------------------------------------------------------
 
+    private val debounce = KeyDebounce()
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (webView == null) return super.dispatchKeyEvent(event)
+        if (tv && debounce.isBounce(event)) return true
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             CrashLog.trace("site : touche ${KeyEvent.keyCodeToString(event.keyCode).removePrefix("KEYCODE_")}, curseur=$cursorMode, cinéma=$cinema")
         }
@@ -603,6 +606,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         if (settings.snapNavigation && event.repeatCount == 0 && customView == null) {
             snap(dirX, dirY)
         } else {
+            snapQueue.clear()
             freeMove(event.repeatCount, dirX, dirY)
         }
         return true
@@ -655,10 +659,23 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
     }
 
+    /** Une demande au curseur aimanté est en cours (la page répond en quelques dizaines de ms, plus sur une clé lente). */
+    private var snapPending = false
+    /** Flèches appuyées pendant ce temps : jouées dans l'ordre à la réponse, au lieu de partir de l'ancienne position. */
+    private val snapQueue = ArrayDeque<Pair<Int, Int>>()
+    private var snapAt = 0L
+
     /** Demande à la page le lien ou bouton le plus naturel dans cette direction ; sinon déplacement libre. */
     private fun snap(dirX: Int, dirY: Int) {
         val wv = webView ?: return
         if (wv.width == 0 || wv.height == 0) return
+        // Une réponse qui ne vient pas (page qui se recharge) ne bloque pas le curseur plus d'un instant.
+        if (snapPending && SystemClock.uptimeMillis() - snapAt < SNAP_TIMEOUT_MS) {
+            if (snapQueue.size < SNAP_QUEUE) snapQueue.addLast(dirX to dirY)
+            return
+        }
+        snapPending = true
+        snapAt = SystemClock.uptimeMillis()
         val dir = when {
             dirX < 0 -> "left"
             dirX > 0 -> "right"
@@ -668,6 +685,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val fx = cursor.px / wv.width
         val fy = cursor.py / wv.height
         wv.evaluateJavascript("window.__widoSnap?window.__widoSnap('$dir',$fx,$fy):null") { raw ->
+            snapPending = false
             val target = parseSnapTarget(raw)
             if (target != null) {
                 cursor.moveTo(target.first * wv.width, target.second * wv.height)
@@ -677,6 +695,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             } else {
                 freeMove(0, dirX, dirY)
             }
+            snapQueue.removeFirstOrNull()?.let { (x, y) -> snap(x, y) }
         }
     }
 
@@ -1699,6 +1718,24 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private var rendererLost = false
 
     private fun onRendererGone() {
+        // Page arrêtée par Android pendant le lecteur léger (mémoire) : rien à montrer, elle sera rouverte au retour.
+        if (nativeActive) {
+            CrashLog.event("Page arrêtée pendant le lecteur léger (mémoire), rouverte au retour")
+            val dead = webView
+            if (nativeReturnUrl == null) {
+                nativeReturnUrl = dead?.url
+                nativeStartPosition = currentPosition()
+            }
+            webView = null
+            pageLost = true
+            dead?.let {
+                root.removeView(it)
+                runCatching { it.destroy() }
+            }
+            WebViewPool.clear()
+            NativeHandoff.releasePage = null
+            return
+        }
         rendererLost = true
         val current = site
         CrashLog.event("Page arrêtée (moteur du navigateur) : ${current?.name.orEmpty()} ${Hosts.of(webView?.url.orEmpty()).orEmpty()}")
@@ -1754,9 +1791,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     /** Vidéo en pause depuis quelques secondes : la page s'assombrit, titre et temps restant en bas. */
     private fun schedulePauseScreen(state: MediaState) {
-        root.removeCallbacks(showPause)
         if (!tv) return
-        if (state.paused && state.duration > 0) root.postDelayed(showPause, PAUSE_SCREEN_MS) else hidePauseScreen()
+        val paused = state.paused && state.duration > 0
+        // Déjà affiché (le relevé de la position revient toutes les 10 s) : rien à refaire.
+        if (paused && pauseView != null) return
+        root.removeCallbacks(showPause)
+        if (paused) root.postDelayed(showPause, PAUSE_SCREEN_MS) else hidePauseScreen()
     }
 
     /** Dernière touche de la télécommande (l'écran de pause n'interrompt pas quelqu'un qui navigue). */
@@ -1764,7 +1804,6 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     private fun showPauseScreen() {
         val state = mediaState.value ?: return
-        if (state.paused) CrashLog.trace("site : écran de pause demandé")
         if (!state.paused || pauseView != null || panelView != null || helpView != null || picking) return
         if (SystemClock.uptimeMillis() - lastInputAt < PAUSE_IDLE_MS) {
             // Quelqu'un vient d'utiliser la télécommande (choisir un épisode…) : on attend le calme.
@@ -1815,6 +1854,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             isFocusable = false
         }
         pauseView = view
+        CrashLog.trace("site : écran de pause affiché")
         root.addView(view, FrameLayout.LayoutParams(MATCH, MATCH))
         view.bringToFront()
         view.animate().alpha(1f).setDuration(450).start()
@@ -1956,7 +1996,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
      * ait à ouvrir le menu. Renvoie vrai si le passage est lancé. Pas pour une pub (vidéo courte).
      */
     private fun maybeAutoNative(): Boolean {
-        if (!settings.autoNative || nativeReturnUrl != null || client?.stream == null) return false
+        if (!settings.autoNative || nativeActive || nativeReturnUrl != null || client?.stream == null) return false
         val state = mediaState.value ?: return false
         val page = webView?.url ?: return false
         if (state.paused || state.duration < AUTO_NATIVE_MIN_SECONDS || page == autoNativeTried) return false
@@ -1971,6 +2011,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     private fun openNative() {
         CrashLog.trace("lecteur natif : ouverture demandée")
+        // Déjà ouvert (passage automatique et menu presque en même temps) : un seul lecteur.
+        if (nativeActive) return
         val current = site ?: return
         val wv = webView ?: return
         val stream = client?.stream
@@ -1984,23 +2026,78 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val cookies = runCatching { android.webkit.CookieManager.getInstance().getCookie(stream.url) }.getOrNull()
         val lowMemory = (application as WiDoApp).lowMemory
         val page = wv.url
+        nativeActive = true
+        nativeStartPosition = start
         nativeLauncher.launch(
             NativePlayerActivity.intent(
                 this, stream, current.id, ResumeUrl.toRemember(current, wv.url), wv.title, pageImage, wv.url, cookies,
                 wv.settings.userAgentString, start,
             ),
         )
+        // Les scripts de la page (pubs, mesures d'audience) s'arrêtent pendant le film : le processeur reste au décodage.
+        wv.pauseTimers()
+        timersPaused = true
         if (lowMemory && page != null) {
-            // La page (et son lecteur) pèse plus de 300 Mo : on la vide pendant le film, on la rechargera au retour.
-            nativeReturnUrl = page
-            nativeStartPosition = start
-            root.postDelayed({ if (nativeReturnUrl != null) webView?.loadUrl("about:blank") }, 600)
+            // La page (et son lecteur) pèse plus de 300 Mo. Elle reste chargée derrière le film, en pause : le retour
+            // au site est instantané. Elle n'est vidée (puis rechargée au retour) que si la mémoire vient à manquer.
+            NativeHandoff.releasePage = { why -> releasePageForNative(page, why) }
+            // Page cachée derrière le film : son moteur passe après le reste. Si la mémoire manque, Android arrête
+            // la page (rouverte au retour) plutôt que WiDo et le film.
+            runCatching { wv.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true) }
+        }
+    }
+
+    /** Le lecteur léger est à l'écran, ouvert depuis cette page. */
+    private var nativeActive = false
+    /** Minuteries JavaScript arrêtées pendant le lecteur léger (réglage global à toutes les WebView : à rétablir sans faute). */
+    private var timersPaused = false
+
+    private fun resumeTimers() {
+        if (!timersPaused) return
+        timersPaused = false
+        val wv = webView
+        if (wv != null) wv.resumeTimers() else runCatching { WebView(this).apply { resumeTimers(); destroy() } }
+    }
+    /** La page a été arrêtée par Android pendant le lecteur léger : une page neuve est ouverte au retour. */
+    private var pageLost = false
+
+    /** Mémoire qui manque pendant le lecteur léger : la page derrière est vidée, elle sera rechargée au retour. */
+    private fun releasePageForNative(page: String, why: String) {
+        if (!nativeActive || nativeReturnUrl != null) return
+        CrashLog.event("Page vidée pendant le lecteur léger ($why)")
+        NativeHandoff.releasePage = null
+        nativeReturnUrl = page
+        webView?.loadUrl("about:blank")
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (nativeActive && level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            NativeHandoff.requestRelease("mémoire faible, niveau $level")
         }
     }
 
     /** Retour du lecteur natif : la vidéo de la page se cale sur la seconde où on l'a quitté (une seule entrée dans Reprendre). */
     private val nativeLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
         val position = result.data?.getDoubleExtra(NativePlayerActivity.RESULT_POSITION, -1.0) ?: -1.0
+        val failed = result.data?.getBooleanExtra(NativePlayerActivity.RESULT_FAILED, false) == true
+        nativeActive = false
+        NativeHandoff.releasePage = null
+        resumeTimers()
+        webView?.let { runCatching { it.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false) } }
+        // Retour normal (← Site, Retour) : si on relance le film dans la page, il repart dans le lecteur léger,
+        // comme le veut le réglage. Après un échec du flux, on n'y renvoie pas (pas de boucle).
+        if (!failed) autoNativeTried = null
+        if (pageLost) {
+            // Page arrêtée par Android pendant le film : une page neuve, à la seconde où le film s'est arrêté.
+            pageLost = false
+            val current = site
+            val url = nativeReturnUrl
+            nativeReturnUrl = null
+            if (current != null) startActivity(intent(this, current.id, url, if (position >= 0) position else nativeStartPosition))
+            close("page rouverte après le lecteur léger")
+            return@registerForActivityResult
+        }
         val back = nativeReturnUrl
         if (back != null) {
             // La page avait été vidée : on la recharge à la seconde où le film s'est arrêté, la lecture reste à toi (OK).
@@ -2178,6 +2275,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     override fun onDestroy() {
+        if (nativeActive) NativeHandoff.releasePage = null
+        resumeTimers()
         if (backgrounded) BackgroundPlayService.stop(this)
         if (BackgroundBridge.controller != null) BackgroundBridge.controller = null
         overlayAnimator?.cancel()
@@ -2261,6 +2360,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val FRAME_EVERY_MS = 90_000L
         private const val PAUSE_SCREEN_MS = 1_200L
         private const val PAUSE_IDLE_MS = 4_000L
+        /** Flèches gardées en attente au plus (au-delà, l'appui maintenu prend le relais). */
+        private const val SNAP_QUEUE = 3
+        private const val SNAP_TIMEOUT_MS = 600L
         private const val DOUBLE_BACK_MS = 450L
         private const val EXIT_CONFIRM_MS = 2_500L
         /** En dessous (pub, bande-annonce), on ne quitte pas la page pour le lecteur léger. */

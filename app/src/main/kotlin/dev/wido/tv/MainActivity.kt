@@ -136,9 +136,12 @@ class MainActivity : ComponentActivity(), RemoteTarget {
         super.onStop()
     }
 
+    private val debounce = KeyDebounce()
+
     /** Téléphone, onglet TV affiché : les touches de volume règlent le son de la TV. */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
+        if (app.isTv && debounce.isBounce(event)) return true
         if (!app.isTv && app.link.volumeToTv && app.link.selectedOnline &&
             (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN)
         ) {
