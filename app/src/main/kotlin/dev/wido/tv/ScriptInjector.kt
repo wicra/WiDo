@@ -40,10 +40,10 @@ class ScriptInjector(private val context: Context, private val site: Site) {
     /** Éléments masqués pendant cette séance (« Masquer un élément ») : appliqués aussi aux pages suivantes. */
     private val liveHides = java.util.concurrent.CopyOnWriteArrayList<String>()
 
-    /** Masque `selector` dès maintenant, sur cette page et les suivantes, sans attendre la prochaine ouverture du site. */
-    fun addHide(selector: String): String {
-        if (selector !in liveHides) liveHides += selector
-        return hideScript(listOf(selector))
+    /** Masque `selectors` dès maintenant, sur cette page et les suivantes, sans attendre la prochaine ouverture du site. */
+    fun addHides(selectors: List<String>): String {
+        selectors.forEach { if (it !in liveHides) liveHides += it }
+        return hideScript(selectors)
     }
 
     private fun liveHideScript(): String = if (liveHides.isEmpty()) "" else "\n" + hideScript(liveHides)
@@ -107,10 +107,17 @@ class ScriptInjector(private val context: Context, private val site: Site) {
             .filter { it.isNotBlank() && it.length <= 300 && it.none { c -> c in "{}<>" } }
             .joinToString("\n") { "$it{display:none!important}" }
         if (css.isEmpty()) return ""
-        return "(function(){var css=${JSONObject.quote(css)};var key='wido-hide-${css.hashCode().toUInt()}';" +
-            "function put(){if(document.getElementById(key))return;var s=document.createElement('style');s.id=key;" +
+        val list = org.json.JSONArray(selectors.filter { it.isNotBlank() && it.length <= 300 && it.none { c -> c in "{}<>" } }).toString()
+        // La feuille de style, et en plus le style posé sur l'élément lui-même : un site qui force
+        // `display:block !important` sur l'élément l'emporte sur toute feuille de style, pas sur ça.
+        return "(function(){var css=${JSONObject.quote(css)};var sels=$list;var key='wido-hide-${css.hashCode().toUInt()}';var t=0;" +
+            "function put(){t=0;if(!document.getElementById(key)){var s=document.createElement('style');s.id=key;" +
             "s.textContent=css;(document.head||document.documentElement).appendChild(s);}" +
-            "put();if(window.MutationObserver)new MutationObserver(put).observe(document.documentElement,{childList:true,subtree:true});})();"
+            "sels.forEach(function(q){try{document.querySelectorAll(q).forEach(function(e){" +
+            "if(e.style.getPropertyValue('display')!=='none'||e.style.getPropertyPriority('display')!=='important')e.style.setProperty('display','none','important');" +
+            "});}catch(err){}});}" +
+            "put();if(window.MutationObserver)new MutationObserver(function(){if(!t)t=setTimeout(put,150);})" +
+            ".observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['style','class']});})();"
     }
 
     private companion object {
