@@ -36,6 +36,7 @@ Dans une page, le bouton **⋯** en haut à droite ouvre le menu rapide (**Sur l
 Une seule fois, sur le même Wi-Fi, avec WiDo ouvert sur la TV :
 
 - **Le plus simple** : sur la TV, Réglages → **Écrans liés** affiche un QR code. Scanne-le avec l'appareil photo du téléphone (l'appli WiDo doit y être installée) : c'est lié, comme « Mon téléphone ».
+  Ou avec le **scanner de l'appli** (bouton à côté d'Actualiser, sur l'accueil) : il ouvre aussi les autres QR codes de la TV dans l'appli — écrire dans un champ de la TV, lire le rapport du test complet — sans passer par le navigateur.
 - **Sans QR code** : dans l'appli du téléphone, onglet **TV**, la TV apparaît dans la liste : **Lier**. La TV demande confirmation à l'écran :
   - **Invité** : télécommande et envoi de vidéos seulement ;
   - **Mon téléphone** : en plus, la bibliothèque se synchronise ;
