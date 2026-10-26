@@ -55,7 +55,8 @@ form{margin:8px}
   prev.addEventListener('click', function () { go(-1); });
   // Recrée l'encadré publicitaire autrement (autre emballage, style qui le force visible), comme une autre page du site.
   window.__widoSelfTestRebuild = function () {
-    document.getElementById('adwrap').innerHTML = '<section class="promo"><div class="ad-box" id="ad" style="display:block !important">Publicité</div></section>';
+    // Sans identifiant : seule une signature par les classes le retrouve.
+    document.getElementById('adwrap').innerHTML = '<section class="promo"><div class="ad-box" style="display:block !important">Publicité</div></section>';
   };
 })();
 </script>

@@ -229,7 +229,8 @@ class DiagnosticActivity : ComponentActivity() {
         metric("faible_memoire", app.lowMemory)
         metric("ecran", "${mode.physicalWidth}x${mode.physicalHeight}")
         metric("moteur_web", runCatching { WebView.getCurrentWebViewPackage()?.versionName }.getOrNull())
-        if (app.lowMemory) warn("peu de mémoire : le lecteur léger est indispensable pour les films")
+        // Constat sur l'appareil, pas un défaut de WiDo : noté sans changer le verdict.
+        if (app.lowMemory) line("Appareil à peu de mémoire : WiDo passe en mode léger (lecteur léger pour les films, listes légères)")
         if (free < 250) warn("moins de 250 Mo libres : fermer les autres applis aide")
     }
 
@@ -594,7 +595,9 @@ class DiagnosticActivity : ComponentActivity() {
             }
             // « Masquer un élément » : masqué sur cette page, puis retrouvé sur une « autre page » où il est emballé
             // autrement et forcé visible par le site.
-            val pick = wv.eval("(function(){var r=document.getElementById('ad').getBoundingClientRect();return JSON.stringify([(r.left+r.width/2)/innerWidth,(r.top+r.height/2)/innerHeight]);})()")
+            // L'encadré d'abord à l'écran : on vise ce qui est sous le curseur, comme à la télécommande (les étapes
+            // précédentes ont fait défiler la page jusqu'au carrousel).
+            val pick = wv.eval("(function(){var a=document.getElementById('ad');a.scrollIntoView({block:'center'});var r=a.getBoundingClientRect();return JSON.stringify([(r.left+r.width/2)/innerWidth,(r.top+r.height/2)/innerHeight]);})()")
             val point = pick?.let { runCatching { org.json.JSONArray(org.json.JSONTokener(it).nextValue() as String) }.getOrNull() }
             val hideOk = if (point != null) {
                 val raw = wv.eval("(${PageScripts.HIDE})(${point.getDouble(0)},${point.getDouble(1)})")
@@ -603,7 +606,7 @@ class DiagnosticActivity : ComponentActivity() {
                 wv.eval("window.__widoSelfTestRebuild()")
                 wv.eval(injector.hideScript(selectors))
                 delay(300)
-                val shown = wv.eval("getComputedStyle(document.getElementById('ad')).display")
+                val shown = wv.eval("getComputedStyle(document.querySelector('#adwrap .ad-box')).display")
                 line("Masquer un élément : ${selectors.size} signature(s) enregistrée(s)")
                 shown == "\"none\""
             } else {
