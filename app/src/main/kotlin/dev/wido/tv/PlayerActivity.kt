@@ -660,7 +660,18 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 val fx = cursor.px / wv.width
                 val fy = cursor.py / wv.height
                 wv.evaluateJavascript("window.__widoScrollXAt?window.__widoScrollXAt($fx,$fy,$px):false") { raw ->
-                    if (raw != "true") webView?.scrollBy(px, 0)
+                    if (raw == "true") return@evaluateJavascript
+                    // Carrousel tactile sans bouton ni API : la page demande un glisser du doigt sur sa piste.
+                    val drag = unquote(raw)?.let { runCatching { JSONObject(it).optJSONArray("drag") }.getOrNull() }?.takeIf { it.length() == 4 }
+                    val w = webView ?: return@evaluateJavascript
+                    if (drag != null) {
+                        dragOnPage(
+                            drag.getDouble(0).toFloat() * w.width, drag.getDouble(1).toFloat() * w.height,
+                            drag.getDouble(2).toFloat() * w.width, drag.getDouble(3).toFloat() * w.height,
+                        ) {}
+                    } else {
+                        w.scrollBy(px, 0)
+                    }
                 }
             }
             if (overY != 0f) wv?.scrollBy(0, (overY * 2).toInt()) // le curseur bute sur un bord : la page défile

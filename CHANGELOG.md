@@ -1,5 +1,10 @@
 # Changelog
 
+## Non publié (affiches sans lien, écran du test)
+
+- **Affiches de films qu'on ne pouvait pas viser ni dépasser** : sur certains sites, les cartes ne sont ni des liens ni des boutons (un bloc avec un clic JavaScript) ; le curseur aimanté les sautait, et ◀ ▶ restaient bloqués sur la rangée. Elles sont maintenant reconnues (le site leur donne le curseur « main ») : le curseur les vise, ◀ ▶ les parcourent et la rangée défile jusqu'au bout. Maintenir ◀ ▶ contre le bord d'un carrousel animé sans barre de défilement le fait aussi avancer (son API, ses flèches, sinon un glisser du doigt), une carte par demi-seconde.
+- **Test complet : les étapes se parcourent à la télécommande** : ◀ depuis les boutons, puis ▲ ▼ ; l'étape sélectionnée déplie son détail (avertissements et échecs en tête). Pendant le test, la liste suit l'étape en cours. Nouveau cas « Cartes sans lien » sur la page de test.
+
 ## Non publié (test de la 1.1.1)
 
 - **« Masquer un élément »** : l'élément est aussi enregistré par ses classes quand il a un identifiant (une autre page du site ne reprend pas toujours l'identifiant, et il revenait).

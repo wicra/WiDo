@@ -105,6 +105,30 @@
     one();
   });
 
+  // 4 bis. Affiches sans lien (<div> au curseur « main ») : le curseur les vise, ▶ fait défiler la rangée jusqu'au bout.
+  steps.push(function (next) {
+    var row = $('cards');
+    row.scrollLeft = 0;
+    row.scrollIntoView({ block: 'center' });
+    var first = center($('k0'));
+    var r = snap('down', [first[0], Math.max(0, first[1] - 0.2)]);
+    var el = r ? at([r.x, r.y]) : null;
+    var card = el && el.closest ? el.closest('#cards > div') : null;
+    ok('Cartes sans lien : le curseur vise une affiche', !!card, card ? 'sur « ' + card.textContent + ' »' : (el ? 'sur ' + el.tagName : 'aucune cible'));
+    var p = center($('k0')), edge = false, moves = 0;
+    for (var i = 0; i < 20; i++) {
+      var q = snap('right', p);
+      if (!q) break;
+      if (q.edge) { edge = true; break; }
+      p = [q.x, q.y]; moves++;
+    }
+    var last = at(p);
+    var lastCard = last && last.closest ? last.closest('#cards > div') : null;
+    ok('Cartes sans lien : ▶ parcourt la rangée jusqu\'au bout', edge && lastCard && lastCard.id === 'k11',
+      moves + ' pas, défilement ' + Math.round(row.scrollLeft) + ' px, ' + (lastCard ? 'sur ' + lastCard.id : 'hors affiche'));
+    next();
+  });
+
   // 5. Clavier du téléphone : le texte entier à chaque frappe (accents compris), Entrée valide ce qui est tapé.
   steps.push(function (next) {
     var q = $('q');

@@ -108,7 +108,7 @@ Avec **l'appli WiDo sur le téléphone**, tout cela est intégré (touches, pav�
 
 ## Limites connues
 
-- **Carrousels** (rangées d'affiches) : ◀ ▶ passent à l'affiche suivante et font défiler la rangée, même sans flèches sur le site (rangée défilante, Swiper, Slick, Owl, Flickity… ou un glisser du doigt simulé) ; au bout de la rangée, le curseur reste en place. ▲ ▼ changent de rangée et la page défile pour la montrer en entier.
+- **Carrousels** (rangées d'affiches) : ◀ ▶ passent à l'affiche suivante et font défiler la rangée, même sans flèches sur le site (rangée défilante, Swiper, Slick, Owl, Flickity… ou un glisser du doigt simulé) ; au bout de la rangée, le curseur reste en place. ▲ ▼ changent de rangée et la page défile pour la montrer en entier. Les affiches qui ne sont pas des liens (un bloc avec un clic JavaScript) sont reconnues à leur curseur « main ».
 - Le curseur aimanté ne voit que la page principale : un élément dans une iframe d'un autre domaine se atteint au curseur libre (flèches maintenues).
 - Les sites qui réagissent au survol (`hover`) ne voient pas le curseur : seul le clic est émulé.
 - Le zoom agrandit le texte, pas les images.
