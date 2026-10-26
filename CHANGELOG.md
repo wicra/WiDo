@@ -1,5 +1,10 @@
 # Changelog
 
+## Non publié (test de la 1.1.1)
+
+- **« Masquer un élément »** : l'élément est aussi enregistré par ses classes quand il a un identifiant (une autre page du site ne reprend pas toujours l'identifiant, et il revenait).
+- **Test complet** : l'encadré à masquer est amené à l'écran avant d'être visé (le test échouait faute de rien sous le curseur) et doit être retrouvé sans son identifiant ; « appareil à peu de mémoire » est noté sans mettre l'étape « à surveiller » (c'est l'appareil, pas un défaut de WiDo).
+
 ## Non publié (carrousels)
 
 ### Ajouté

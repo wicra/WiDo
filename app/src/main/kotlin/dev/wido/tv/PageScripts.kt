@@ -126,8 +126,10 @@ internal object PageScripts {
   var out = [];
   function add(sel) { if (sel && sel.length <= 300 && out.indexOf(sel) < 0) out.push(sel); }
   add(selector(target));
-  var own = part(target);
-  if (own.charAt(0) !== '#' && own.indexOf('.') > 0 && own.indexOf(':nth-of-type') < 0) {
+  // Ses classes, même s'il a un identifiant : une autre page du site ne reprend pas toujours l'identifiant.
+  var cls = Array.prototype.filter.call(target.classList, stable).slice(0, 3);
+  if (cls.length) {
+    var own = target.tagName.toLowerCase() + '.' + cls.join('.');
     try { if (document.querySelectorAll(own).length === 1) add(own); } catch (err) { /* ignoré */ }
   }
   var frames = target.tagName === 'IFRAME' ? [target] : Array.prototype.slice.call(target.querySelectorAll('iframe'), 0, 3);
