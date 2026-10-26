@@ -88,6 +88,9 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         player = built.first
         trackSelector = built.second
         player.addAnalyticsListener(diagnostics)
+        tracks = PlayerTracks(this, player, trackSelector, settings, if ((application as WiDoApp).lowMemory) 1080 else Int.MAX_VALUE)
+        // Les langues choisies aux films précédents, avant que le flux ne choisisse ses pistes.
+        tracks.applyPreferences()
 
         view = PlayerView(this).apply {
             setBackgroundColor(Color.BLACK)
@@ -181,7 +184,11 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 if (videoSize.height > 0) CrashLog.trace("natif : image ${videoSize.width}×${videoSize.height}")
+                refreshOptions()
             }
+
+            // Pistes connues (ou changées) : le menu des options et le téléphone sont mis à jour.
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) = refreshOptions()
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 // La lecture repart normalement : les relances sont de nouveau permises.
@@ -202,6 +209,51 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
     }
 
     private lateinit var trackSelector: DefaultTrackSelector
+    private lateinit var tracks: PlayerTracks
+    /** Qualité, audio, sous-titres et vitesse du film : lus par le plateau des options (TV) et le téléphone. */
+    private val playerOptions = androidx.compose.runtime.mutableStateOf(dev.wido.core.PlayerOptions())
+
+    private fun refreshOptions() {
+        if (!::tracks.isInitialized) return
+        val next = tracks.options()
+        if (next == playerOptions.value) return
+        playerOptions.value = next
+        publishNowPlaying()
+    }
+
+    /** Un choix d'option (plateau de la TV ou téléphone). */
+    private fun pickOption(kind: String, id: String) {
+        if (!tracks.apply(kind, id)) return
+        CrashLog.trace("natif : option $kind = $id")
+        refreshOptions()
+        // La vitesse ne change pas les pistes : relue tout de suite.
+        playerOptions.value = tracks.options()
+        publishNowPlaying()
+    }
+
+    /** Plateau « Options de lecture » : audio, sous-titres, qualité, vitesse (▼, touche Sous-titres ou menu). */
+    private fun showOptions() {
+        if (panel != null) return
+        view.hideController()
+        hidePauseScreen()
+        refreshOptions()
+        val compose = androidx.compose.ui.platform.ComposeView(this).apply {
+            setContent {
+                dev.wido.tv.ui.WiDoTheme {
+                    dev.wido.tv.ui.PlayerOptionsSheet(
+                        playerOptions.value, tracks.decimalComma(), compact = !tv,
+                        onPick = { kind, id -> pickOption(kind, id) },
+                        onDismiss = { hidePanel() },
+                    )
+                }
+            }
+        }
+        panel = compose
+        rootFrame.addView(compose, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        compose.bringToFront()
+        osd.bringToFront()
+    }
+
     private var retries = 0
     /** Le flux n'a pas pu être lu : la page ne doit pas renvoyer aussitôt vers le lecteur léger. */
     private var failed = false
@@ -319,6 +371,14 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             }
             return super.dispatchKeyEvent(event)
         }
+        // ▼ (barre cachée) ou la touche Sous-titres : le plateau des options, comme dans les applis de streaming.
+        if (code == KeyEvent.KEYCODE_CAPTIONS || (code == KeyEvent.KEYCODE_DPAD_DOWN && tv && !view.isControllerFullyVisible)) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                swallowUp = code
+                showOptions()
+            }
+            return true
+        }
         // Menu : les mêmes réglages que dans la page (cadrage, épingler, veille…), sans quitter le film.
         if (code == KeyEvent.KEYCODE_MENU) {
             if (event.action == KeyEvent.ACTION_UP) showPanel()
@@ -356,6 +416,10 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             QuickAction(getString(R.string.tile_pause), Glyph.Play, dynamic = { getString(if (player.isPlaying) R.string.tile_pause else R.string.tile_play) }) {
                 if (player.isPlaying) player.pause() else player.play()
                 hidePanel()
+            },
+            QuickAction(getString(R.string.opt_tile), Glyph.Menu, dynamic = { tracks.summary().ifEmpty { getString(R.string.opt_tile) } }) {
+                hidePanel()
+                showOptions()
             },
             QuickAction(framingLabel(), Glyph.ZoomIn, dynamic = ::framingLabel) {
                 stay {
@@ -542,6 +606,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             playing = player.isPlaying,
             at = System.currentTimeMillis(),
             native = true,
+            options = playerOptions.value,
         )
     }
 
@@ -559,6 +624,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
                 else -> return
             }
             is RemoteCommand.Seek -> player.seekTo((command.position * 1000).toLong())
+            is RemoteCommand.Option -> pickOption(command.kind, command.id)
             else -> return
         }
         publishNowPlaying()

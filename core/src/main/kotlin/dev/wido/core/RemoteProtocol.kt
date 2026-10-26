@@ -21,6 +21,8 @@ sealed interface RemoteCommand {
     data class Open(val url: String) : RemoteCommand
     /** Va à cette position (secondes) dans la vidéo en cours. */
     data class Seek(val position: Double) : RemoteCommand
+    /** Un réglage du lecteur natif ([PlayerOptions.KINDS]) : qualité, piste audio, sous-titres ou vitesse. */
+    data class Option(val kind: String, val id: String) : RemoteCommand
 }
 
 /**
@@ -57,6 +59,12 @@ object RemoteProtocol {
                 ?.takeIf { val s = Hosts.schemeOf(it); s == "https" || s == "http" }
                 ?.let { RemoteCommand.Open(it) }
             "seek" -> num("to")?.takeIf { !it.isNaN() && it >= 0 }?.let { RemoteCommand.Seek(it.toDouble()) }
+            "option" -> {
+                val kind = str("kind")?.takeIf { it in PlayerOptions.KINDS } ?: return null
+                val id = str("id")?.takeIf { it.isNotEmpty() && it.length <= 64 } ?: return null
+                if (kind == PlayerOptions.SPEED && id.toFloatOrNull()?.takeIf { it in PlayerOptions.SPEEDS } == null) return null
+                RemoteCommand.Option(kind, id)
+            }
             else -> null
         }
     }

@@ -1828,6 +1828,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 }
                 osd.showText(getString(R.string.osd_link_opened))
             }
+            // Réglages du lecteur natif : rien à régler dans la page.
+            is RemoteCommand.Option -> Unit
         }
     }
 

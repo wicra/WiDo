@@ -197,6 +197,29 @@ class RemoteProtocolTest {
         assertNull(RemoteProtocol.parse("""{"cmd":"key","key":"power"}"""))
         assertNull(RemoteProtocol.parse("nope"))
     }
+
+    @Test fun parsesPlayerOptions() {
+        assertEquals(RemoteCommand.Option("audio", "1:0"), RemoteProtocol.parse("""{"cmd":"option","kind":"audio","id":"1:0"}"""))
+        assertEquals(RemoteCommand.Option("speed", "1.25"), RemoteProtocol.parse("""{"cmd":"option","kind":"speed","id":"1.25"}"""))
+        assertNull(RemoteProtocol.parse("""{"cmd":"option","kind":"speed","id":"9"}"""))
+        assertNull(RemoteProtocol.parse("""{"cmd":"option","kind":"volume","id":"1"}"""))
+        assertNull(RemoteProtocol.parse("""{"cmd":"option","kind":"audio","id":""}"""))
+    }
+}
+
+class PlayerOptionsTest {
+    @Test fun qualitiesNeedAChoice() {
+        assertEquals(emptyList(), PlayerOptions.qualities(listOf(720, 720), 1080, null, "Auto"))
+        val q = PlayerOptions.qualities(listOf(480, 2160, 1080, 720), 1080, 720, "Auto")
+        assertEquals(listOf("auto", "1080", "720", "480"), q.map { it.id })
+        assertEquals(listOf(false, false, true, false), q.map { it.selected })
+    }
+
+    @Test fun speedLabels() {
+        assertEquals("1×", PlayerOptions.speedLabel(1f, true))
+        assertEquals("1,25×", PlayerOptions.speedLabel(1.25f, true))
+        assertEquals("0.75×", PlayerOptions.speedLabel(0.75f, false))
+    }
 }
 
 class SiteEntityTest {

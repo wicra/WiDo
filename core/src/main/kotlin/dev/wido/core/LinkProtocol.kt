@@ -69,6 +69,8 @@ data class NowPlaying(
     val at: Long = 0,
     /** Lu dans le lecteur natif plutôt que dans la page. */
     val native: Boolean = false,
+    /** Lecteur natif : qualité, audio, sous-titres et vitesse, réglables depuis le téléphone. */
+    val options: PlayerOptions? = null,
 ) {
     /** Position estimée `elapsedMs` millisecondes après la mesure. */
     fun positionAfter(elapsedMs: Long): Double {
@@ -77,6 +79,52 @@ data class NowPlaying(
     }
 
     val progress: Float get() = if (duration > 0) (position / duration).toFloat().coerceIn(0f, 1f) else 0f
+}
+
+/** Un choix d'un menu du lecteur (une qualité, une piste audio, des sous-titres). */
+@Serializable
+data class TrackOption(val id: String, val label: String, val selected: Boolean = false)
+
+/**
+ * Les réglages du film en cours dans le lecteur natif. Chaque liste n'apparaît que s'il y a vraiment le choix
+ * (au moins deux qualités, deux pistes audio, ou des sous-titres) ; `subtitles` commence par « Désactivés ».
+ */
+@Serializable
+data class PlayerOptions(
+    val quality: List<TrackOption> = emptyList(),
+    val audio: List<TrackOption> = emptyList(),
+    val subtitles: List<TrackOption> = emptyList(),
+    val speed: Float = 1f,
+) {
+    val isEmpty: Boolean get() = quality.isEmpty() && audio.isEmpty() && subtitles.isEmpty()
+
+    companion object {
+        const val QUALITY = "quality"
+        const val AUDIO = "audio"
+        const val SUBTITLES = "subtitles"
+        const val SPEED = "speed"
+        val KINDS = listOf(QUALITY, AUDIO, SUBTITLES, SPEED)
+
+        /** Identifiant de « qualité automatique » et de « sous-titres désactivés ». */
+        const val AUTO = "auto"
+        const val OFF = "off"
+
+        val SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
+
+        /** « 1× », « 1,25× » (virgule française), « 0.75× » ailleurs. */
+        fun speedLabel(speed: Float, decimalComma: Boolean): String {
+            val text = if (speed == speed.toInt().toFloat()) speed.toInt().toString() else speed.toString().trimEnd('0')
+            return (if (decimalComma) text.replace('.', ',') else text) + "×"
+        }
+
+        /** Les qualités proposées pour ces hauteurs d'image (px) : Auto, puis de la meilleure à la plus légère. */
+        fun qualities(heights: Collection<Int>, maxHeight: Int, selected: Int?, autoLabel: String): List<TrackOption> {
+            val list = heights.filter { it in 1..maxHeight }.distinct().sortedDescending()
+            if (list.size < 2) return emptyList()
+            return listOf(TrackOption(AUTO, autoLabel, selected == null)) +
+                list.map { h -> TrackOption(h.toString(), "${h}p", selected == h) }
+        }
+    }
 }
 
 @Serializable

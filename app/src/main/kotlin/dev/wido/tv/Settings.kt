@@ -166,6 +166,16 @@ class Settings(private val context: Context) {
         get() = prefs.getString("memory_mode", null)?.takeIf { it in MEMORY_MODES } ?: MEMORY_AUTO
         set(v) = prefs.edit().putString("memory_mode", v).apply()
 
+    /** Lecteur natif : langue audio choisie la dernière fois (code ISO), proposée en premier aux films suivants. */
+    var preferredAudioLanguage: String?
+        get() = prefs.getString("pref_audio", null)
+        set(v) = prefs.edit().apply { if (v == null) remove("pref_audio") else putString("pref_audio", v) }.apply()
+
+    /** Lecteur natif : langue des sous-titres choisie la dernière fois, ou `off` (désactivés). */
+    var preferredTextLanguage: String?
+        get() = prefs.getString("pref_text", null)
+        set(v) = prefs.edit().apply { if (v == null) remove("pref_text") else putString("pref_text", v) }.apply()
+
     /** WiDo se fait économe en mémoire (voir [memoryMode]). */
     val lowMemory: Boolean
         get() = when (memoryMode) {
