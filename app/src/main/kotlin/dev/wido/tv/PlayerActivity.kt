@@ -396,6 +396,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     // --- Télécommande -----------------------------------------------------------------------
 
     private val debounce = KeyDebounce()
+    private var typedHintAt = 0L
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (webView == null) return super.dispatchKeyEvent(event)
@@ -1692,7 +1693,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             is RemoteCommand.Scroll -> webView?.scrollBy(0, (command.dy * resources.displayMetrics.density).toInt())
             is RemoteCommand.Type -> {
                 typeText(command.text, command.submit)
-                osd.showText(getString(R.string.osd_text_sent))
+                // Le clavier en direct envoie à chaque lettre : le message ne s'affiche qu'à l'envoi (ou au plus toutes les 4 s).
+                val now = SystemClock.uptimeMillis()
+                if (command.submit || now - typedHintAt > 4_000) {
+                    typedHintAt = now
+                    osd.showText(getString(R.string.osd_text_sent))
+                }
             }
             is RemoteCommand.Open -> {
                 val current = site

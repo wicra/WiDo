@@ -3,6 +3,7 @@
 ## Non publié (ouverture des sites)
 
 ### Corrigé
+- **Clavier du téléphone (appli liée) : lettres manquantes ou recherche vide** : il n'envoyait que les lettres ajoutées, alors que la TV remplace tout le champ ; il ne restait que la dernière lettre, et Entrée envoyait un texte vide avant de valider. Le texte entier part maintenant à chaque frappe (corrections du clavier et accents compris), Entrée valide le texte tapé, Effacer vide aussi le champ de la TV ; le message « Texte envoyé » ne s'affiche plus à chaque lettre.
 - **Un site ne s'ouvrait pas et WiDo revenait à l'accueil (plantage 10 s après l'ouverture)** : à la première ouverture sur une petite clé, les listes de blocage mettent plus de 10 s à se charger ; le relevé de la vidéo, programmé à 10 s, touchait la barre de messages pas encore créée (`lateinit property osd has not been initialized`). Le relevé, les commandes du téléphone et l'aide attendent maintenant que la page soit montée. Le journal détaillé note le temps de chargement des listes.
 - **Lecteur léger : « ERROR_CODE_DECODING_FAILED »** : au lieu de relancer à l'identique, il relance dans une qualité plus légère et en H.264 quand le flux en propose.
 
