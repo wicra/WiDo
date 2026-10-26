@@ -652,10 +652,18 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val step = (8f + minOf(repeat, 25) * 2.5f) * density * settings.cursorSpeed
         val (overX, overY) = cursor.moveBy(dirX * step, dirY * step)
         if (customView == null) {
-            if (repeat == 0) webView?.evaluateJavascript("window.__widoUnmark&&window.__widoUnmark()", null)
-            if (overX != 0f || overY != 0f) {
-                webView?.scrollBy((overX * 2).toInt(), (overY * 2).toInt()) // le curseur bute sur un bord : la page défile
+            val wv = webView
+            if (repeat == 0) wv?.evaluateJavascript("window.__widoUnmark&&window.__widoUnmark()", null)
+            if (wv != null && overX != 0f && wv.width > 0 && wv.height > 0) {
+                // Bord gauche/droit : d'abord la rangée défilante sous le curseur (carrousel), sinon la page.
+                val px = (overX * 2).toInt()
+                val fx = cursor.px / wv.width
+                val fy = cursor.py / wv.height
+                wv.evaluateJavascript("window.__widoScrollXAt?window.__widoScrollXAt($fx,$fy,$px):false") { raw ->
+                    if (raw != "true") webView?.scrollBy(px, 0)
+                }
             }
+            if (overY != 0f) wv?.scrollBy(0, (overY * 2).toInt()) // le curseur bute sur un bord : la page défile
         }
     }
 
@@ -711,6 +719,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         snapAhead = null
     }
 
+    /** Numéro de la demande en cours : une réponse tardive d'un carrousel animé n'écrase pas une demande plus récente. */
+    private var snapGen = 0
+
     /** Demande à la page le lien ou bouton le plus naturel dans cette direction ; sinon déplacement libre. */
     private fun snap(dirX: Int, dirY: Int) {
         val wv = webView ?: return
@@ -737,15 +748,16 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         if (ahead != null) cursor.moveTo(ahead.first * wv.width, ahead.second * wv.height)
         snapPending = true
         snapAt = SystemClock.uptimeMillis()
+        val gen = ++snapGen
         wv.evaluateJavascript("window.__widoSnap?window.__widoSnap('$dir',$fx,$fy):null") { raw ->
-            snapPending = false
             val result = parseSnap(raw)
             if (result != null) {
-                val x = result.first.first * wv.width
-                val y = result.first.second * wv.height
-                // Déjà dessus (cible annoncée) : rien ne bouge ; sinon (page changée entre-temps), le curseur se corrige.
-                if (kotlin.math.abs(cursor.px - x) > 2f || kotlin.math.abs(cursor.py - y) > 2f) cursor.moveTo(x, y)
-                snapAhead = SnapAhead(cursor.px, cursor.py, wv.scrollY, SystemClock.uptimeMillis(), result.second)
+                applySnap(result)
+                if (result.drag != null || result.wait > 0) {
+                    // Le carrousel du site s'anime (bouton, glisser) : les flèches suivantes attendent sa fin.
+                    afterCarousel(result, gen)
+                    return@evaluateJavascript
+                }
             } else if (ahead != null) {
                 // La cible annoncée n'existe plus : retour au point de départ, puis le comportement habituel.
                 cursor.moveTo(fx * wv.width, fy * wv.height)
@@ -756,12 +768,98 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             } else {
                 freeMove(0, dirX, dirY)
             }
+            snapPending = false
             snapQueue.removeFirstOrNull()?.let { (x, y) -> snap(x, y) }
         }
     }
 
-    /** Réponse de `__widoSnap` : la cible (fractions de l'écran) et les cibles suivantes par direction. */
-    private fun parseSnap(raw: String?): Pair<Pair<Float, Float>, Map<String, Pair<Float, Float>>>? {
+    /** Le curseur va où la page l'a dit ; au bout d'un carrousel (edge), il reste où il est. */
+    private fun applySnap(r: SnapReply) {
+        val wv = webView ?: return
+        val x = r.x * wv.width
+        val y = r.y * wv.height
+        // Déjà dessus (cible annoncée) : rien ne bouge ; sinon (page changée entre-temps), le curseur se corrige.
+        if (kotlin.math.abs(cursor.px - x) > 2f || kotlin.math.abs(cursor.py - y) > 2f) cursor.moveTo(x, y)
+        snapAhead = SnapAhead(cursor.px, cursor.py, wv.scrollY, SystemClock.uptimeMillis(), r.next)
+        if (r.edge) cursor.wake()
+    }
+
+    private fun afterCarousel(r: SnapReply, gen: Int) {
+        val wv = webView ?: run { snapPending = false; return }
+        val d = r.drag
+        if (d != null) {
+            snapAt = SystemClock.uptimeMillis()
+            dragOnPage(d[0] * wv.width, d[1] * wv.height, d[2] * wv.width, d[3] * wv.height) { settleSnap(gen, SETTLE_TRIES, r.wait) }
+        } else {
+            settleSnap(gen, SETTLE_TRIES, r.wait)
+        }
+    }
+
+    /** Redemande à la page, après l'animation de son carrousel, où se trouve la carte visée. */
+    private fun settleSnap(gen: Int, tries: Int, delay: Long) {
+        snapAt = SystemClock.uptimeMillis()
+        root.postDelayed({
+            val wv = webView
+            if (gen != snapGen || wv == null) {
+                if (gen == snapGen) snapPending = false
+                return@postDelayed
+            }
+            wv.evaluateJavascript("window.__widoSnapSettle?window.__widoSnapSettle(${tries <= 1}):null") { raw ->
+                if (gen != snapGen) return@evaluateJavascript
+                snapAt = SystemClock.uptimeMillis()
+                val o = unquote(raw)?.let { runCatching { JSONObject(it) }.getOrNull() }
+                val wait = o?.optLong("wait") ?: 0L
+                if (o != null && !o.has("x") && wait > 0 && tries > 1) {
+                    settleSnap(gen, tries - 1, wait) // ça bouge encore
+                    return@evaluateJavascript
+                }
+                parseSnap(raw)?.let { applySnap(it) }
+                snapPending = false
+                snapQueue.removeFirstOrNull()?.let { (x, y) -> snap(x, y) }
+            }
+        }, delay)
+    }
+
+    /**
+     * Glisse le doigt de (x0, y0) à (x1, y1) dans la page, lentement, et s'arrête avant de le lever (pas d'élan) :
+     * avance d'une carte un carrousel tactile qui n'a ni bouton ni API (Embla, keen-slider, carrousels maison).
+     */
+    private fun dragOnPage(x0: Float, y0: Float, x1: Float, y1: Float, then: () -> Unit) {
+        if (webView == null) return then()
+        val down = SystemClock.uptimeMillis()
+        fun send(action: Int, x: Float, y: Float) {
+            val target = webView ?: return
+            val ev = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0)
+            target.dispatchTouchEvent(ev)
+            ev.recycle()
+        }
+        send(MotionEvent.ACTION_DOWN, x0, y0)
+        for (i in 1..DRAG_STEPS) {
+            val f = i / DRAG_STEPS.toFloat()
+            root.postDelayed({ send(MotionEvent.ACTION_MOVE, x0 + (x1 - x0) * f, y0 + (y1 - y0) * f) }, i * DRAG_STEP_MS)
+        }
+        root.postDelayed({ send(MotionEvent.ACTION_MOVE, x1, y1) }, (DRAG_STEPS + 3) * DRAG_STEP_MS)
+        root.postDelayed({
+            send(MotionEvent.ACTION_UP, x1, y1)
+            then()
+        }, (DRAG_STEPS + 6) * DRAG_STEP_MS)
+    }
+
+    /** Réponse de `__widoSnap` / `__widoSnapSettle`. */
+    private class SnapReply(
+        val x: Float,
+        val y: Float,
+        /** Cibles suivantes par direction (fractions de l'écran). */
+        val next: Map<String, Pair<Float, Float>>,
+        /** Bout d'un carrousel : le curseur reste sur la carte (pas de pas libre). */
+        val edge: Boolean,
+        /** Le site anime son carrousel : redemander dans `wait` ms (`__widoSnapSettle`). */
+        val wait: Long,
+        /** [x0, y0, x1, y1] (fractions) : glisser le doigt d'abord. */
+        val drag: FloatArray?,
+    )
+
+    private fun parseSnap(raw: String?): SnapReply? {
         val text = unquote(raw) ?: return null
         return runCatching {
             val o = JSONObject(text)
@@ -772,7 +870,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                     put(key, p.getDouble(0).toFloat() to p.getDouble(1).toFloat())
                 }
             }
-            (o.getDouble("x").toFloat() to o.getDouble("y").toFloat()) to ahead
+            val d = o.optJSONArray("drag")?.takeIf { it.length() == 4 }
+            SnapReply(
+                o.getDouble("x").toFloat(), o.getDouble("y").toFloat(), ahead,
+                o.optBoolean("edge"), o.optLong("wait"),
+                d?.let { a -> FloatArray(4) { a.getDouble(it).toFloat() } },
+            )
         }.getOrNull()
     }
 
@@ -2556,6 +2659,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         /** Flèches gardées en attente au plus (au-delà, l'appui maintenu prend le relais). */
         private const val SNAP_QUEUE = 3
         private const val SNAP_TIMEOUT_MS = 600L
+        /** Essais de `__widoSnapSettle` pendant l'animation d'un carrousel (≈ 120 ms chacun). */
+        private const val SETTLE_TRIES = 8
+        private const val DRAG_STEPS = 12
+        private const val DRAG_STEP_MS = 20L
         /** La vidéo va à la seconde visée ce délai après le dernier appui sur ◀ ▶ (enchaîner les appuis ne la fait pas sauter à chaque fois). */
         private const val SEEK_COMMIT_MS = 900L
         private const val SEEKBAR_HIDE_MS = 4_000L

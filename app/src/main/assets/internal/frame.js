@@ -13,12 +13,69 @@
   var markedOutline = '';
   var markedOffset = '';
 
-  function usable(el, r) {
-    if (r.width < 8 || r.height < 8) return false;
-    if (r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth) return false;
+  function styleOk(cs) {
+    return cs.visibility !== 'hidden' && cs.display !== 'none' && cs.pointerEvents !== 'none' && parseFloat(cs.opacity) > 0.05;
+  }
+
+  function matches(el, sel) {
+    var f = el.matches || el.webkitMatchesSelector;
+    try { return !!f && f.call(el, sel); } catch (e) { return false; }
+  }
+
+  function closest(el, sel) {
+    for (; el && el.nodeType === 1; el = el.parentElement) if (matches(el, sel)) return el;
+    return null;
+  }
+
+  function isPage(el) {
+    return !el || el === document.body || el === document.documentElement;
+  }
+
+  // Pour un appel : une fonction qui donne la partie visible d'un élément, rognée par la fenêtre ET par ses
+  // ancêtres en overflow ≠ visible (piste d'un carrousel, liste défilante). Chaque ancêtre n'est lu qu'une fois.
+  // Approximations : un élément en position absolue échappe en vrai au rognage de ses ancêtres non positionnés.
+  // reach : la fenêtre est prolongée d'autant d'écrans en haut et en bas (cibles à atteindre en défilant la page).
+  function makeClip(reach) {
+    var memo = typeof WeakMap === 'function' ? new WeakMap() : null;
+    var ext = (reach || 0) * window.innerHeight;
+    var vp = { l: 0, t: -ext, r: window.innerWidth, b: window.innerHeight + ext };
+    function boxFor(node) {
+      if (!node || node.nodeType !== 1 || isPage(node)) return vp;
+      var m = memo && memo.get(node);
+      if (m) return m;
+      var cs = window.getComputedStyle(node);
+      var c = cs.position === 'fixed' ? vp : boxFor(node.parentElement);
+      var ox = cs.overflowX !== 'visible';
+      var oy = cs.overflowY !== 'visible';
+      if ((ox || oy) && cs.display !== 'inline' && cs.display !== 'contents') {
+        var r = node.getBoundingClientRect();
+        var l = r.left + node.clientLeft;
+        var t = r.top + node.clientTop;
+        c = {
+          l: ox ? Math.max(c.l, l) : c.l, t: oy ? Math.max(c.t, t) : c.t,
+          r: ox ? Math.min(c.r, l + node.clientWidth) : c.r, b: oy ? Math.min(c.b, t + node.clientHeight) : c.b
+        };
+      }
+      if (memo) memo.set(node, c);
+      return c;
+    }
+    return function (el, r, cs) {
+      var c = cs.position === 'fixed' ? vp : boxFor(el.parentElement);
+      var l = Math.max(r.left, c.l), t = Math.max(r.top, c.t), rr = Math.min(r.right, c.r), b = Math.min(r.bottom, c.b);
+      return { l: l, t: t, w: Math.max(0, rr - l), h: Math.max(0, b - t) };
+    };
+  }
+
+  // Un élément cliquable mesuré : r = boîte entière, (x, y, w, h) = centre et taille de sa partie VISIBLE,
+  // vis = part visible (0 à 1). anywhere : aussi hors écran (membres d'un carrousel). null si inutilisable.
+  function measure(el, clip, anywhere) {
+    var r = el.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8) return null;
+    if (!anywhere && (r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth)) return null;
     var cs = window.getComputedStyle(el);
-    return cs.visibility !== 'hidden' && cs.display !== 'none' && cs.pointerEvents !== 'none' &&
-      parseFloat(cs.opacity) > 0.05;
+    if (!styleOk(cs)) return null;
+    var v = clip(el, r, cs);
+    return { el: el, r: r, x: v.l + v.w / 2, y: v.t + v.h / 2, w: v.w, h: v.h, vis: (v.w * v.h) / (r.width * r.height) };
   }
 
   function unmark() {
@@ -74,42 +131,386 @@
     return best < 0 ? null : els[best];
   }
 
-  function usableIn(root) {
-    var nodes = root.querySelectorAll(SELECTOR);
-    var list = [];
-    for (var i = 0; i < nodes.length; i++) {
+  // ---------- Carrousels ----------
+  // Racines connues des bibliothèques à translate3d (Swiper, Slick, Splide, Glide, Owl, Flickity, keen-slider, Embla…).
+  var SLIDER_SEL = '.swiper,.swiper-container,swiper-container,.slick-slider,.splide,.glide,.owl-carousel,.flickity-enabled,' +
+    '.keen-slider,.embla,[aria-roledescription=carousel],[class*=carousel],[class*=Carousel],[class*=slider],[class*=Slider]';
+  var NAV_SEL = 'button,a,[role=button],[aria-label],[class*=next],[class*=Next],[class*=prev],[class*=Prev],' +
+    '[class*=arrow],[class*=Arrow],[class*=chevron],[class*=control]';
+  var pending = null; // défilement animé par le site en cours : { el (cible visée ou null), from, dir, pos }
+
+  function sliderRoot(box) {
+    var a = box;
+    for (var i = 0; i < 4 && a && !isPage(a); i++, a = a.parentElement) if (matches(a, SLIDER_SEL)) return a;
+    return null;
+  }
+
+  function transformedBetween(el, box) {
+    for (var a = el.parentElement; a && a !== box; a = a.parentElement) {
+      if (window.getComputedStyle(a).transform !== 'none') return true;
+    }
+    return false;
+  }
+
+  // Une rangée de cartes : au moins deux autres cliquables de même hauteur que el sur sa bande, dont un
+  // hors de la boîte. Écarte un en-tête en overflow:hidden qui cache un menu hors écran.
+  function rowLike(box, el, er) {
+    var br = box.getBoundingClientRect();
+    var nodes = box.querySelectorAll(SELECTOR);
+    var same = 0, out = 0;
+    for (var i = 0; i < nodes.length && i < 300; i++) {
+      if (nodes[i] === el) continue;
       var r = nodes[i].getBoundingClientRect();
-      if (usable(nodes[i], r)) list.push({ el: nodes[i], x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height });
+      var cy = r.top + r.height / 2;
+      if (r.width < 8 || cy < er.top || cy > er.bottom || Math.abs(r.height - er.height) > er.height * 0.25) continue;
+      same++;
+      if (r.left >= br.right - 1 || r.right <= br.left + 1) out++;
+    }
+    return same >= 2 && out >= 1;
+  }
+
+  // Le carrousel horizontal qui contient el, ou null : { box : l'élément qui rogne (et défile si scroll),
+  // root : où chercher ses boutons, scroll : on le fait défiler par scrollLeft, drag : un glisser du doigt peut l'avancer }.
+  function carouselOf(el) {
+    var ih = window.innerHeight;
+    var er = el.getBoundingClientRect();
+    for (var a = el.parentElement, depth = 0; a && !isPage(a) && depth < 25; a = a.parentElement, depth++) {
+      var cs = window.getComputedStyle(a);
+      var ox = cs.overflowX;
+      if (ox === 'visible' || ox === 'clip' || cs.display === 'inline' || a.clientWidth < er.width * 1.5) continue;
+      // Un conteneur de toute la page en overflow-x:hidden (menus hors écran…) n'est pas un carrousel.
+      if (a.getBoundingClientRect().height > ih * 0.9) continue;
+      var wide = a.scrollWidth > a.clientWidth + 4;
+      if (ox !== 'hidden') {
+        if (wide) return { box: a, root: a, scroll: true, drag: false }; // overflow-x auto / scroll (scroll-snap compris)
+        continue;
+      }
+      // overflow-x:hidden : piste déplacée par transform (bibliothèque) → son API, ses boutons ou un glisser.
+      // Sans transform ni classe connue (carrousel maison à scrollLeft… ou en-tête qui cache un menu) : ses
+      // boutons seulement, on ne touche jamais à son scrollLeft.
+      if (!rowLike(a, el, er)) continue;
+      var root = sliderRoot(a);
+      var moved = transformedBetween(el, a);
+      if (root || moved || wide) return { box: a, root: root || a.parentElement || a, scroll: false, drag: !!(root || moved) };
+    }
+    return null;
+  }
+
+  // Les cliquables du carrousel, où qu'ils soient (rognés, hors écran), sauf cur et ce qui le contient ou qu'il contient.
+  // Seulement les cartes de même hauteur (± 40 %) : pas les flèches du carrousel ni les petits boutons des cartes.
+  function members(car, cur, clip) {
+    var nodes = car.box.querySelectorAll(SELECTOR);
+    var list = [];
+    var h = cur.r.height;
+    for (var i = 0; i < nodes.length && i < 600; i++) {
+      var n = nodes[i];
+      if (n === cur.el || n.contains(cur.el) || cur.el.contains(n)) continue;
+      var it = measure(n, clip, true);
+      if (it && Math.abs(it.r.height - h) <= h * 0.4) list.push(it);
     }
     return list;
+  }
+
+  // Le prochain élément de la même rangée du carrousel dans cette direction (positions réelles, même cachées), ou null.
+  function nextInRow(dir, cur, car, clip) {
+    var list = members(car, cur, clip);
+    var pts = list.map(function (it) { return { x: it.r.left + it.r.width / 2, y: it.r.top + it.r.height / 2, w: it.r.width, h: it.r.height }; });
+    var r = cur.r;
+    var j = window.__widoPickInRow(dir, r.left + r.width / 2, r.top + r.height / 2, pts, r.top, r.bottom);
+    return j < 0 ? null : list[j];
+  }
+
+  function instantScroll(el, dx, dy) {
+    var page = isPage(el);
+    var target = page ? document.documentElement : el;
+    var old = target.style.scrollBehavior;
+    target.style.scrollBehavior = 'auto'; // un scroll-behavior:smooth du site rendrait la position fausse au retour
+    if (page) window.scrollBy(dx, dy);
+    else { el.scrollLeft += dx; el.scrollTop += dy; }
+    target.style.scrollBehavior = old;
+  }
+
+  // Ce qu'il faut faire défiler pour voir t en entier : [{ el (null = la page), x, y }]. Rien pour ce qui est fixe ou collant.
+  function revealPlan(t) {
+    var ops = [];
+    var iw = window.innerWidth, ih = window.innerHeight;
+    var r = t.el.getBoundingClientRect();
+    var car = carouselOf(t.el);
+    if (car && car.scroll) {
+      var b = car.box, br = b.getBoundingClientRect();
+      var l = Math.max(0, br.left + b.clientLeft), rr = Math.min(iw, br.left + b.clientLeft + b.clientWidth);
+      var dx = window.__widoRevealDelta(r.left, r.right, l, rr, Math.min(48, (rr - l) * 0.08));
+      dx = Math.max(-b.scrollLeft, Math.min(b.scrollWidth - b.clientWidth - b.scrollLeft, dx));
+      if (Math.abs(dx) >= 1) ops.push({ el: b, x: dx, y: 0 });
+    }
+    var sc = null;
+    for (var a = t.el; a && !isPage(a); a = a.parentElement) {
+      var cs = window.getComputedStyle(a);
+      if (cs.position === 'fixed' || cs.position === 'sticky') return ops; // la page qui défile ne le déplacerait pas
+      var oy = cs.overflowY;
+      if (!sc && a !== t.el && (oy === 'auto' || oy === 'scroll' || oy === 'overlay') && a.scrollHeight > a.clientHeight + 2 &&
+        // overflow-x:auto force overflow-y:auto : une rangée qui déborde de quelques px (zoom au survol) n'est pas une liste verticale
+        !(a.scrollWidth > a.clientWidth + 4 && a.scrollHeight < a.clientHeight * 1.5)) sc = a;
+    }
+    var vs = 0, ve = ih, pad = Math.round(ih * 0.1); // marge : un bandeau collé en haut ne le cache pas
+    var se = document.scrollingElement || document.documentElement;
+    var top = se.scrollTop, max = se.scrollHeight - ih;
+    if (sc) {
+      var sr = sc.getBoundingClientRect();
+      vs = Math.max(0, sr.top + sc.clientTop);
+      ve = Math.min(ih, sr.top + sc.clientTop + sc.clientHeight);
+      pad = Math.min(24, (ve - vs) * 0.05);
+      top = sc.scrollTop; max = sc.scrollHeight - sc.clientHeight;
+    }
+    var dy = window.__widoRevealDelta(r.top, r.bottom, vs, ve, pad);
+    dy = Math.max(-top, Math.min(max - top, dy));
+    if (Math.abs(dy) >= 1) ops.push({ el: sc, x: 0, y: dy });
+    return ops;
+  }
+
+  function reveal(t) {
+    var ops = revealPlan(t);
+    for (var i = 0; i < ops.length; i++) instantScroll(ops[i].el, ops[i].x, ops[i].y);
+    return ops.length > 0;
+  }
+
+  // Le bouton « suivant » (fwd) ou « précédent » du carrousel, cherché dans sa racine et jusqu'à 3 parents,
+  // dans la bande verticale du carrousel (pas celui d'une autre rangée). Même invisible (flèches au survol).
+  function navButton(car, fwd) {
+    var br = car.box.getBoundingClientRect();
+    var mid = br.left + br.width / 2;
+    var want = fwd ? 1 : -1;
+    var best = null, bestScore = 0;
+    var scope = car.root;
+    for (var up = 0; up < 4 && scope && !isPage(scope); up++, scope = scope.parentElement) {
+      var nodes = scope.querySelectorAll(NAV_SEL);
+      for (var i = 0; i < nodes.length && i < 400; i++) {
+        var b = nodes[i];
+        if (b.contains(car.box) || b.disabled || b.getAttribute('aria-disabled') === 'true') continue;
+        var href = b.tagName === 'A' ? (b.getAttribute('href') || '') : '';
+        if (href && href.charAt(0) !== '#' && href.indexOf('javascript:') !== 0) continue; // un vrai lien (affiche) : jamais
+        var cls = b.getAttribute('class') || '';
+        if (/disabled|lock/i.test(cls)) continue; // bout atteint (swiper-button-disabled, slick-disabled…)
+        var r = b.getBoundingClientRect();
+        if (r.width > 0 && (r.bottom < br.top - 40 || r.top > br.bottom + 40)) continue; // une autre rangée
+        var text = (b.textContent || '').trim();
+        var hint = window.__widoNavDir(cls + ' ' + (b.getAttribute('aria-label') || '') + ' ' + (b.getAttribute('title') || '') +
+          ' ' + (text.length <= 3 ? text : ''));
+        var score = 0;
+        if (hint === want) score = 3;
+        else if (hint === 0 && r.width > 0 && r.width <= 120 && text.length <= 3 &&
+          (matches(b, 'button,[role=button]') || /arrow|chevron|control/i.test(cls)) &&
+          (fwd ? r.left > mid : r.right < mid)) score = 1; // petite flèche sans nom, du bon côté
+        if (score > bestScore) { bestScore = score; best = b; }
+      }
+      if (bestScore === 3) break;
+    }
+    return best;
+  }
+
+  // Fait avancer un carrousel à translate3d. 'instant' : c'est fait (API sans animation) ;
+  // 'async' : le site anime ; false : rien trouvé (l'appli peut glisser le doigt).
+  function advance(car, fwd) {
+    var root = car.root;
+    var $ = window.jQuery;
+    try {
+      var sw = root.swiper || car.box.swiper || (root.parentElement && root.parentElement.swiper);
+      if (sw && typeof sw.slideNext === 'function') { if (fwd) sw.slideNext(0); else sw.slidePrev(0); return 'instant'; }
+      var Fl = window.Flickity;
+      var fl = Fl && Fl.data && (Fl.data(root) || Fl.data(car.box) || Fl.data(car.box.parentElement));
+      if (fl) { if (fwd) fl.next(false, true); else fl.previous(false, true); return 'instant'; }
+      if ($ && $.fn) {
+        var s = $(root).closest('.slick-initialized');
+        if (s.length && $.fn.slick) { s.slick(fwd ? 'slickNext' : 'slickPrev'); return 'async'; }
+        var o = $(root).closest('.owl-carousel');
+        if (o.length) { o.trigger(fwd ? 'next.owl.carousel' : 'prev.owl.carousel', [0]); return 'async'; }
+      }
+    } catch (e) { /* API absente ou d'une autre version : on passe aux boutons */ }
+    var b = navButton(car, fwd);
+    if (b) { b.click(); return 'async'; }
+    return false;
+  }
+
+  // ---------- Choix de la cible ----------
+  // reach : comme pour makeClip (0 : ce qui est à l'écran).
+  function usableIn(root, clip, reach) {
+    clip = clip || makeClip(reach); // checkModal() l'appelle sans
+    var nodes = root.querySelectorAll(SELECTOR);
+    var list = [];
+    var ext = (reach || 0) * window.innerHeight;
+    for (var i = 0; i < nodes.length; i++) {
+      var r = nodes[i].getBoundingClientRect();
+      if (r.bottom < -ext || r.top > window.innerHeight + ext) continue;
+      var it = measure(nodes[i], clip, true);
+      if (it && it.w >= 8 && it.h >= 8) list.push(it); // il en reste assez de visible pour viser et toucher
+    }
+    return list;
+  }
+
+  // L'élément où est le curseur : celui marqué s'il est encore sous le curseur, sinon celui sous le curseur.
+  function currentAt(cx, cy, clip) {
+    var el = null;
+    if (marked && document.documentElement.contains(marked)) {
+      var r = marked.getBoundingClientRect();
+      if (cx >= r.left - 4 && cx <= r.right + 4 && cy >= r.top - 4 && cy <= r.bottom + 4) el = marked;
+    }
+    if (!el) el = closest(document.elementFromPoint(cx, cy), SELECTOR);
+    return el ? measure(el, clip, true) : null;
+  }
+
+  function context(modal) {
+    var clip = makeClip();
+    var items = modal ? usableIn(modal, clip) : [];
+    if (!items.length) { modal = null; items = usableIn(document, clip); }
+    return { modal: modal, clip: clip, items: items };
+  }
+
+  // Cibles suivantes depuis t, pour que l'appli y aille sans attendre la page. Seulement celles qui n'exigent
+  // aucun défilement : une cible à révéler ou un bout de carrousel, c'est la page qui décide.
+  function nextFrom(t, ctx) {
+    var iw = window.innerWidth, ih = window.innerHeight;
+    var next = {};
+    var car = ctx.modal ? null : carouselOf(t.el);
+    ['left', 'right', 'up', 'down'].forEach(function (d) {
+      var q = null;
+      if (car && (d === 'left' || d === 'right')) q = nextInRow(d, t, car, ctx.clip);
+      else {
+        var j = window.__widoPick(d, t.x, t.y, ctx.items);
+        if (j >= 0) q = ctx.items[j];
+      }
+      if (q && q.vis >= 0.98 && !revealPlan(q).length) next[d] = [q.x / iw, q.y / ih];
+    });
+    return next;
+  }
+
+  // Le curseur va sur t : défilement s'il le faut (instantané), nouvelle mesure, marquage, réponse à l'appli.
+  function land(t, ctx, extra) {
+    if (reveal(t)) {
+      var fresh = context(ctx.modal);
+      ctx = fresh;
+      t = measure(t.el, ctx.clip, true) || t;
+      // Un scroll-snap a pu ramener la piste ailleurs : le navigateur fait au mieux.
+      if (t.vis < 0.5 && t.el.scrollIntoView) {
+        try { t.el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { t.el.scrollIntoView(false); }
+        ctx = context(ctx.modal);
+        t = measure(t.el, ctx.clip, true) || t;
+      }
+    }
+    mark(t.el);
+    var o = { x: t.x / window.innerWidth, y: t.y / window.innerHeight, next: nextFrom(t, ctx) };
+    if (extra) for (var k in extra) o[k] = extra[k];
+    return JSON.stringify(o);
+  }
+
+  function stay(cur, extra) {
+    mark(cur.el);
+    var o = { x: cur.x / window.innerWidth, y: cur.y / window.innerHeight, next: {} };
+    for (var k in extra) o[k] = extra[k];
+    return JSON.stringify(o);
+  }
+
+  // ◀ ▶ dans un carrousel. Renvoie la réponse, ou null si cur n'est pas dans un carrousel (règle générale).
+  function snapInCarousel(dir, cur, ctx) {
+    var car = carouselOf(cur.el);
+    if (!car) return null;
+    var fwd = dir === 'right';
+    var t = nextInRow(dir, cur, car, ctx.clip);
+    if (t && t.vis >= 0.98) return land(t, ctx);
+    if (car.scroll) {
+      var b = car.box;
+      if (t) return land(t, ctx); // révélé par scrollLeft dans land()
+      // Plus rien dans le DOM de ce côté, mais la piste peut encore défiler (liste chargée au fur et à mesure).
+      var room = fwd ? b.scrollWidth - b.clientWidth - b.scrollLeft : b.scrollLeft;
+      if (room > 8) {
+        instantScroll(b, (fwd ? 1 : -1) * Math.min(room, b.clientWidth * 0.8), 0);
+        pending = { el: null, from: cur.el, dir: dir, pos: null };
+        return stay(measure(cur.el, makeClip(), true) || cur, { wait: 200 });
+      }
+    } else {
+      var how = advance(car, fwd);
+      if (how === 'instant') {
+        ctx = context(null);
+        var again = t && measure(t.el, ctx.clip, true);
+        if (again && again.w >= 8) return land(again, ctx);
+        var c2 = measure(cur.el, ctx.clip, true);
+        var t2 = c2 && nextInRow(dir, c2, car, ctx.clip);
+        if (t2 && t2.w >= 8) return land(t2, ctx);
+        if (c2 && c2.w >= 8) return stay(c2, { edge: true });
+      } else if (how === 'async' || (t && car.drag)) {
+        pending = { el: t ? t.el : null, from: cur.el, dir: dir, pos: null };
+        var extra = { wait: 350 };
+        if (!how) {
+          // Ni API ni bouton : l'appli glisse le doigt sur la piste, d'environ une affiche (pas au-delà du bout).
+          var v = measure(car.box, ctx.clip, true) || cur;
+          var len = Math.min(v.w * 0.6, Math.max(cur.r.width * 1.1, 80));
+          var x0 = fwd ? v.x + len / 2 : v.x - len / 2;
+          var iw = window.innerWidth, ih = window.innerHeight;
+          extra = { wait: 250, drag: [x0 / iw, cur.y / ih, (fwd ? x0 - len : x0 + len) / iw, cur.y / ih] };
+        }
+        return stay(cur, extra);
+      }
+    }
+    // Bout de la rangée : un lien juste à côté sur la même bande (« Tout voir › »), sinon on ne bouge pas.
+    var br = car.box.getBoundingClientRect();
+    var outside = ctx.items.filter(function (it) { return !car.box.contains(it.el); });
+    var j = window.__widoPickInRow(dir, cur.x, cur.y, outside, br.top, br.bottom);
+    if (j >= 0) return land(outside[j], ctx);
+    return stay(cur, { edge: true });
   }
 
   // (fx, fy) : position du curseur en fraction de la fenêtre. Renvoie la cible en fractions, ou null.
   // Une fenêtre surgissante est ouverte : les flèches ne parcourent que ses boutons (le reste de la page
   // est derrière), et depuis l'extérieur le curseur la rejoint.
+  // Réponse : { x, y, next, edge? (bout d'un carrousel : ne pas bouger), wait? (ms avant __widoSnapSettle),
+  // drag? ([x0, y0, x1, y1] à glisser avant) }.
   window.__widoSnap = function (dir, fx, fy) {
     if (!isTop || !window.__widoPick) return null;
-    var modal = topModal();
-    var items = modal ? usableIn(modal) : [];
-    if (!items.length) items = usableIn(document);
+    pending = null;
+    var ctx = context(topModal());
+    var items = ctx.items;
     var cx = fx * window.innerWidth, cy = fy * window.innerHeight;
+    if (!ctx.modal && (dir === 'left' || dir === 'right')) {
+      var cur = currentAt(cx, cy, ctx.clip);
+      var res = cur && snapInCarousel(dir, cur, ctx);
+      if (res) return res;
+    }
     var index = window.__widoPick(dir, cx, cy, items);
-    if (index < 0 && modal && items.length) {
-      var m = modal.getBoundingClientRect();
+    if (index < 0 && ctx.modal && items.length) {
+      var m = ctx.modal.getBoundingClientRect();
       var outside = cx < m.left || cx > m.right || cy < m.top || cy > m.bottom;
       if (outside) index = window.__widoPickPrimary(items.map(function (it) { return it.el.innerText || it.el.value || it.el.getAttribute('aria-label') || ''; }));
     }
+    if (index < 0 && !ctx.modal && (dir === 'up' || dir === 'down')) {
+      // Rien à l'écran au-dessus / en dessous : la rangée suivante jusqu'à un écran plus loin, que land() fait
+      // venir à l'écran. Au-delà (texte sans liens), null : l'appli défile d'une demi-page comme avant.
+      var far = usableIn(document, makeClip(1), 1);
+      var k = window.__widoPick(dir, cx, cy, far);
+      if (k >= 0) return land(far[k], ctx);
+    }
     if (index < 0) return null;
-    mark(items[index].el);
-    // Les cibles suivantes depuis celle-ci, dans les 4 directions, avec la même règle : l'appli s'y place
-    // aussitôt au prochain appui (sans attendre la page), puis vérifie par cette même fonction.
-    var t = items[index], iw = window.innerWidth, ih = window.innerHeight;
-    var next = {};
-    ['left', 'right', 'up', 'down'].forEach(function (d) {
-      var j = window.__widoPick(d, t.x, t.y, items);
-      if (j >= 0) next[d] = [items[j].x / iw, items[j].y / ih];
-    });
-    return JSON.stringify({ x: t.x / iw, y: t.y / ih, next: next });
+    return land(items[index], ctx);
+  };
+
+  // Après une animation du site (bouton, API, glisser) : où va le curseur ? { wait } tant que ça bouge encore,
+  // puis la réponse habituelle ; null si plus rien à faire. last : dernier essai, on répond quoi qu'il arrive.
+  window.__widoSnapSettle = function (last) {
+    var p = pending;
+    if (!p || !window.__widoPick) return null;
+    var ref = (p.el && document.documentElement.contains(p.el)) ? p.el : p.from;
+    if (!document.documentElement.contains(ref)) { pending = null; return null; }
+    var pos = ref.getBoundingClientRect().left;
+    if (!last && (p.pos === null || Math.abs(pos - p.pos) > 1)) { p.pos = pos; return JSON.stringify({ wait: 120 }); }
+    pending = null;
+    var ctx = context(null);
+    var t = p.el && measure(p.el, ctx.clip, true);
+    if (t && t.vis >= 0.5) return land(t, ctx);
+    var from = measure(p.from, ctx.clip, true);
+    var car = from && carouselOf(from.el);
+    var q = car && nextInRow(p.dir, from, car, ctx.clip);
+    if (q && q.w >= 8) return land(q, ctx);
+    if (t && t.w >= 8) return land(t, ctx);
+    if (from && from.w >= 8) return stay(from, { edge: true });
+    return null;
   };
   window.__widoUnmark = unmark;
 
@@ -134,6 +535,22 @@
     if (canPage) { by(null, k * window.innerHeight, true); return true; }
     return false;
   };
+
+  // Curseur maintenu contre un bord gauche/droit : fait défiler la rangée défilante sous lui (overflow-x auto /
+  // scroll), sinon rien (faux : l'appli fait défiler la page comme avant). px : décalage signé.
+  window.__widoScrollXAt = function (fx, fy, px) {
+    if (!isTop) return false;
+    var el = document.elementFromPoint(fx * window.innerWidth, fy * window.innerHeight);
+    for (; el && !isPage(el); el = el.parentElement) {
+      var ox = window.getComputedStyle(el).overflowX;
+      if ((ox === 'auto' || ox === 'scroll' || ox === 'overlay') && el.scrollWidth > el.clientWidth + 2) {
+        var can = px > 0 ? el.scrollLeft + el.clientWidth < el.scrollWidth - 1 : el.scrollLeft > 0;
+        if (can) { instantScroll(el, px, 0); return true; }
+      }
+    }
+    return false;
+  };
+
 
   // La fenêtre apparaît ou disparaît : l'app amène le curseur sur son bouton principal, puis le ramène
   // où il était à la fermeture. Vérifié au plus une fois par seconde, et jamais page cachée.

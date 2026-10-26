@@ -1,5 +1,14 @@
 # Changelog
 
+## Non publié (carrousels)
+
+### Ajouté
+- **Carrousels à la télécommande** : sur une rangée d'affiches, ◀ ▶ vont à l'affiche suivante même hors de l'écran, et la rangée défile pour la montrer. Ça marche avec les rangées défilantes (y compris « scroll-snap ») et avec les carrousels animés des bibliothèques courantes (Swiper, Slick, Owl, Flickity… par leur API, leurs boutons suivant/précédent, sinon un vrai glisser du doigt). Au bout d'une rangée, le curseur ne saute plus en diagonale sur la rangée du dessous : il reste, ou va au lien voisin (« Tout voir »). Maintenir ◀ ▶ contre le bord fait défiler la rangée sous le curseur.
+
+### Corrigé
+- **Curseur sur des éléments cachés** : une affiche coupée par la bordure de son carrousel n'est plus visée (le curseur allait sur un endroit invisible et le clic tombait ailleurs) ; le curseur vise le centre de la partie visible.
+- **▲ ▼ amènent la rangée à l'écran** : la carte choisie est montrée en entier (la page défile), au lieu d'un centre hors de l'écran.
+
 ## Non publié (ouverture des sites)
 
 ### Corrigé
