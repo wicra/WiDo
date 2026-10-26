@@ -198,6 +198,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                         runOnUiThread {
                             hidePauseScreen()
                             forgetSnapAhead()
+                            cancelSeekBar()
                         }
                         bridge?.reset()
                         mediaState.value = null
@@ -375,6 +376,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     private fun exitCustomView() {
         val view = customView ?: return
+        cancelSeekBar()
         root.removeView(view)
         customView = null
         customCallback?.onCustomViewHidden()
@@ -468,6 +470,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 return true
             }
             return super.dispatchKeyEvent(event)
+        }
+
+        // Barre de lecture affichée : Retour la ferme (et oublie la seconde visée) sans quitter le plein écran.
+        if (code == KeyEvent.KEYCODE_BACK && seekBar?.isShowing == true) {
+            if (event.action == KeyEvent.ACTION_UP) cancelSeekBar()
+            return true
         }
 
         when (code) {
@@ -812,14 +820,107 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     /** Flèches et OK en plein écran vidéo. Renvoie vrai si la touche est consommée. */
     private fun fullscreenKey(event: KeyEvent): Boolean {
-        val seek = settings.seekSeconds.toDouble()
+        val down = event.action == KeyEvent.ACTION_DOWN
         when (event.keyCode) {
-            KeyEvent.KEYCODE_DPAD_LEFT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(-seek * (1 + minOf(event.repeatCount / 4, 4)))
-            KeyEvent.KEYCODE_DPAD_RIGHT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(seek * (1 + minOf(event.repeatCount / 4, 4)))
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) toggleMedia()
+            // ◀ ▶ : la barre de WiDo montre la seconde visée ; la vidéo y va dès qu'on lâche (ou OK).
+            KeyEvent.KEYCODE_DPAD_LEFT -> if (down) moveSeekTarget(-1, event.repeatCount)
+            KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) moveSeekTarget(1, event.repeatCount)
+            // ▲ ▼ : affiche ou masque la barre (où en est la vidéo, combien il reste).
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> if (down && event.repeatCount == 0) {
+                if (seekBar?.isShowing == true) {
+                    commitSeekTarget()
+                    seekBar?.hide()
+                } else {
+                    showSeekBar()
+                }
+            }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (down && event.repeatCount == 0) {
+                if (seekTarget >= 0) commitSeekTarget() else toggleMedia()
+            }
             else -> return false
         }
         return true
+    }
+
+    // --- Barre de lecture de WiDo (vidéo de site en plein écran) ----------------------------------
+
+    private var seekBar: SeekBarView? = null
+    /** Seconde visée aux flèches, pas encore envoyée à la vidéo ; négative : aucune. */
+    private var seekTarget = -1.0
+    private val commitSeek = Runnable { commitSeekTarget() }
+    private val hideSeekBarLater = Runnable { seekBar?.hide() }
+
+    private fun seekBarView(): SeekBarView = seekBar ?: SeekBarView(this, settings.uiScale).also { bar ->
+        bar.visibility = View.GONE
+        bar.hint = getString(R.string.seekbar_hint)
+        bar.position = { estimatedTime() }
+        val height = (200 * resources.displayMetrics.density * settings.uiScale).toInt()
+        root.addView(bar, FrameLayout.LayoutParams(MATCH, height, Gravity.BOTTOM))
+        seekBar = bar
+    }
+
+    /** Position de la vidéo maintenant, d'après le dernier relevé (la page n'est interrogée que de temps en temps). */
+    private fun estimatedTime(): Double {
+        val state = mediaState.value ?: return 0.0
+        return if (state.paused) state.time else state.time + (SystemClock.elapsedRealtime() - mediaAt) / 1000.0
+    }
+
+    private fun showSeekBar(hideAfterMs: Long = SEEKBAR_HIDE_MS) {
+        val state = mediaState.value ?: return
+        if (state.duration <= 0) return
+        val bar = seekBarView()
+        bar.duration = state.duration
+        bar.title = webView?.title?.takeIf { it.isNotBlank() && it != webView?.url }.orEmpty()
+        bar.target = seekTarget
+        bar.bringToFront()
+        osd.bringToFront()
+        bar.show()
+        root.removeCallbacks(hideSeekBarLater)
+        root.postDelayed(hideSeekBarLater, hideAfterMs)
+    }
+
+    /** ◀ ▶ : la seconde visée avance ou recule (de plus en plus vite si la touche est maintenue), sans encore y aller. */
+    private fun moveSeekTarget(sign: Int, repeat: Int) {
+        val state = mediaState.value
+        if (state == null || state.duration <= 0) {
+            // Direct sans durée connue : simple saut, comme avant.
+            seekBy(sign * settings.seekSeconds.toDouble() * (1 + minOf(repeat / 4, 4)))
+            return
+        }
+        val base = if (seekTarget >= 0) seekTarget else estimatedTime()
+        val step = settings.seekSeconds * (1 + minOf(repeat / 4, 5))
+        seekTarget = (base + sign * step).coerceIn(0.0, maxOf(0.0, state.duration - 1))
+        cancelSeekGuard()
+        showSeekBar()
+        root.removeCallbacks(commitSeek)
+        root.postDelayed(commitSeek, SEEK_COMMIT_MS)
+    }
+
+    /** La vidéo va à la seconde visée ; la barre reste un instant pour montrer la nouvelle position. */
+    private fun commitSeekTarget() {
+        root.removeCallbacks(commitSeek)
+        val target = seekTarget
+        if (target < 0) return
+        seekTarget = -1.0
+        CrashLog.trace("site : barre de lecture → ${target.toLong()} s")
+        mediaJson(JSONObject().put("cmd", "seekTo").put("to", target).toString())
+        mediaState.value?.let {
+            mediaState.value = it.copy(time = target)
+            mediaAt = SystemClock.elapsedRealtime()
+        }
+        seekBar?.target = -1.0
+        root.removeCallbacks(hideSeekBarLater)
+        root.postDelayed(hideSeekBarLater, 2_500)
+        root.postDelayed({ passivePoll = true; media("state") }, 700)
+    }
+
+    /** Retour sur la barre : la seconde visée est oubliée, la vidéo ne bouge pas. */
+    private fun cancelSeekBar() {
+        root.removeCallbacks(commitSeek)
+        root.removeCallbacks(hideSeekBarLater)
+        seekTarget = -1.0
+        seekBar?.target = -1.0
+        seekBar?.hide()
     }
 
     /** Vidéo en pause en plein écran : le curseur apparaît et se déplace librement, OK clique. */
@@ -1888,6 +1989,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     private fun setCinema(on: Boolean) {
         cinema = on
+        if (!on) cancelSeekBar()
         mediaJson(JSONObject().put("cmd", "cinema").put("on", on).toString())
         if (on) osd.showText(getString(R.string.osd_cinema))
     }
@@ -2271,6 +2373,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         root.removeCallbacks(resumeSeek)
         root.removeCallbacks(autoStartPoll)
         root.removeCallbacks(showPause)
+        root.removeCallbacks(commitSeek)
+        root.removeCallbacks(hideSeekBarLater)
         adWindow?.close()
         customCallback?.onCustomViewHidden()
         webView?.let {
@@ -2329,6 +2433,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         /** Flèches gardées en attente au plus (au-delà, l'appui maintenu prend le relais). */
         private const val SNAP_QUEUE = 3
         private const val SNAP_TIMEOUT_MS = 600L
+        /** La vidéo va à la seconde visée ce délai après le dernier appui sur ◀ ▶ (enchaîner les appuis ne la fait pas sauter à chaque fois). */
+        private const val SEEK_COMMIT_MS = 900L
+        private const val SEEKBAR_HIDE_MS = 4_000L
         /** Au-delà, les cibles annoncées sont trop anciennes (la page a pu changer) : on redemande. */
         private const val SNAP_AHEAD_MS = 2_500L
         private const val DOUBLE_BACK_MS = 450L

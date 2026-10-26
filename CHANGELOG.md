@@ -1,5 +1,9 @@
 # Changelog
 
+## Non publié (YouTube en plein écran)
+
+- **Barre de lecture de WiDo pour les vidéos de site en plein écran** (YouTube…) : le site cache sa barre et la télécommande ne pouvait pas la viser. ◀ ▶ déplacent maintenant la seconde visée sur une barre en bas de l'écran (« 12:40  +1:30 », plus vite si la touche est maintenue) ; la vidéo y va dès qu'on lâche (0,9 s) ou avec OK. ▲ ▼ affichent la barre (où en est la vidéo, la durée), Retour l'annule sans quitter le plein écran. Enchaîner les appuis ne fait plus sauter la vidéo à chaque fois.
+
 ## Non publié (test de la 1.0.8)
 
 - **« Masquer un élément » ne revient plus en naviguant sur le site** : le masquage est aussi posé sur l'élément lui-même (un site qui force `display:block !important` l'emportait sur la feuille de style), et l'élément est enregistré sous plusieurs signatures pour être retrouvé sur les autres pages : son sélecteur unique, ses propres classes quand elles suffisent à le désigner, et pour une pub en iframe, les iframes du même domaine tiers (jamais une grande iframe, qui peut être le lecteur vidéo).

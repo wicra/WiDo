@@ -518,4 +518,5 @@
     <string name="s_screensaver_note">Replaces the system screensaver (the rainbow) with WiDo\'s: blue glass glows, time and date. In the setting that opens, choose “WiDo”.</string>
     <string name="screensaver_manual">Setting not found on this TV: Android Settings → Screensaver (or Daydream) → WiDo</string>
     <string name="open_interrupted">Opening the site was interrupted: Android closed WiDo (often for lack of memory). Try again; if it happens again, run Settings → Test.</string>
+    <string name="seekbar_hint">◀ ▶ pick the position · OK go · ▲ ▼ hide · Back cancel</string>
 </resources>
