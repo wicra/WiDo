@@ -17,6 +17,8 @@ h2{margin:24px 8px 8px}
 .swiper-slide{flex:0 0 220px;height:130px;margin-right:12px;background:#6b2a5b;display:block;color:#fff}
 .swiper-button-next,.swiper-button-prev{position:absolute;top:50px;width:30px;height:30px;background:#fff;z-index:2}
 .swiper-button-next{right:0}.swiper-button-prev{left:0}
+.cards{display:flex;overflow-x:auto;gap:12px;padding:8px}
+.cards div{flex:0 0 200px;height:150px;background:#2a6b4b;color:#fff;cursor:pointer}
 #vid{width:400px;height:225px;background:#000;display:block;margin:8px}
 #adwrap{margin:8px}
 .ad-box{width:300px;height:80px;background:#a33;color:#fff}
@@ -29,8 +31,11 @@ form{margin:8px}
 <h2>Carrousel animé</h2>
 <div class="swiper" id="sw"><div class="swiper-wrapper" id="swt"></div>
 <button class="swiper-button-prev" aria-label="Précédent"></button><button class="swiper-button-next" aria-label="Suivant"></button></div>
+<h2>Cartes sans lien</h2>
+<div class="cards" id="cards"></div>
 <form id="f" onsubmit="window.__widoSubmitted=document.getElementById('q').value;return false"><input id="q" type="search" placeholder="Recherche"></form>
 <video id="vid" muted></video>
+<p><a id="nextep" href="#ep2" onclick="window.__widoNextClicked=true;return false">Épisode suivant</a></p>
 <div id="adwrap"><div class="ad-box" id="ad" style="display:block !important">Publicité</div></div>
 <script>
 (function () {
@@ -40,6 +45,15 @@ form{margin:8px}
   for (var j = 0; j < 14; j++) { var c = document.createElement('a'); c.href = '#c' + j; c.id = 'c' + j; c.textContent = 'Affiche ' + j; r.appendChild(c); }
   var t = document.getElementById('swt');
   for (var k = 0; k < 10; k++) { var s = document.createElement('a'); s.href = '#s' + k; s.id = 's' + k; s.className = 'swiper-slide'; s.textContent = 'Diapo ' + k; t.appendChild(s); }
+  // Des affiches en <div> avec un clic JavaScript (pas de lien) : seul le curseur « main » les signale.
+  var cs = document.getElementById('cards');
+  window.__widoCardClicks = [];
+  for (var m = 0; m < 12; m++) {
+    var d = document.createElement('div'); d.className = 'MovieCard_root'; d.id = 'k' + m;
+    d.innerHTML = '<span>Film ' + m + '</span>';
+    d.addEventListener('click', function () { window.__widoCardClicks.push(this.id); });
+    cs.appendChild(d);
+  }
   // Un carrousel animé minimal : les boutons déplacent la piste par transform, comme Swiper.
   var pos = 0;
   var next = document.querySelector('.swiper-button-next'), prev = document.querySelector('.swiper-button-prev');

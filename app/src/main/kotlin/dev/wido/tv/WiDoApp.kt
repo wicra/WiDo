@@ -15,7 +15,7 @@ class WiDoApp : Application() {
      * Appareil à peu de mémoire (clé TV de 1 Go…) : Android y ferme vite l'appli pendant une vidéo. On
      * y renonce aux préparations qui coûtent de la mémoire, et on libère les caches dès qu'il en manque.
      */
-    val lowMemory: Boolean get() = DeviceMemory.isLow(this)
+    val lowMemory: Boolean by lazy { settings.lowMemory }
 
     /** TV ou téléphone : l'interface s'adapte (télécommande et curseur, ou écran tactile). */
     val isTv: Boolean get() = link.isTv

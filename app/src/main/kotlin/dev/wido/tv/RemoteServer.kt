@@ -40,7 +40,7 @@ class RemoteServer(
         get() {
             val p = port ?: return null
             val ip = MiniHttpServer.localAddress() ?: return null
-            return "http://$ip:$p/?t=${settings.remoteToken}"
+            return dev.wido.core.ScanCodes.tag("http://$ip:$p/?t=${settings.remoteToken}", dev.wido.core.ScanCodes.REMOTE)
         }
 
     /** QR code d'appairage de l'appli WiDo sur téléphone (`wido://pair…`), ou null si le serveur n'est pas ouvert. */

@@ -364,6 +364,7 @@ fun glyphLabel(glyph: Glyph): String? = when (glyph) {
     Glyph.Refresh -> R.string.a11y_refresh
     Glyph.Close -> R.string.a11y_close
     Glyph.Plus -> R.string.add_site
+    Glyph.Scan -> R.string.scan_title
     else -> null
 }?.let { androidx.compose.ui.res.stringResource(it) }
 

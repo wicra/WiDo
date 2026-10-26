@@ -31,6 +31,67 @@
     return !el || el === document.body || el === document.documentElement;
   }
 
+  // Cartes cliquables qui ne sont ni lien ni bouton (affiches de films en <div> avec un clic JavaScript) : on ne
+  // les reconnaît qu'au curseur « main » que le site leur donne. CARD_SEL limite la recherche aux noms usuels.
+  var CARD_SEL = '.swiper-slide,.slick-slide,.splide__slide,.glide__slide,.owl-item,.keen-slider__slide,.embla__slide,' +
+    '[class*=card],[class*=Card],[class*=poster],[class*=Poster],[class*=tile],[class*=Tile],[class*=thumb],[class*=Thumb],' +
+    '[class*=item],[class*=Item],[class*=movie],[class*=Movie],[class*=film],[class*=episode],[class*=Episode],li,article,img';
+
+  // La carte « main » qui contient el : l'ancêtre le plus haut au curseur pointer (le curseur s'hérite), de taille
+  // d'une carte, ni dans un lien ni couvert par un lien à lui. null sinon.
+  function cardOf(el) {
+    var iw = window.innerWidth, ih = window.innerHeight;
+    var top = null;
+    for (var a = el, depth = 0; a && a.nodeType === 1 && !isPage(a) && depth < 8; a = a.parentElement, depth++) {
+      if (window.getComputedStyle(a).cursor !== 'pointer') break;
+      top = a;
+    }
+    if (!top || closest(top, SELECTOR)) return null;
+    var r = top.getBoundingClientRect();
+    if (r.width < 40 || r.height < 40 || r.width > iw * 0.7 || r.height > ih * 0.8) return null;
+    var inner = top.querySelectorAll(SELECTOR);
+    for (var i = 0; i < inner.length && i < 20; i++) {
+      var q = inner[i].getBoundingClientRect();
+      if (q.width * q.height >= r.width * r.height * 0.5) return null; // le lien qu'elle contient suffit
+    }
+    return top;
+  }
+
+  // Les éléments cliquables de root : liens, boutons… et les cartes « main ».
+  function clickables(root, max) {
+    var list = Array.prototype.slice.call(root.querySelectorAll(SELECTOR), 0, max);
+    var cards = pageCards();
+    for (var i = 0; i < cards.length; i++) if (root === document || root.contains(cards[i])) list.push(cards[i]);
+    return list;
+  }
+
+  // Les cartes « main » de la page. Gardées tant que la page ne change pas (ni DOM, ni défilement, au plus 3 s) :
+  // les appuis suivants ne les recherchent pas.
+  var cardsMemo = null;
+  var cardsAt = 0;
+  function pageCards() {
+    if (cardsMemo && Date.now() - cardsAt < 3000) return cardsMemo;
+    cardsAt = Date.now();
+    var list = [];
+    var cands = document.querySelectorAll(CARD_SEL);
+    var seen = typeof Set === 'function' ? new Set() : null;
+    var ext = window.innerHeight * 1.5;
+    for (var i = 0, n = 0; i < cands.length && n < 400; i++) {
+      var c = cands[i];
+      if (c.closest && c.closest('a[href],button')) continue; // déjà couvert par un lien : rien à calculer
+      var cr = c.getBoundingClientRect();
+      if (cr.bottom < -ext || cr.top > window.innerHeight + ext || cr.width < 8) continue; // loin de l'écran (en hauteur)
+      n++;
+      if (window.getComputedStyle(c).cursor !== 'pointer') continue; // une lecture de style, le plus souvent la seule
+      var card = cardOf(c);
+      if (!card || (seen ? seen.has(card) : list.indexOf(card) >= 0)) continue;
+      if (seen) seen.add(card);
+      list.push(card);
+    }
+    cardsMemo = list;
+    return list;
+  }
+
   // Pour un appel : une fonction qui donne la partie visible d'un élément, rognée par la fenêtre ET par ses
   // ancêtres en overflow ≠ visible (piste d'un carrousel, liste défilante). Chaque ancêtre n'est lu qu'une fois.
   // Approximations : un élément en position absolue échappe en vrai au rognage de ses ancêtres non positionnés.
@@ -156,7 +217,7 @@
   // hors de la boîte. Écarte un en-tête en overflow:hidden qui cache un menu hors écran.
   function rowLike(box, el, er) {
     var br = box.getBoundingClientRect();
-    var nodes = box.querySelectorAll(SELECTOR);
+    var nodes = clickables(box, 300);
     var same = 0, out = 0;
     for (var i = 0; i < nodes.length && i < 300; i++) {
       if (nodes[i] === el) continue;
@@ -199,7 +260,7 @@
   // Les cliquables du carrousel, où qu'ils soient (rognés, hors écran), sauf cur et ce qui le contient ou qu'il contient.
   // Seulement les cartes de même hauteur (± 40 %) : pas les flèches du carrousel ni les petits boutons des cartes.
   function members(car, cur, clip) {
-    var nodes = car.box.querySelectorAll(SELECTOR);
+    var nodes = clickables(car.box, 600);
     var list = [];
     var h = cur.r.height;
     for (var i = 0; i < nodes.length && i < 600; i++) {
@@ -335,7 +396,7 @@
   // reach : comme pour makeClip (0 : ce qui est à l'écran).
   function usableIn(root, clip, reach) {
     clip = clip || makeClip(reach); // checkModal() l'appelle sans
-    var nodes = root.querySelectorAll(SELECTOR);
+    var nodes = clickables(root);
     var list = [];
     var ext = (reach || 0) * window.innerHeight;
     for (var i = 0; i < nodes.length; i++) {
@@ -354,7 +415,10 @@
       var r = marked.getBoundingClientRect();
       if (cx >= r.left - 4 && cx <= r.right + 4 && cy >= r.top - 4 && cy <= r.bottom + 4) el = marked;
     }
-    if (!el) el = closest(document.elementFromPoint(cx, cy), SELECTOR);
+    if (!el) {
+      var under = document.elementFromPoint(cx, cy);
+      el = closest(under, SELECTOR) || (under && cardOf(under));
+    }
     return el ? measure(el, clip, true) : null;
   }
 
@@ -514,6 +578,38 @@
   };
   window.__widoUnmark = unmark;
 
+  // « Épisode suivant » de la page (lien ou bouton du site), pour le proposer à la fin du film dans le lecteur
+  // natif. Seulement un texte (ou nom, classe) qui parle d'épisode : jamais un simple « Suivant » (pages, carrousels).
+  // click : le suit. Renvoie son libellé, ou null.
+  var NEXT_EP = /(?:[ée]pisode|ep\.?)\s*suivant|prochain\s+[ée]pisode|next\s*ep(?:isode)?\b|episode\s*next|suivant\s*:\s*[ée]pisode/i;
+  var NEXT_EP_CLASS = /next[-_]?ep(?:isode)?|episode[-_]?next|nextEpisode|NextEpisode/;
+  window.__widoNextEpisode = function (click) {
+    if (!isTop) return null;
+    var nodes = document.querySelectorAll('a[href],button,[role=button],[role=link],[class*=next],[class*=Next],[id*=next],[id*=Next]');
+    var best = null, bestScore = 0;
+    for (var i = 0; i < nodes.length && i < 1500; i++) {
+      var el = nodes[i];
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
+      var text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      var name = (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '');
+      var cls = (typeof el.className === 'string' ? el.className : '') + ' ' + (el.id || '');
+      var score = 0;
+      if (text.length <= 80 && NEXT_EP.test(text)) score = 3;
+      else if (NEXT_EP.test(name)) score = 2;
+      else if (NEXT_EP_CLASS.test(cls) && matches(el, 'a[href],button,[role=button]')) score = 1;
+      if (!score) continue;
+      if (el.tagName === 'A') {
+        var href = el.getAttribute('href') || '';
+        if (/^javascript:/i.test(href) && !el.onclick) continue;
+      }
+      if (score > bestScore) { best = el; bestScore = score; if (score === 3) break; }
+    }
+    if (!best) return null;
+    var label = ((best.innerText || '').replace(/\s+/g, ' ').trim() || best.getAttribute('aria-label') || best.getAttribute('title') || '').slice(0, 60);
+    if (click) best.click();
+    return label || 'next';
+  };
+
   // Défile ce qui se trouve sous le curseur : la zone défilante de la fenêtre surgissante (conditions
   // d'utilisation, cookies…), sinon la page. k : fraction de la hauteur visible (signée). Vrai si ça peut défiler.
   window.__widoScrollAt = function (fx, fy, k) {
@@ -548,8 +644,42 @@
         if (can) { instantScroll(el, px, 0); return true; }
       }
     }
-    return false;
+    // Piste déplacée par transform (overflow hidden) : son API ou ses boutons, sinon un glisser du doigt par l'appli
+    // (réponse { drag }). Curseur maintenu contre le bord : une carte par demi-seconde, pas à chaque répétition.
+    var car = sliderAt(fx * window.innerWidth, fy * window.innerHeight);
+    if (!car) return false;
+    var now = Date.now();
+    if (now - lastForce < FORCE_MS) return true;
+    lastForce = now;
+    if (advance(car, px > 0)) return true;
+    var br = car.box.getBoundingClientRect();
+    var y = Math.max(br.top + 4, Math.min(br.bottom - 4, fy * window.innerHeight));
+    var len = Math.min(br.width * 0.6, 360);
+    var x0 = br.left + br.width / 2 + (px > 0 ? len / 2 : -len / 2);
+    var iw = window.innerWidth, ih = window.innerHeight;
+    return JSON.stringify({ drag: [x0 / iw, y / ih, (px > 0 ? x0 - len : x0 + len) / iw, y / ih] });
   };
+  var lastForce = 0;
+  var FORCE_MS = 450;
+
+  // Le carrousel à transform sous (x, y), même sans carte reconnue : un ancêtre en overflow-x:hidden de la taille d'une
+  // rangée (pas toute la page), connu d'une bibliothèque ou dont la piste est déplacée par transform. Jamais un simple
+  // conteneur qui déborde (en-tête qui cache un menu) : on y cliquerait un bouton au hasard. null sinon.
+  function sliderAt(x, y) {
+    var ih = window.innerHeight;
+    var el = document.elementFromPoint(x, y);
+    for (var a = el, depth = 0; a && !isPage(a) && depth < 25; a = a.parentElement, depth++) {
+      var cs = window.getComputedStyle(a);
+      if (cs.overflowX !== 'hidden' || cs.display === 'inline') continue;
+      var r = a.getBoundingClientRect();
+      if (r.height > ih * 0.9 || r.width < 200) continue;
+      var root = sliderRoot(a);
+      var first = a.firstElementChild;
+      var moved = first && window.getComputedStyle(first).transform !== 'none';
+      if (root || moved) return { box: a, root: root || a.parentElement || a, scroll: false, drag: true };
+    }
+    return null;
+  }
 
 
   // La fenêtre apparaît ou disparaît : l'app amène le curseur sur son bouton principal, puis le ramène
@@ -573,7 +703,9 @@
     window.WiDoBridge.postMessage(JSON.stringify({ type: 'modal', x: x, y: y }));
   }
   if (isTop && typeof MutationObserver === 'function') {
+    window.addEventListener('scroll', function () { cardsMemo = null; }, { passive: true });
     new MutationObserver(function () {
+      cardsMemo = null;
       if (!modalTimer) modalTimer = setTimeout(checkModal, 1000);
     }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'open', 'aria-hidden'] });
   }

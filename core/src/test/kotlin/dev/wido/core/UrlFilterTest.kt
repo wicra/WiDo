@@ -197,6 +197,29 @@ class RemoteProtocolTest {
         assertNull(RemoteProtocol.parse("""{"cmd":"key","key":"power"}"""))
         assertNull(RemoteProtocol.parse("nope"))
     }
+
+    @Test fun parsesPlayerOptions() {
+        assertEquals(RemoteCommand.Option("audio", "1:0"), RemoteProtocol.parse("""{"cmd":"option","kind":"audio","id":"1:0"}"""))
+        assertEquals(RemoteCommand.Option("speed", "1.25"), RemoteProtocol.parse("""{"cmd":"option","kind":"speed","id":"1.25"}"""))
+        assertNull(RemoteProtocol.parse("""{"cmd":"option","kind":"speed","id":"9"}"""))
+        assertNull(RemoteProtocol.parse("""{"cmd":"option","kind":"volume","id":"1"}"""))
+        assertNull(RemoteProtocol.parse("""{"cmd":"option","kind":"audio","id":""}"""))
+    }
+}
+
+class PlayerOptionsTest {
+    @Test fun qualitiesNeedAChoice() {
+        assertEquals(emptyList(), PlayerOptions.qualities(listOf(720, 720), 1080, null, "Auto"))
+        val q = PlayerOptions.qualities(listOf(480, 2160, 1080, 720), 1080, 720, "Auto")
+        assertEquals(listOf("auto", "1080", "720", "480"), q.map { it.id })
+        assertEquals(listOf(false, false, true, false), q.map { it.selected })
+    }
+
+    @Test fun speedLabels() {
+        assertEquals("1×", PlayerOptions.speedLabel(1f, true))
+        assertEquals("1,25×", PlayerOptions.speedLabel(1.25f, true))
+        assertEquals("0.75×", PlayerOptions.speedLabel(0.75f, false))
+    }
 }
 
 class SiteEntityTest {
@@ -208,5 +231,23 @@ class SiteEntityTest {
         assertEquals(NavigationPolicy.Decision.ALLOW, NavigationPolicy.decide("https://monsite.cloud/film", site, null))
         assertEquals(NavigationPolicy.Decision.BLOCK, NavigationPolicy.decide("https://pub-monsite.net/", site, null))
         assertEquals(listOf("monsite.*", "cdn.exemple.org") to null, LocalSites.parseDomains("monsite.*, https://cdn.exemple.org/x"))
+    }
+}
+
+class ScanCodesTest {
+    @Test fun tvCodesAreRecognised() {
+        val t = "0123456789abcdef0123456789abcdef"
+        assertEquals(ScanTarget.Keyboard("http://192.168.1.20:8765", t), ScanCodes.parse(ScanCodes.tag("http://192.168.1.20:8765/?t=$t", ScanCodes.KEYBOARD)))
+        assertEquals(ScanTarget.Report("http://192.168.1.20:8766", t), ScanCodes.parse("http://192.168.1.20:8766/?t=$t&w=report"))
+        assertTrue(ScanCodes.parse("http://192.168.1.20:8766/?t=$t&w=remote") is ScanTarget.Remote)
+        assertTrue(ScanCodes.parse("wido://pair?h=192.168.1.20&p=8766&k=abc&n=Salon") is ScanTarget.Pair)
+    }
+
+    @Test fun otherLinksStayLinks() {
+        assertEquals(ScanTarget.Web("https://exemple.org/film"), ScanCodes.parse("https://exemple.org/film"))
+        // Sans marque : une adresse locale reste un lien (ancienne version de la TV, autre appareil).
+        assertTrue(ScanCodes.parse("http://192.168.1.20:8765/?t=0123456789abcdef") is ScanTarget.Web)
+        assertNull(ScanCodes.parse("bonjour"))
+        assertNull(ScanCodes.parse("javascript:alert(1)"))
     }
 }

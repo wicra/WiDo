@@ -99,6 +99,10 @@ dependencies {
     implementation("androidx.media:media:1.7.0")
     // QR code de la saisie depuis un téléphone (génération seulement).
     implementation("com.google.zxing:core:3.5.3")
+    // Scanner de QR code de l'appli du téléphone (codes de la TV ouverts sans navigateur) ; décodage par zxing.
+    implementation("androidx.camera:camera-camera2:1.4.1")
+    implementation("androidx.camera:camera-lifecycle:1.4.1")
+    implementation("androidx.camera:camera-view:1.4.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("junit:junit:4.13.2")

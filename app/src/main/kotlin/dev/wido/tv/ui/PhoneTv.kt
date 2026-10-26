@@ -321,9 +321,47 @@ internal fun NowPlayingCard(peer: Peer, state: ScreenLink.ScreenState, link: Scr
                     ) { GlyphIcon(if (now.playing) Glyph.Pause else Glyph.Play, Palette.Ink, 28.dp) }
                     RoundButton(Glyph.Forward, { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); link.key(RemoteKey.FORWARD) }, size = 52.dp)
                 }
+                // Lecteur natif de la TV : audio, sous-titres, qualité et vitesse se règlent d'ici, sans la télécommande.
+                val options = now.options
+                if (now.native && options != null) {
+                    var open by remember { mutableStateOf(false) }
+                    ActionButton(stringResource(R.string.opt_tile), { open = true }, Modifier.fillMaxWidth(), primary = false, glyph = Glyph.Menu)
+                    if (open) PhoneOptionsDialog(options, link) { open = false }
+                }
                 ActionButton(stringResource(R.string.action_play_here), onPlayHere, Modifier.fillMaxWidth())
             }
         }
+    }
+}
+
+/**
+ * Les options du film de la TV, sur le téléphone. Le choix touché est coché tout de suite ; la TV confirme à sa
+ * nouvelle suivante (toutes les 2 s).
+ */
+@Composable
+private fun PhoneOptionsDialog(options: dev.wido.core.PlayerOptions, link: ScreenLink, onDismiss: () -> Unit) {
+    var pending by remember { mutableStateOf<Pair<String, String>?>(null) }
+    LaunchedEffect(options) { pending = null }
+    val shown = pending?.let { (kind, id) ->
+        fun List<dev.wido.core.TrackOption>.pick() = map { it.copy(selected = it.id == id) }
+        when (kind) {
+            dev.wido.core.PlayerOptions.QUALITY -> options.copy(quality = options.quality.pick())
+            dev.wido.core.PlayerOptions.AUDIO -> options.copy(audio = options.audio.pick())
+            dev.wido.core.PlayerOptions.SUBTITLES -> options.copy(subtitles = options.subtitles.pick())
+            else -> options.copy(speed = id.toFloatOrNull() ?: options.speed)
+        }
+    } ?: options
+    androidx.compose.ui.window.Dialog(onDismiss, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        PlayerOptionsSheet(
+            shown,
+            decimalComma = java.util.Locale.getDefault().language == "fr",
+            compact = true,
+            onPick = { kind, id ->
+                pending = kind to id
+                link.command(JSONObject().put("cmd", "option").put("kind", kind).put("id", id))
+            },
+            onDismiss = onDismiss,
+        )
     }
 }
 

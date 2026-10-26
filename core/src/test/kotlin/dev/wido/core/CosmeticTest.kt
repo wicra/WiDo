@@ -47,6 +47,33 @@ class CompiledRulesTest {
     @Test fun rejectsOtherFormats() {
         assertEquals(null, CompiledRules.decode("||a.com^\n"))
     }
+
+    @Test fun writtenLineByLineReadsBackCompact() {
+        val rules = FilterParser.parse(sequenceOf("||a.com^", "||b.com^", "@@||c.com^", "##.x"))
+        val out = StringBuilder()
+        CompiledRules.write(rules, out)
+        assertEquals(CompiledRules.encode(rules), out.toString())
+        val back = CompiledRules.decodeLines(out.lineSequence(), compact = true)!!
+        assertEquals(true, back.blocked.contains("a.com"))
+        assertEquals(false, back.blocked.contains("c.com"))
+    }
+}
+
+class ListIncludesLinesTest {
+    @Test fun includesAreReadLineByLine() {
+        val fetched = mutableListOf<String>()
+        val lines = ListIncludes.expandLines(sequenceOf("||a.com^", "!#include part.txt", "!#include ../x.txt", "||z.com^")) { name ->
+            fetched += name
+            sequenceOf("||p1.com^", "||p2.com^")
+        }
+        assertEquals(listOf("||a.com^", "||p1.com^", "||p2.com^", "!#include ../x.txt", "||z.com^"), lines.toList())
+        assertEquals(listOf("part.txt"), fetched)
+    }
+
+    @Test fun textVersionMatches() {
+        val text = ListIncludes.expand("||a.com^\n!#include part.txt\n||z.com^") { "||p.com^" }
+        assertEquals("||a.com^\n||p.com^\n||z.com^", text)
+    }
 }
 
 class CatalogTest {

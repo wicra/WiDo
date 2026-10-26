@@ -157,6 +157,33 @@ class Settings(private val context: Context) {
             ?: if (prefs.getBoolean("new_relaxed", false)) Navigation.RELAXED else Navigation.STRICT
         set(v) = prefs.edit().putString("new_navigation", v).apply()
 
+    /**
+     * Mode mémoire : `auto` (selon l'appareil : économe sous 1,7 Go), `eco` (toujours économe : lecteur limité au
+     * 1080p avec un petit tampon, pas de page préparée d'avance, caches lâchés dès que l'accueil est caché, listes
+     * mises à jour une à une) ou `full` (tout, même sur une petite clé). Pris en compte au prochain démarrage.
+     */
+    var memoryMode: String
+        get() = prefs.getString("memory_mode", null)?.takeIf { it in MEMORY_MODES } ?: MEMORY_AUTO
+        set(v) = prefs.edit().putString("memory_mode", v).apply()
+
+    /** Lecteur natif : langue audio choisie la dernière fois (code ISO), proposée en premier aux films suivants. */
+    var preferredAudioLanguage: String?
+        get() = prefs.getString("pref_audio", null)
+        set(v) = prefs.edit().apply { if (v == null) remove("pref_audio") else putString("pref_audio", v) }.apply()
+
+    /** Lecteur natif : langue des sous-titres choisie la dernière fois, ou `off` (désactivés). */
+    var preferredTextLanguage: String?
+        get() = prefs.getString("pref_text", null)
+        set(v) = prefs.edit().apply { if (v == null) remove("pref_text") else putString("pref_text", v) }.apply()
+
+    /** WiDo se fait économe en mémoire (voir [memoryMode]). */
+    val lowMemory: Boolean
+        get() = when (memoryMode) {
+            MEMORY_ECO -> true
+            MEMORY_FULL -> false
+            else -> DeviceMemory.isLow(context)
+        }
+
     // --- Blocage ----------------------------------------------------------------------------
     /**
      * Lecteur léger automatique : quand un film est détecté, WiDo passe seul au lecteur intégré (bien
@@ -172,7 +199,7 @@ class Settings(private val context: Context) {
      * EasyList, la liste française ni les filtres d'uBlock. Par défaut, activé sur les appareils à peu de mémoire.
      */
     var lightLists: Boolean
-        get() = prefs.getBoolean("light_lists", DeviceMemory.isLow(context))
+        get() = prefs.getBoolean("light_lists", lowMemory)
         set(v) = prefs.edit().putBoolean("light_lists", v).apply()
 
     /** Ajoute EasyList, la liste française et le filtre DNS d'AdGuard aux listes de la configuration. */
@@ -367,7 +394,11 @@ class Settings(private val context: Context) {
         UiSound.setLevel(UiSound.NORMAL)
     }
 
-    private companion object {
-        const val KEY_CONFIG_URL = "config_url"
+    companion object {
+        private const val KEY_CONFIG_URL = "config_url"
+        const val MEMORY_AUTO = "auto"
+        const val MEMORY_ECO = "eco"
+        const val MEMORY_FULL = "full"
+        val MEMORY_MODES = listOf(MEMORY_AUTO, MEMORY_ECO, MEMORY_FULL)
     }
 }

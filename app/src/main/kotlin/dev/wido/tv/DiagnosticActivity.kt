@@ -13,6 +13,8 @@ import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -91,6 +94,8 @@ class DiagnosticActivity : ComponentActivity() {
     class Step(val title: String) {
         var status by mutableStateOf(Status.RUNNING)
         var summary by mutableStateOf("")
+        /** Ce que l'étape a noté (avertissements et échecs en tête), montré quand elle a le focus. */
+        var lines by mutableStateOf(emptyList<String>())
     }
 
     /** Ce qu'une étape note : des lignes, et le pire résultat rencontré. */
@@ -192,6 +197,7 @@ class DiagnosticActivity : ComponentActivity() {
             scope.fail("erreur inattendue : ${e.javaClass.simpleName} ${e.message.orEmpty()}")
         }
         step.summary = scope.summary
+        step.lines = scope.lines.filter { it.startsWith("✗") || it.startsWith("⚠") } + scope.lines.filterNot { it.startsWith("✗") || it.startsWith("⚠") }
         step.status = scope.status
         val label = when (scope.status) {
             Status.OK -> "OK"
@@ -227,10 +233,12 @@ class DiagnosticActivity : ComponentActivity() {
         metric("memoire_mo", total)
         metric("memoire_libre_mo", free)
         metric("faible_memoire", app.lowMemory)
+        metric("mode_memoire", app.settings.memoryMode)
+        metric("tas_max_mo", Runtime.getRuntime().maxMemory() / MB)
         metric("ecran", "${mode.physicalWidth}x${mode.physicalHeight}")
         metric("moteur_web", runCatching { WebView.getCurrentWebViewPackage()?.versionName }.getOrNull())
         // Constat sur l'appareil, pas un défaut de WiDo : noté sans changer le verdict.
-        if (app.lowMemory) line("Appareil à peu de mémoire : WiDo passe en mode léger (lecteur léger pour les films, listes légères)")
+        if (app.lowMemory) line("Mode mémoire économe (${app.settings.memoryMode}) : lecteur limité au 1080p, listes une à une, pas de page préparée d'avance")
         if (free < 250) warn("moins de 250 Mo libres : fermer les autres applis aide")
     }
 
@@ -779,7 +787,13 @@ class DiagnosticActivity : ComponentActivity() {
                         color = Palette.TextSecondary,
                         fontSize = 15.sp,
                     )
-                    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Chaque étape prend le focus (◀ depuis les boutons) : ▲ ▼ font défiler la liste et déplient le détail.
+                    // Pendant le test, la liste suit l'étape en cours.
+                    val scroll = rememberScrollState()
+                    LaunchedEffect(steps.size, done) {
+                        if (done == null) scroll.animateScrollTo(scroll.maxValue)
+                    }
+                    Column(Modifier.fillMaxWidth().verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         steps.forEach { StepRow(it) }
                     }
                 }
@@ -818,8 +832,16 @@ class DiagnosticActivity : ComponentActivity() {
 
     @Composable
     private fun StepRow(step: Step) {
+        var focused by remember { mutableStateOf(false) }
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Palette.GlassFaint).padding(horizontal = 16.dp, vertical = 12.dp),
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(if (focused) Palette.GlassStrong else Palette.GlassFaint)
+                .border(1.5.dp, if (focused) Palette.Accent else Color.Transparent, RoundedCornerShape(14.dp))
+                .onFocusChanged { focused = it.isFocused }
+                .focusable()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -833,13 +855,28 @@ class DiagnosticActivity : ComponentActivity() {
             Column(Modifier.weight(1f)) {
                 Text(step.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 val detail = if (step.status == Status.RUNNING) stringResource(R.string.test_step_running) else step.summary
-                if (detail.isNotEmpty()) Text(detail, color = Palette.TextSecondary, fontSize = 13.sp, maxLines = 2)
+                if (detail.isNotEmpty()) Text(detail, color = Palette.TextSecondary, fontSize = 13.sp, maxLines = if (focused) 4 else 2)
+                if (focused && step.lines.isNotEmpty()) {
+                    Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        step.lines.take(STEP_LINES).forEach { line ->
+                            val tone = when {
+                                line.startsWith("✗") -> Color(0xFFFF6B6B)
+                                line.startsWith("⚠") -> Color(0xFFFFB86B)
+                                else -> Palette.TextMuted
+                            }
+                            Text(line, color = tone, fontSize = 12.sp, lineHeight = 15.sp)
+                        }
+                        if (step.lines.size > STEP_LINES) Text("…", color = Palette.TextMuted, fontSize = 12.sp)
+                    }
+                }
             }
         }
     }
 
     private companion object {
         const val MB = 1_048_576L
+        /** Lignes de détail montrées sous une étape qui a le focus (le reste est dans le rapport). */
+        const val STEP_LINES = 12
         /** Site fictif de la page de test (les scripts internes ne dépendent pas du site). */
         val TEST_SITE = dev.wido.core.Site(id = "selftest", name = "Test", url = "https://wido.test/")
         /** Flux HLS de test public (Big Buck Bunny, plusieurs qualités jusqu'au 1080p). */
