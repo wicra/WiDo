@@ -7,6 +7,12 @@
         <item name="android:colorAccent">@color/wido_accent</item>
     </style>
 
+    <!-- Lecteur léger : fond noir, sans animation d'ouverture (il prend la suite de la page sans à-coup). -->
+    <style name="Theme.WiDo.Player" parent="Theme.WiDo">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
     <!-- Fenêtre de partage : posée sur l'appli d'origine, fond assombri. -->
     <style name="Theme.WiDo.Translucent" parent="Theme.WiDo">
         <item name="android:windowIsTranslucent">true</item>

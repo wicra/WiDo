@@ -207,6 +207,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                             hidePauseScreen()
                             forgetSnapAhead()
                             cancelSeekBar()
+                            armed = false
+                            root.removeCallbacks(releaseUndecided)
+                            hideHandoffCover()
                         }
                         bridge?.reset()
                         mediaState.value = null
@@ -1008,7 +1011,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         mediaAt = SystemClock.elapsedRealtime()
         if (backgrounded) BackgroundBridge.update(playbackInfo(state))
         applyAutoStart(state)
-        maybeAutoNative()
+        if (!maybeAutoNative()) decideHandoff(state)
         schedulePauseScreen(state)
         if (pauseCursor && !state.paused) {
             pauseCursor = false
@@ -2056,10 +2059,98 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private fun onStreamFound() {
         if (streamHinted) return
         streamHinted = true
-        // Peu de mémoire : le lecteur natif consomme bien moins que la page, il évite les fermetures.
         val app = application as WiDoApp
-        if (settings.autoNative && maybeAutoNative()) return
+        if (settings.autoNative) {
+            // La page est prévenue : la vidéo qui démarrera ne se verra ni ne s'entendra dans la page, le temps que le
+            // lecteur léger prenne la suite (plus de film qui joue un instant puis bascule).
+            armHandoff()
+            maybeAutoNative()
+            return
+        }
         osd.showText(getString(if (app.lowMemory) R.string.osd_native_found_low else R.string.osd_native_found))
+    }
+
+    /** La page cache et coupe sa vidéo dès qu'elle démarre (voir frame.js, `arm`). */
+    private var armed = false
+
+    private fun armHandoff() {
+        if (armed || nativeActive) return
+        armed = true
+        mediaJson(JSONObject().put("cmd", "arm").put("on", true).toString())
+    }
+
+    /** Ce n'est pas un film (pub, bande-annonce) ou le lecteur léger n'en veut pas : la page reprend, visible et avec le son. */
+    private fun releaseHandoff(play: Boolean) {
+        root.removeCallbacks(releaseUndecided)
+        hideHandoffCover()
+        if (!armed) return
+        armed = false
+        mediaJson(JSONObject().put("cmd", "release").put("play", play).toString())
+    }
+
+    /** Vidéo cachée depuis 4 s sans durée connue (direct, flux étrange) : on la rend à la page plutôt que de la laisser invisible. */
+    private val releaseUndecided = Runnable { if (!nativeActive) releaseHandoff(play = false) }
+
+    /**
+     * Armée, la page a caché une vidéo qui démarre : on décide tout de suite. Film → lecteur léger ; courte (pub) →
+     * la page la rejoue normalement ; durée encore inconnue → on attend sa durée (au plus 4 s).
+     */
+    private fun decideHandoff(state: MediaState) {
+        if (!armed || nativeActive || state.paused) return
+        when {
+            // Un film, mais le lecteur léger n'en veut pas (déjà essayé sur cette page, retour en cours…) : la page le joue.
+            state.duration > 0 -> releaseHandoff(play = false)
+            else -> {
+                root.removeCallbacks(releaseUndecided)
+                root.postDelayed(releaseUndecided, 4_000)
+            }
+        }
+    }
+
+    // --- Couverture du passage au lecteur léger ---
+
+    private var handoffCover: View? = null
+
+    /** Fond noir, titre et roue par-dessus la page, du moment où la page cède la place jusqu'au lecteur léger. */
+    private fun showHandoffCover() {
+        if (handoffCover != null) return
+        val density = resources.displayMetrics.density
+        val cover = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            isClickable = true
+            addView(
+                ProgressBar(this@PlayerActivity).apply { indeterminateTintList = ColorStateList.valueOf(ACCENT) },
+                FrameLayout.LayoutParams((44 * density).toInt(), (44 * density).toInt(), Gravity.CENTER),
+            )
+            val title = webView?.title?.takeIf { it.isNotBlank() && it != webView?.url }
+            if (title != null) {
+                addView(
+                    TextView(this@PlayerActivity).apply {
+                        text = title
+                        setTextColor(0xCCFFFFFF.toInt())
+                        textSize = 18f * settings.uiScale
+                        maxLines = 1
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                        useJakarta(700)
+                        gravity = Gravity.CENTER
+                    },
+                    FrameLayout.LayoutParams(MATCH, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER).apply {
+                        topMargin = (64 * density).toInt()
+                        leftMargin = (56 * density).toInt()
+                        rightMargin = (56 * density).toInt()
+                    },
+                )
+            }
+        }
+        handoffCover = cover
+        root.addView(cover, FrameLayout.LayoutParams(MATCH, MATCH))
+        cover.bringToFront()
+    }
+
+    private fun hideHandoffCover() {
+        val cover = handoffCover ?: return
+        handoffCover = null
+        cover.animate().alpha(0f).setDuration(220).withEndAction { root.removeView(cover) }.start()
     }
 
     /** « Lire dans WiDo » : le flux repéré s'ouvre dans le lecteur natif, la page se met en pause. */
@@ -2080,11 +2171,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val page = webView?.url ?: return false
         if (state.paused || state.duration < AUTO_NATIVE_MIN_SECONDS || page == autoNativeTried) return false
         autoNativeTried = page
-        osd.showText(getString(R.string.osd_auto_native), OsdView.Kind.Info)
-        root.postDelayed({
-            val now = mediaState.value
-            if (!isFinishing && nativeReturnUrl == null && now != null && !now.paused && webView?.url == page) openNative()
-        }, AUTO_NATIVE_DELAY_MS)
+        // Tout de suite, sans message ni délai : la couverture cache la page, la page se tait, le lecteur s'ouvre.
+        openNative()
         return true
     }
 
@@ -2119,7 +2207,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
         // Le lecteur natif part de la seconde où en était la page.
         val start = currentPosition()
-        media("pause")
+        showHandoffCover()
+        root.removeCallbacks(releaseUndecided)
+        // La page se tait, se fige et cache sa vidéo (même si elle n'était pas armée).
+        media("hold")
         val cookies = runCatching { android.webkit.CookieManager.getInstance().getCookie(stream.url) }.getOrNull()
         val lowMemory = (application as WiDoApp).lowMemory
         val page = wv.url
@@ -2132,6 +2223,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 this, stream, current.id, ResumeUrl.toRemember(current, wv.url), wv.title, pageImage, wv.url, cookies,
                 wv.settings.userAgentString, start,
             ),
+            // Sans animation : la couverture noire de la page enchaîne sur celle du lecteur, puis sur la vidéo.
+            androidx.core.app.ActivityOptionsCompat.makeCustomAnimation(this, 0, 0),
         )
         // Les scripts de la page (pubs, mesures d'audience) s'arrêtent pendant le film : le processeur reste au décodage.
         wv.pauseTimers()
@@ -2188,6 +2281,18 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         // Retour normal (← Site, Retour) : si on relance le film dans la page, il repart dans le lecteur léger,
         // comme le veut le réglage. Après un échec du flux, on n'y renvoie pas (pas de boucle).
         if (!failed) autoNativeTried = null
+        if (failed) {
+            // Le lecteur léger n'a pas pu lire ce flux : la page reprend d'elle-même, à la même seconde, avec le son.
+            releaseHandoff(play = true)
+            osd.showText(getString(R.string.osd_native_fallback))
+        } else {
+            // Retour au site : la page redevient visible (sa vidéo reste en pause, à la seconde du film), et reste armée :
+            // relancer le film le renvoie dans le lecteur léger sans qu'il joue d'abord dans la page.
+            armed = false
+            mediaJson(JSONObject().put("cmd", "arm").put("on", false).toString())
+            if (settings.autoNative && client?.stream != null) armHandoff()
+            root.postDelayed({ hideHandoffCover() }, 400)
+        }
         if (pageLost) {
             // Page arrêtée par Android pendant le film : une page neuve, à la seconde où le film s'est arrêté.
             pageLost = false
@@ -2460,8 +2565,6 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         private const val EXIT_CONFIRM_MS = 2_500L
         /** En dessous (pub, bande-annonce), on ne quitte pas la page pour le lecteur léger. */
         private const val AUTO_NATIVE_MIN_SECONDS = 240.0
-        /** Le temps de lire « Film détecté » avant le passage au lecteur léger. */
-        private const val AUTO_NATIVE_DELAY_MS = 700L
         private const val STATE_URL = "state_url"
         private const val STATE_POSITION = "state_position"
         /** Étiquette du vinyle de l'accueil, rapportée au rayon du disque (50 dp sur 86 dp au focus). */

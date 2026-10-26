@@ -141,6 +141,12 @@ class MainActivity : ComponentActivity(), RemoteTarget {
 
     override fun onStop() {
         if (!app.isTv) app.link.stopPolling()
+        // Petite clé : l'accueil passe derrière un site ; ses images en mémoire (icônes, vignettes) laissent la place.
+        // Android ne le demande pas tant que le lecteur est à l'écran (l'appli n'est pas « cachée »).
+        if (app.lowMemory) {
+            app.thumbnails.trimMemory()
+            app.favicons.trimMemory()
+        }
         super.onStop()
     }
 

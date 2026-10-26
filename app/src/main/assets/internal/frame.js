@@ -197,9 +197,30 @@
       case 'seek': v.currentTime = Math.max(0, Math.min(isFinite(v.duration) ? v.duration : 1e9, v.currentTime + c.by)); break;
       case 'seekTo': v.currentTime = Math.max(0, Math.min(isFinite(v.duration) ? v.duration : 1e9, c.to)); break;
       case 'vol': v.muted = false; v.volume = Math.max(0, Math.min(1, v.volume + c.by)); break;
+      // Passage au lecteur léger : la page se tait, se fige et cache sa vidéo (le lecteur prend la suite).
+      case 'hold': v.muted = true; v.pause(); conceal(true); break;
+      // Le lecteur léger n'a pas pu lire ce flux, ou ce n'est pas un film : la page reprend, visible et avec le son.
+      case 'release': conceal(false); handoff = false; v.muted = false; if (c.play && v.paused) v.play(); break;
       default: break;
     }
     return state(v);
+  }
+
+  // Armé par l'app quand le flux de la page partira dans le lecteur léger : la vidéo qui démarre ne se montre
+  // ni ne s'entend dans la page (sinon on la voit jouer puis basculer, comme un à-coup).
+  var handoff = false;
+  function conceal(on) {
+    var old = document.getElementById('__wido_conceal');
+    if (old) old.remove();
+    if (!on) return;
+    var st = document.createElement('style');
+    st.id = '__wido_conceal';
+    st.textContent = 'video{opacity:0!important}';
+    (document.head || document.documentElement).appendChild(st);
+  }
+  function arm(on) {
+    handoff = !!on;
+    if (!on) conceal(false);
   }
 
   // Mode cinéma : la plus grande vidéo (ou, à défaut, l'iframe du lecteur) occupe tout l'écran, sur
@@ -237,6 +258,7 @@
       var m = JSON.parse(json);
       if (m.cmd === 'type') return window.__widoType ? String(window.__widoType(m.text, m.submit)) : null;
       if (m.cmd === 'cinema') return String(cinema(!!m.on));
+      if (m.cmd === 'arm') { arm(m.on); return null; }
       var s = command(m);
       return s ? JSON.stringify(s) : null;
     } catch (e) {
@@ -252,16 +274,19 @@
         var m = JSON.parse(event.data);
         if (m.cmd === 'type') { if (window.__widoType) window.__widoType(m.text, m.submit); return; }
         if (m.cmd === 'cinema') { cinema(!!m.on); return; }
+        if (m.cmd === 'arm') { arm(m.on); return; }
         var s = command(m);
         if (s) bridge.postMessage(JSON.stringify({ type: 'media', s: s, top: isTop }));
       } catch (e) { /* message illisible : ignoré */ }
     };
     bridge.postMessage(JSON.stringify({ type: 'hello', top: isTop }));
     // Lecture ou pause décidée par la page (bouton du lecteur) : l'app le sait aussitôt (écran de pause).
-    ['play', 'pause', 'ended'].forEach(function (name) {
+    // 'durationchange' / 'loadedmetadata' : la durée d'un flux arrive souvent après 'play' ; l'app décide dès qu'elle la connaît.
+    ['play', 'playing', 'pause', 'ended', 'durationchange', 'loadedmetadata'].forEach(function (name) {
       document.addEventListener(name, function (e) {
         var v = e.target;
         if (!v || v.tagName !== 'VIDEO' || v.clientWidth * v.clientHeight < 40000) return;
+        if (handoff && (name === 'play' || name === 'playing')) { v.muted = true; conceal(true); }
         try { bridge.postMessage(JSON.stringify({ type: 'event', s: state(v), top: isTop })); } catch (err) { /* ignoré */ }
       }, true);
     });

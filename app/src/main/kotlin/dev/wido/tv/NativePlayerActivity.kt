@@ -95,6 +95,8 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             keepScreenOn = true
             // Flux qui se recharge : la roue tourne, plutôt qu'une image arrêtée sans explication.
             setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+            // Pas de barre qui surgit au démarrage : on arrive de la page, l'image doit venir seule (OK l'affiche).
+            controllerAutoShow = false
             setShowSubtitleButton(true)
             setShowNextButton(false)
             setShowPreviousButton(false)
@@ -173,7 +175,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
                 }
                 CrashLog.event("Lecteur léger : échec ${error.errorCodeName}")
                 failed = true
-                Toast.makeText(this@NativePlayerActivity, R.string.native_failed, Toast.LENGTH_LONG).show()
+                // La page reprend d'elle-même et le dit (« Lecture sur le site ») : pas de message en double ici.
                 finish()
             }
 
@@ -589,6 +591,9 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             setResult(RESULT_OK, Intent().putExtra(RESULT_POSITION, player.currentPosition / 1000.0).putExtra(RESULT_FAILED, failed))
         }
         super.finish()
+        // Retour à la page sans animation : elle est déjà à la bonne seconde, derrière sa couverture.
+        @Suppress("DEPRECATION")
+        overridePendingTransition(0, 0)
     }
 
     override fun onStop() {
