@@ -107,6 +107,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     /** Création du lecteur, pour mesurer le temps d'ouverture du site. */
     private var createdAt = 0L
 
+    /**
+     * Vrai une fois la page montée ([start] : WebView, curseur, messages). Avant, ces vues n'existent pas : tout ce
+     * qui est programmé dès l'ouverture (relevé de la vidéo, commandes du téléphone, aide) doit attendre.
+     */
+    private val pageReady: Boolean get() = ::osd.isInitialized && ::cursor.isInitialized && webView != null
+
     /** État gardé par Android quand il a fermé l'appli en arrière-plan (page et position du moment). */
     private var restored: Bundle? = null
 
@@ -162,7 +168,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             if (site.id != ConfigRepository.LINK_SITE_ID) settings.lastSiteId = site.id
             CrashLog.event("Lecteur ouvert : ${site.name}" + (intent.getStringExtra(EXTRA_URL)?.let { " (${Hosts.of(it).orEmpty()})" } ?: ""))
             loadingLabel.text = getString(R.string.loading_site, site.name)
+            val listsStart = SystemClock.elapsedRealtime()
             val blocker = app.repository.blockerFor(site)
+            CrashLog.trace("site : listes de blocage prêtes en ${SystemClock.elapsedRealtime() - listsStart} ms (${CrashLog.memoryLine(this@PlayerActivity)})")
             val scripts = ScriptInjector(this@PlayerActivity, site)
             scripts.early = scripts.earlyScript(app.repository.cosmeticFor(site), settings.youtubeAdblock, settings.sponsorBlock)
             injector = scripts
@@ -1338,7 +1346,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     // --- Aide à l'écran ---------------------------------------------------------------------
 
     private fun showHelp() {
-        if (helpView != null) return
+        if (helpView != null || !pageReady) return
         val density = resources.displayMetrics.density
         val card = TextView(this).apply {
             text = getString(R.string.help_body)
@@ -1654,6 +1662,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     // --- Télécommande sur téléphone ----------------------------------------------------------
 
     override fun onRemote(command: RemoteCommand) {
+        // Commande du téléphone avant que la page soit prête : le curseur et les messages n'existent pas encore.
+        if (!pageReady) return
         when (command) {
             is RemoteCommand.Key -> when (command.key) {
                 RemoteKey.HOME -> close("télécommande du téléphone : Accueil")
@@ -1720,7 +1730,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     /** L'état du lecteur de la page est relevé de temps en temps, sans rien afficher : la progression reste à jour. */
     private val progressPoll = object : Runnable {
         override fun run() {
-            if (!osd.isShowing && panelView == null) {
+            // La page n'est pas encore là (listes de blocage encore en chargement sur une petite clé : plus de 10 s à la
+            // première ouverture) : la barre de messages n'existe pas encore. Avant, l'appli plantait ici.
+            if (pageReady && !osd.isShowing && panelView == null) {
                 passivePoll = true
                 media("state")
             }

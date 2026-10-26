@@ -158,6 +158,15 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
                     retries++
                     CrashLog.event("Lecteur léger : ${error.errorCodeName}, relance n°$retries")
                     if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) player.seekToDefaultPosition()
+                    // Le décodeur refuse cette qualité (profil trop exigeant pour la clé) : on relance plus léger, en H.264 si le flux en a.
+                    if (error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED || error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED) {
+                        val lowered = lowerQuality()
+                        trackSelector.setParameters(
+                            trackSelector.buildUponParameters()
+                                .setPreferredVideoMimeType(MimeTypes.VIDEO_H264)
+                                .apply { if (!lowered) setMaxVideoSize(1280, 720) },
+                        )
+                    }
                     player.prepare()
                     osd.showText(getString(R.string.native_retrying), OsdView.Kind.Warning)
                     return
@@ -630,6 +639,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
             PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
             PlaybackException.ERROR_CODE_DECODING_FAILED,
+            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
             PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
             PlaybackException.ERROR_CODE_TIMEOUT,
         )
