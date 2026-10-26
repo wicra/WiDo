@@ -129,6 +129,15 @@
     next();
   });
 
+  // 4 ter. « Épisode suivant » de la page (proposé à la fin du film) : trouvé, sans confondre avec « Suivant » du carrousel.
+  steps.push(function (next) {
+    window.__widoNextClicked = false;
+    var label = window.__widoNextEpisode ? window.__widoNextEpisode(false) : null;
+    if (window.__widoNextEpisode) window.__widoNextEpisode(true);
+    ok('Épisode suivant : trouvé et suivi', label === 'Épisode suivant' && window.__widoNextClicked, 'trouvé « ' + label + ' »');
+    next();
+  });
+
   // 5. Clavier du téléphone : le texte entier à chaque frappe (accents compris), Entrée valide ce qui est tapé.
   steps.push(function (next) {
     var q = $('q');

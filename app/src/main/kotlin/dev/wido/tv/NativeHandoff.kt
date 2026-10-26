@@ -10,6 +10,9 @@ object NativeHandoff {
     /** Vide la page laissée derrière le lecteur léger (null : aucune page en attente). Fil principal. */
     var releasePage: ((why: String) -> Unit)? = null
 
+    /** « Épisode suivant » trouvé dans la page au départ du film (son libellé), proposé à la fin ; null : aucun. */
+    @Volatile var nextEpisode: String? = null
+
     fun requestRelease(why: String) {
         releasePage?.invoke(why)
     }

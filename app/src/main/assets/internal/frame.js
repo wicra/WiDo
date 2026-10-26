@@ -578,6 +578,38 @@
   };
   window.__widoUnmark = unmark;
 
+  // « Épisode suivant » de la page (lien ou bouton du site), pour le proposer à la fin du film dans le lecteur
+  // natif. Seulement un texte (ou nom, classe) qui parle d'épisode : jamais un simple « Suivant » (pages, carrousels).
+  // click : le suit. Renvoie son libellé, ou null.
+  var NEXT_EP = /(?:[ée]pisode|ep\.?)\s*suivant|prochain\s+[ée]pisode|next\s*ep(?:isode)?\b|episode\s*next|suivant\s*:\s*[ée]pisode/i;
+  var NEXT_EP_CLASS = /next[-_]?ep(?:isode)?|episode[-_]?next|nextEpisode|NextEpisode/;
+  window.__widoNextEpisode = function (click) {
+    if (!isTop) return null;
+    var nodes = document.querySelectorAll('a[href],button,[role=button],[role=link],[class*=next],[class*=Next],[id*=next],[id*=Next]');
+    var best = null, bestScore = 0;
+    for (var i = 0; i < nodes.length && i < 1500; i++) {
+      var el = nodes[i];
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
+      var text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      var name = (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '');
+      var cls = (typeof el.className === 'string' ? el.className : '') + ' ' + (el.id || '');
+      var score = 0;
+      if (text.length <= 80 && NEXT_EP.test(text)) score = 3;
+      else if (NEXT_EP.test(name)) score = 2;
+      else if (NEXT_EP_CLASS.test(cls) && matches(el, 'a[href],button,[role=button]')) score = 1;
+      if (!score) continue;
+      if (el.tagName === 'A') {
+        var href = el.getAttribute('href') || '';
+        if (/^javascript:/i.test(href) && !el.onclick) continue;
+      }
+      if (score > bestScore) { best = el; bestScore = score; if (score === 3) break; }
+    }
+    if (!best) return null;
+    var label = ((best.innerText || '').replace(/\s+/g, ' ').trim() || best.getAttribute('aria-label') || best.getAttribute('title') || '').slice(0, 60);
+    if (click) best.click();
+    return label || 'next';
+  };
+
   // Défile ce qui se trouve sous le curseur : la zone défilante de la fenêtre surgissante (conditions
   // d'utilisation, cookies…), sinon la page. k : fraction de la hauteur visible (signée). Vrai si ça peut défiler.
   window.__widoScrollAt = function (fx, fy, k) {

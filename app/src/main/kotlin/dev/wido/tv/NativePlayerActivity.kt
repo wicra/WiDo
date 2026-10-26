@@ -197,6 +197,11 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = schedulePause()
+
+            // Fin du film avec un épisode suivant proposé (et pas écarté) : on y va, comme une appli de streaming.
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED && nextCard != null && !nextDismissed) view.postDelayed({ if (nextCard != null) goNextEpisode() }, NEXT_AUTO_MS)
+            }
         })
         // La seconde où en était la page ; à défaut, la dernière position retenue dans le lecteur natif.
         val start = (intent.getDoubleExtra(EXTRA_START, 0.0) * 1000).toLong()
@@ -370,6 +375,19 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
                 return true
             }
             return super.dispatchKeyEvent(event)
+        }
+        // « Épisode suivant » proposé : OK y va, Retour l'écarte (le film continue jusqu'au bout).
+        if (nextCard != null && panel == null && !view.isControllerFullyVisible) {
+            when (code) {
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    if (event.action == KeyEvent.ACTION_UP) goNextEpisode()
+                    return true
+                }
+                KeyEvent.KEYCODE_BACK -> {
+                    if (event.action == KeyEvent.ACTION_UP) hideNextCard(dismiss = true)
+                    return true
+                }
+            }
         }
         // ▼ (barre cachée) ou la touche Sous-titres : le plateau des options, comme dans les applis de streaming.
         if (code == KeyEvent.KEYCODE_CAPTIONS || (code == KeyEvent.KEYCODE_DPAD_DOWN && tv && !view.isControllerFullyVisible)) {
@@ -566,6 +584,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
     private val publish = object : Runnable {
         override fun run() {
             publishNowPlaying()
+            checkNextEpisode()
             // Toutes les ~45 s de lecture : l'image de la vidéo pour « Reprendre ».
             // Pas sur les clés d'1 Go : la copie de l'image vidéo prend de la mémoire au décodeur (elle se fait en quittant).
             if (player.isPlaying && !(application as WiDoApp).lowMemory && ++ticks % 22 == 0) captureFrame()
@@ -573,6 +592,65 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
             if (player.isPlaying && ++saves % 15 == 0) savePosition()
             view.postDelayed(this, PUBLISH_MS)
         }
+    }
+
+    // --- Épisode suivant ----------------------------------------------------------------------
+
+    private var nextCard: TextView? = null
+    /** Retour (ou ◀ ▶) a écarté la proposition pour ce film. */
+    private var nextDismissed = false
+    private var goingNext = false
+
+    /** Fin du film (30 dernières secondes, générique) : la page a un « Épisode suivant », on le propose. */
+    private fun checkNextEpisode() {
+        val duration = player.duration
+        // Recul hors de la fin : la proposition se retire (elle reviendra).
+        if (nextCard != null && duration - player.currentPosition > NEXT_SHOW_MS + 5_000) hideNextCard(dismiss = false)
+        if (!tv || nextDismissed || nextCard != null || NativeHandoff.nextEpisode == null) return
+        if (duration < NEXT_MIN_DURATION_MS || duration - player.currentPosition > NEXT_SHOW_MS) return
+        showNextCard()
+    }
+
+    private fun showNextCard() {
+        val density = resources.displayMetrics.density
+        val scale = settings.uiScale
+        val card = TextView(this).apply {
+            text = getString(R.string.native_next_episode)
+            textSize = 18f * scale
+            typeface = androidx.core.content.res.ResourcesCompat.getFont(context, R.font.plus_jakarta_sans)
+            setTextColor(0xFF0B0B12.toInt())
+            setPadding((26 * density).toInt(), (14 * density).toInt(), (26 * density).toInt(), (14 * density).toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 999f
+                setColor(Color.WHITE)
+            }
+            isFocusable = true
+            setOnClickListener { goNextEpisode() }
+            alpha = 0f
+        }
+        nextCard = card
+        rootFrame.addView(
+            card,
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, android.view.Gravity.BOTTOM or android.view.Gravity.END)
+                .apply { setMargins(0, 0, (48 * density).toInt(), (56 * density).toInt()) },
+        )
+        card.animate().alpha(1f).setDuration(250).start()
+        CrashLog.trace("natif : « Épisode suivant » proposé")
+    }
+
+    private fun hideNextCard(dismiss: Boolean) {
+        val card = nextCard ?: return
+        nextCard = null
+        if (dismiss) nextDismissed = true
+        rootFrame.removeView(card)
+    }
+
+    /** Retour à la page, qui suit son lien « Épisode suivant » ; le film suivant repart dans le lecteur intégré. */
+    private fun goNextEpisode() {
+        if (goingNext) return
+        goingNext = true
+        CrashLog.event("Lecteur léger : épisode suivant")
+        finish()
     }
 
     /** Copie l'image affichée par le lecteur (sa surface vidéo) pour la vignette de « Reprendre ». */
@@ -654,7 +732,7 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
     /** La page reprend à la seconde où le lecteur natif s'est arrêté. */
     override fun finish() {
         if (::player.isInitialized && (player.currentPosition > 0 || failed)) {
-            setResult(RESULT_OK, Intent().putExtra(RESULT_POSITION, player.currentPosition / 1000.0).putExtra(RESULT_FAILED, failed))
+            setResult(RESULT_OK, Intent().putExtra(RESULT_POSITION, player.currentPosition / 1000.0).putExtra(RESULT_FAILED, failed).putExtra(RESULT_NEXT, goingNext))
         }
         super.finish()
         // Retour à la page sans animation : elle est déjà à la bonne seconde, derrière sa couverture.
@@ -704,6 +782,11 @@ class NativePlayerActivity : ComponentActivity(), RemoteTarget {
         const val RESULT_POSITION = "position"
         /** Le flux n'a pas pu être lu (la page ne relance pas le lecteur léger d'elle-même). */
         const val RESULT_FAILED = "failed"
+        /** Le film s'est fini sur « Épisode suivant » : la page doit suivre son lien. */
+        const val RESULT_NEXT = "next"
+        private const val NEXT_MIN_DURATION_MS = 5 * 60_000L
+        private const val NEXT_SHOW_MS = 30_000L
+        private const val NEXT_AUTO_MS = 4_000L
         private const val MAX_RETRIES = 2
         private val RETRYABLE = setOf(
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,

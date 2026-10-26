@@ -430,6 +430,9 @@
     <string name="s_light_lists">List size</string>
     <string name="s_memory_mode">Memory</string>
     <string name="opt_title">Playback options</string>
+    <string name="native_next_episode">Next episode  ›</string>
+    <string name="osd_next_episode">Next episode…</string>
+    <string name="osd_next_missing">No next episode found on the page</string>
     <string name="opt_tile">Audio, subtitles, quality</string>
     <string name="opt_audio">Audio</string>
     <string name="opt_subtitles">Subtitles</string>

@@ -2325,6 +2325,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val start = currentPosition()
         showHandoffCover()
         root.removeCallbacks(releaseUndecided)
+        // « Épisode suivant » de la page, cherché avant qu'elle ne se fige : proposé à la fin du film.
+        NativeHandoff.nextEpisode = null
+        wv.evaluateJavascript("window.__widoNextEpisode?window.__widoNextEpisode(false):null") { raw -> NativeHandoff.nextEpisode = unquote(raw) }
         // La page se tait, se fige et cache sa vidéo (même si elle n'était pas armée).
         media("hold")
         val cookies = runCatching { android.webkit.CookieManager.getInstance().getCookie(stream.url) }.getOrNull()
@@ -2390,6 +2393,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private val nativeLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
         val position = result.data?.getDoubleExtra(NativePlayerActivity.RESULT_POSITION, -1.0) ?: -1.0
         val failed = result.data?.getBooleanExtra(NativePlayerActivity.RESULT_FAILED, false) == true
+        val next = result.data?.getBooleanExtra(NativePlayerActivity.RESULT_NEXT, false) == true
         nativeActive = false
         NativeHandoff.releasePage = null
         resumeTimers()
@@ -2430,6 +2434,14 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             // Pas de surprise devant une page qui ne joue pas : on dit où elle en est et ce qu'il reste à faire.
             val resumed = pendingSeek
             root.postDelayed({ if (!isFinishing) osd.showText(getString(R.string.osd_page_reloaded, dev.wido.core.PlayerFormat.time(resumed))) }, 1_500)
+            return@registerForActivityResult
+        }
+        if (next) {
+            // Fin du film sur « Épisode suivant » : la page suit son lien ; le nouvel épisode repart dans le lecteur intégré.
+            webView?.evaluateJavascript("window.__widoNextEpisode?window.__widoNextEpisode(true):null") { raw ->
+                if (unquote(raw) == null) osd.showText(getString(R.string.osd_next_missing), OsdView.Kind.Warning)
+                else osd.showText(getString(R.string.osd_next_episode))
+            }
             return@registerForActivityResult
         }
         if (position < 0) return@registerForActivityResult

@@ -430,6 +430,9 @@
     <string name="s_light_lists">Taille des listes</string>
     <string name="s_memory_mode">Mémoire</string>
     <string name="opt_title">Options de lecture</string>
+    <string name="native_next_episode">Épisode suivant  ›</string>
+    <string name="osd_next_episode">Épisode suivant…</string>
+    <string name="osd_next_missing">Épisode suivant introuvable sur la page</string>
     <string name="opt_tile">Audio, sous-titres, qualité</string>
     <string name="opt_audio">Audio</string>
     <string name="opt_subtitles">Sous-titres</string>
