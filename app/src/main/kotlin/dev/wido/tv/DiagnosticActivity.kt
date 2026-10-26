@@ -165,9 +165,12 @@ class DiagnosticActivity : ComponentActivity() {
             val fail = steps.count { it.status == Status.FAIL }
             val summary = "Résumé : $ok OK · $warn à surveiller · $fail en échec · ${(SystemClock.elapsedRealtime() - started) / 1000} s"
             out.insert(out.indexOf("\n") + 1, "$summary\n")
-            // Les chiffres clés, une ligne chacun : de quoi comparer deux rapports d'un coup d'œil (et les analyser).
-            out.append("\n== Résumé technique\n")
-            metrics.forEach { (k, v) -> out.append("  ").append(k).append(" = ").append(v).append('\n') }
+            // Les chiffres clés, une ligne chacun, en tête (juste après le résumé) : de quoi comparer deux rapports d'un
+            // coup d'œil, et ils tiennent toujours dans un envoi, même quand le journal détaillé est long.
+            val tech = StringBuilder("\n== Résumé technique\n")
+            metrics.forEach { (k, v) -> tech.append("  ").append(k).append(" = ").append(v).append('\n') }
+            val headerEnd = out.indexOf("\n", out.indexOf(summary)) + 1
+            out.insert(headerEnd, tech)
             CrashLog.lastCrash()?.let { out.append("\n== Dernière erreur enregistrée\n").append(it.take(3_000).trimEnd()).append('\n') }
             CrashLog.recentEvents()?.let { out.append("\n== Derniers événements\n").append(it).append('\n') }
             CrashLog.recentTrace(60).takeIf { it.isNotEmpty() }?.let { out.append("\n== Journal détaillé (60 dernières lignes)\n").append(it.joinToString("\n")).append('\n') }
