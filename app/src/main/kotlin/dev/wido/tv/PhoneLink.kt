@@ -41,7 +41,8 @@ class PhoneLink(
     fun start(): String? {
         val ip = MiniHttpServer.localAddress() ?: return null
         val port = server.start(PORT) ?: return null
-        return "http://$ip:$port/?t=$token"
+        // `w` : l'appli WiDo du téléphone qui scanne le code ouvre son propre clavier (les navigateurs l'ignorent).
+        return dev.wido.core.ScanCodes.tag("http://$ip:$port/?t=$token", dev.wido.core.ScanCodes.KEYBOARD)
     }
 
     fun stop() = server.stop()

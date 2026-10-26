@@ -170,6 +170,35 @@ fun PhoneHome(
         }
     }
 
+    // QR codes de la TV scannés dans l'appli : chacun s'ouvre ici, sans navigateur.
+    var scanning by remember { mutableStateOf(false) }
+    var scannedPair by remember { mutableStateOf<LinkProtocol.PairTarget?>(null) }
+    var typeTarget by remember { mutableStateOf<dev.wido.core.ScanTarget.Keyboard?>(null) }
+    var reportTarget by remember { mutableStateOf<dev.wido.core.ScanTarget.Report?>(null) }
+    val context = LocalContext.current
+    val scanUnknown = stringResource(R.string.scan_unknown)
+    val sentText = stringResource(R.string.phone_sent)
+    fun onScanned(raw: String) {
+        scanning = false
+        when (val target = dev.wido.core.ScanCodes.parse(raw)) {
+            is dev.wido.core.ScanTarget.Pair -> {
+                scannedPair = target.target
+                tab = PhoneTab.Tv
+            }
+            is dev.wido.core.ScanTarget.Keyboard -> typeTarget = target
+            is dev.wido.core.ScanTarget.Report -> reportTarget = target
+            // La télécommande du navigateur : l'appli a mieux, l'onglet TV (s'il n'y a encore aucune TV, il la cherche).
+            is dev.wido.core.ScanTarget.Remote -> tab = PhoneTab.Tv
+            // Un lien ordinaire : regarder ici ou l'envoyer sur la TV, comme un lien partagé.
+            is dev.wido.core.ScanTarget.Web -> context.startActivity(
+                android.content.Intent(context, dev.wido.tv.ShareActivity::class.java)
+                    .setAction(android.content.Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(android.content.Intent.EXTRA_TEXT, target.url),
+            )
+            null -> message = PhoneMessage(scanUnknown)
+        }
+    }
+
     val removedText = stringResource(R.string.msg_removed)
     /** Retirer de Reprendre, avec « Annuler » quelques secondes. */
     fun removeWatch(entry: WatchEntry) {
@@ -203,6 +232,7 @@ fun PhoneHome(
                                     onOpenWatch = onOpenWatch,
                                     onLongPress = { pressed = it },
                                     onRefresh = vm::refresh,
+                                    onScan = { scanning = true },
                                 )
                             }
                             if (wide) Box(Modifier.weight(1f)) { TvSidePane(link, onPlayHere) { tab = PhoneTab.Tv } }
@@ -216,7 +246,10 @@ fun PhoneHome(
                             onSendToTv = { sendToTv(HandoffPlay(it.url, it.siteId, it.title, it.position)) },
                             onLongPress = { pressed = LongPressed.Watch(it) },
                         )
-                        PhoneTab.Tv -> PhoneTvTab(link, onPlayHere, pairTarget, onPairTargetHandled)
+                        PhoneTab.Tv -> PhoneTvTab(link, onPlayHere, pairTarget ?: scannedPair) {
+                            onPairTargetHandled()
+                            scannedPair = null
+                        }
                         PhoneTab.Settings -> Column(Modifier.fillMaxSize()) {
                             PhoneTitle(stringResource(R.string.action_settings), Modifier.padding(start = 18.dp, top = 16.dp))
                             SettingsPane(app.settings, lists, vm::updateLists, Modifier.weight(1f))
@@ -234,6 +267,15 @@ fun PhoneHome(
             }
         }
     }
+
+    if (scanning) QrScannerDialog(::onScanned) { scanning = false }
+    typeTarget?.let { target ->
+        PhoneTypeDialog(target) { sent ->
+            typeTarget = null
+            if (sent) message = PhoneMessage(sentText)
+        }
+    }
+    reportTarget?.let { target -> ScannedReportDialog(target) { reportTarget = null } }
 
     pressed?.let { target ->
         LongPressMenu(
@@ -316,6 +358,7 @@ internal fun HomeTab(
     onOpenWatch: (WatchEntry) -> Unit,
     onLongPress: (LongPressed) -> Unit,
     onRefresh: () -> Unit,
+    onScan: () -> Unit,
 ) {
     val full: androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
     // Tirer vers le bas : configuration, listes et état de la TV se mettent à jour.
@@ -330,6 +373,8 @@ internal fun HomeTab(
         item(span = full) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("WiDo", fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp, modifier = Modifier.weight(1f))
+                RoundButton(Glyph.Scan, onScan)
+                androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
                 RoundButton(Glyph.Refresh, onRefresh)
             }
         }

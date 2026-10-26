@@ -233,3 +233,21 @@ class SiteEntityTest {
         assertEquals(listOf("monsite.*", "cdn.exemple.org") to null, LocalSites.parseDomains("monsite.*, https://cdn.exemple.org/x"))
     }
 }
+
+class ScanCodesTest {
+    @Test fun tvCodesAreRecognised() {
+        val t = "0123456789abcdef0123456789abcdef"
+        assertEquals(ScanTarget.Keyboard("http://192.168.1.20:8765", t), ScanCodes.parse(ScanCodes.tag("http://192.168.1.20:8765/?t=$t", ScanCodes.KEYBOARD)))
+        assertEquals(ScanTarget.Report("http://192.168.1.20:8766", t), ScanCodes.parse("http://192.168.1.20:8766/?t=$t&w=report"))
+        assertTrue(ScanCodes.parse("http://192.168.1.20:8766/?t=$t&w=remote") is ScanTarget.Remote)
+        assertTrue(ScanCodes.parse("wido://pair?h=192.168.1.20&p=8766&k=abc&n=Salon") is ScanTarget.Pair)
+    }
+
+    @Test fun otherLinksStayLinks() {
+        assertEquals(ScanTarget.Web("https://exemple.org/film"), ScanCodes.parse("https://exemple.org/film"))
+        // Sans marque : une adresse locale reste un lien (ancienne version de la TV, autre appareil).
+        assertTrue(ScanCodes.parse("http://192.168.1.20:8765/?t=0123456789abcdef") is ScanTarget.Web)
+        assertNull(ScanCodes.parse("bonjour"))
+        assertNull(ScanCodes.parse("javascript:alert(1)"))
+    }
+}

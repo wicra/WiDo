@@ -25,7 +25,7 @@ import kotlin.math.sin
 enum class Glyph {
     Refresh, Play, Pause, Rewind, Forward, Up, Down, Left, Right, Back, Home, Menu, VolumeDown, VolumeUp, Mute,
     Star, ZoomIn, ZoomOut, Hide, Save, Sleep, Help, Sites, Cursor, Phone, Native, Tv, Next, Restart, More,
-    Check, Warning, Blocked, Close, Plus, Globe, Dot,
+    Check, Warning, Blocked, Close, Plus, Globe, Dot, Scan,
 }
 
 @Composable
@@ -180,6 +180,20 @@ private fun DrawScope.drawGlyph(glyph: Glyph, color: Color) {
             drawLine(color, p(0.14f, 0.5f), p(0.86f, 0.5f), strokeWidth = stroke.width * 0.8f)
         }
         Glyph.Dot -> drawCircle(color, radius = 0.24f * s, center = p(0.5f, 0.5f))
+        Glyph.Scan -> {
+            // Les quatre coins d'un viseur, et un QR code stylisé au milieu.
+            val a = 0.14f
+            val b = 0.86f
+            val l = 0.2f
+            listOf(
+                listOf(p(a, a + l), p(a, a), p(a + l, a)), listOf(p(b - l, a), p(b, a), p(b, a + l)),
+                listOf(p(a, b - l), p(a, b), p(a + l, b)), listOf(p(b - l, b), p(b, b), p(b, b - l)),
+            ).forEach { drawPath(poly(it, closed = false), color, style = stroke) }
+            drawRoundRect(color, p(0.34f, 0.34f), Size(0.13f * s, 0.13f * s), CornerRadius(0.02f * s))
+            drawRoundRect(color, p(0.53f, 0.34f), Size(0.13f * s, 0.13f * s), CornerRadius(0.02f * s))
+            drawRoundRect(color, p(0.34f, 0.53f), Size(0.13f * s, 0.13f * s), CornerRadius(0.02f * s))
+            drawRoundRect(color, p(0.56f, 0.56f), Size(0.07f * s, 0.07f * s), CornerRadius(0.01f * s))
+        }
         Glyph.Mute -> {
             speaker()
             drawLine(color, p(0.62f, 0.4f), p(0.82f, 0.6f), strokeWidth = stroke.width, cap = StrokeCap.Round)

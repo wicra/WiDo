@@ -15,6 +15,11 @@
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <!-- Téléphone : scanner les QR codes de la TV dans l'appli. Facultatif : les TV n'ont pas d'appareil photo. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
     <!-- cleartext : seulement pour les sites marqués allowInsecure (serveur local).
          NavigationPolicy refuse tout http pour les autres. -->
