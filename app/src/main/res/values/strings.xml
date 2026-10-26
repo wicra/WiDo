@@ -520,4 +520,7 @@
     <string name="open_interrupted">L\'ouverture du site a été interrompue : Android a fermé WiDo (souvent par manque de mémoire). Réessaie ; si ça recommence, lance Réglages → Test.</string>
     <string name="seekbar_hint">◀ ▶ choisir la position · OK y aller · ▲ ▼ masquer · Retour annuler</string>
     <string name="osd_native_fallback">Lecture sur le site (le lecteur léger ne lit pas ce flux)</string>
+    <string name="test_step_features">Fonctions de WiDo (page de test)</string>
+    <string name="test_step_open">Ouverture d\'un site</string>
+    <string name="test_step_leaks">Mémoire du moteur web</string>
 </resources>

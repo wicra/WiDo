@@ -102,7 +102,7 @@ class ScriptInjector(private val context: Context, private val site: Site) {
      * Feuille de style qui masque `selectors`, chacun dans sa propre règle : un sélecteur que le navigateur
      * refuse n'annule pas les autres. Le style est remis s'il est retiré de la page (sites qui réécrivent l'en-tête).
      */
-    private fun hideScript(selectors: List<String>): String {
+    internal fun hideScript(selectors: List<String>): String {
         val css = selectors
             .filter { it.isNotBlank() && it.length <= 300 && it.none { c -> c in "{}<>" } }
             .joinToString("\n") { "$it{display:none!important}" }

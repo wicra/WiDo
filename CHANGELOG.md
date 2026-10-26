@@ -1,5 +1,15 @@
 # Changelog
 
+## Non publié (carrousels)
+
+### Ajouté
+- **Test complet : il éprouve maintenant les fonctions de WiDo elles-mêmes**, sur une page de test avec les vrais scripts de l'appli : curseur aimanté (▶, ▼), carrousel défilant et carrousel animé jusqu'au bout, clavier du téléphone (texte entier, accents, Entrée), passage au lecteur léger (vidéo cachée et muette, puis rendue à la page), fenêtre de cookies (curseur sur « Tout accepter »), « Masquer un élément » d'une page à l'autre. S'y ajoutent le temps de préparation d'un site (listes de blocage) et la mémoire rendue par le moteur web après trois pages. Chaque cas est noté ✓ ou ✗, et le rapport finit par un **résumé technique** (une ligne par chiffre clé) pour comparer deux rapports et corriger.
+- **Carrousels à la télécommande** : sur une rangée d'affiches, ◀ ▶ vont à l'affiche suivante même hors de l'écran, et la rangée défile pour la montrer. Ça marche avec les rangées défilantes (y compris « scroll-snap ») et avec les carrousels animés des bibliothèques courantes (Swiper, Slick, Owl, Flickity… par leur API, leurs boutons suivant/précédent, sinon un vrai glisser du doigt). Au bout d'une rangée, le curseur ne saute plus en diagonale sur la rangée du dessous : il reste, ou va au lien voisin (« Tout voir »). Maintenir ◀ ▶ contre le bord fait défiler la rangée sous le curseur.
+
+### Corrigé
+- **Curseur sur des éléments cachés** : une affiche coupée par la bordure de son carrousel n'est plus visée (le curseur allait sur un endroit invisible et le clic tombait ailleurs) ; le curseur vise le centre de la partie visible.
+- **▲ ▼ amènent la rangée à l'écran** : la carte choisie est montrée en entier (la page défile), au lieu d'un centre hors de l'écran.
+
 ## Non publié (ouverture des sites)
 
 ### Corrigé

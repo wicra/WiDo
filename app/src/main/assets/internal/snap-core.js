@@ -66,10 +66,55 @@
     return best;
   }
 
-  if (typeof module !== 'undefined' && module.exports) module.exports = { pickTarget: pickTarget, pickPrimary: pickPrimary, pickModal: pickModal };
+  /**
+   * Comme pickTarget, mais seulement parmi les éléments de la même rangée : centre vertical dans [top, bottom].
+   * Sert dans un carrousel, où `items` contient aussi les éléments rognés ou hors écran (positions réelles).
+   */
+  function pickInRow(dir, cx, cy, items, top, bottom) {
+    var idx = [];
+    var sub = [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].y >= top && items[i].y <= bottom) { idx.push(i); sub.push(items[i]); }
+    }
+    var j = pickTarget(dir, cx, cy, sub);
+    return j < 0 ? -1 : idx[j];
+  }
+
+  /**
+   * De combien défiler (signé, en px) pour que [start, end] tienne dans la zone visible [vs, ve], avec une
+   * marge `pad` de chaque côté si la place le permet. 0 si c'est déjà le cas ; trop grand : aligné au début.
+   */
+  function revealDelta(start, end, vs, ve, pad) {
+    var room = ve - vs;
+    var size = end - start;
+    if (size >= room) return start - vs;
+    var p = Math.max(0, Math.min(pad, (room - size) / 2));
+    if (start < vs + p) return start - (vs + p);
+    if (end > ve - p) return end - (ve - p);
+    return 0;
+  }
+
+  /**
+   * Sens d'un bouton de carrousel d'après sa classe, son aria-label, son titre ou son texte :
+   * 1 = suivant (vers la droite), -1 = précédent, 0 = inconnu ou ambigu.
+   */
+  function navDir(text) {
+    var t = ' ' + String(text || '').toLowerCase().replace(/prev-next|previous-next/g, ' ') + ' ';
+    var next = /next|suivant|forward|droite|[^a-z]right|arrow-?right|chevron-?right|›|»|→|❯|>/.test(t);
+    var prev = /prev|pr[ée]c[ée]dent|gauche|[^a-z]left|arrow-?left|chevron-?left|[^a-z]back[^a-z]|‹|«|←|❮|</.test(t);
+    return next === prev ? 0 : (next ? 1 : -1);
+  }
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = {
+    pickTarget: pickTarget, pickPrimary: pickPrimary, pickModal: pickModal,
+    pickInRow: pickInRow, revealDelta: revealDelta, navDir: navDir
+  };
   else {
     root.__widoPick = pickTarget;
     root.__widoPickPrimary = pickPrimary;
     root.__widoPickModal = pickModal;
+    root.__widoPickInRow = pickInRow;
+    root.__widoRevealDelta = revealDelta;
+    root.__widoNavDir = navDir;
   }
 })(typeof window !== 'undefined' ? window : this);

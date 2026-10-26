@@ -520,4 +520,7 @@
     <string name="open_interrupted">Opening the site was interrupted: Android closed WiDo (often for lack of memory). Try again; if it happens again, run Settings → Test.</string>
     <string name="seekbar_hint">◀ ▶ pick the position · OK go · ▲ ▼ hide · Back cancel</string>
     <string name="osd_native_fallback">Playing on the site (the light player cannot read this stream)</string>
+    <string name="test_step_features">WiDo features (test page)</string>
+    <string name="test_step_open">Opening a site</string>
+    <string name="test_step_leaks">Web engine memory</string>
 </resources>

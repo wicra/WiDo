@@ -119,6 +119,12 @@ class DiagnosticActivity : ComponentActivity() {
     private var testPlayer by mutableStateOf<ExoPlayer?>(null)
     private var job: Job? = null
     private val out = StringBuilder()
+    /** Chiffres clés du test (résumé technique en fin de rapport), dans l'ordre où ils sont mesurés. */
+    private val metrics = linkedMapOf<String, String>()
+
+    private fun metric(key: String, value: Any?) {
+        if (value != null) metrics[key] = value.toString()
+    }
     private val app get() = application as WiDoApp
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -139,6 +145,7 @@ class DiagnosticActivity : ComponentActivity() {
         steps.clear()
         report = null
         out.setLength(0)
+        metrics.clear()
         job = lifecycleScope.launch {
             CrashLog.trace("test complet : début (${CrashLog.memoryLine(this@DiagnosticActivity)})")
             val started = SystemClock.elapsedRealtime()
@@ -148,6 +155,9 @@ class DiagnosticActivity : ComponentActivity() {
             step(getString(R.string.test_step_codecs)) { codecs() }
             step(getString(R.string.test_step_playback)) { playback() }
             step(getString(R.string.test_step_web)) { web() }
+            step(getString(R.string.test_step_features)) { features() }
+            step(getString(R.string.test_step_open)) { siteOpening() }
+            step(getString(R.string.test_step_leaks)) { webLeaks() }
             step(getString(R.string.test_step_app)) { appState() }
             step(getString(R.string.test_step_memory)) { memoryAfter() }
             val ok = steps.count { it.status == Status.OK }
@@ -155,6 +165,12 @@ class DiagnosticActivity : ComponentActivity() {
             val fail = steps.count { it.status == Status.FAIL }
             val summary = "Résumé : $ok OK · $warn à surveiller · $fail en échec · ${(SystemClock.elapsedRealtime() - started) / 1000} s"
             out.insert(out.indexOf("\n") + 1, "$summary\n")
+            // Les chiffres clés, une ligne chacun, en tête (juste après le résumé) : de quoi comparer deux rapports d'un
+            // coup d'œil, et ils tiennent toujours dans un envoi, même quand le journal détaillé est long.
+            val tech = StringBuilder("\n== Résumé technique\n")
+            metrics.forEach { (k, v) -> tech.append("  ").append(k).append(" = ").append(v).append('\n') }
+            val headerEnd = out.indexOf("\n", out.indexOf(summary)) + 1
+            out.insert(headerEnd, tech)
             CrashLog.lastCrash()?.let { out.append("\n== Dernière erreur enregistrée\n").append(it.take(3_000).trimEnd()).append('\n') }
             CrashLog.recentEvents()?.let { out.append("\n== Derniers événements\n").append(it).append('\n') }
             CrashLog.recentTrace(60).takeIf { it.isNotEmpty() }?.let { out.append("\n== Journal détaillé (60 dernières lignes)\n").append(it.joinToString("\n")).append('\n') }
@@ -206,6 +222,13 @@ class DiagnosticActivity : ComponentActivity() {
         line("Stockage libre : ${filesDir.usableSpace / MB} Mo")
         line("Moteur web : ${runCatching { WebView.getCurrentWebViewPackage()?.let { "${it.packageName} ${it.versionName}" } }.getOrNull() ?: "inconnu"}")
         summary = "$total Mo de mémoire, $free Mo libres"
+        metric("version", BuildConfig.VERSION_NAME)
+        metric("appareil", "${Build.MANUFACTURER} ${Build.MODEL} · API ${Build.VERSION.SDK_INT}")
+        metric("memoire_mo", total)
+        metric("memoire_libre_mo", free)
+        metric("faible_memoire", app.lowMemory)
+        metric("ecran", "${mode.physicalWidth}x${mode.physicalHeight}")
+        metric("moteur_web", runCatching { WebView.getCurrentWebViewPackage()?.versionName }.getOrNull())
         if (app.lowMemory) warn("peu de mémoire : le lecteur léger est indispensable pour les films")
         if (free < 250) warn("moins de 250 Mo libres : fermer les autres applis aide")
     }
@@ -243,6 +266,7 @@ class DiagnosticActivity : ComponentActivity() {
             summary = "connecté ($kind)"
         } else {
             line("Débit : ${"%.1f".format(speed)} Mb/s")
+            metric("debit_mbps", "%.1f".format(java.util.Locale.ROOT, speed))
             summary = "$kind · ${"%.1f".format(speed)} Mb/s"
             if (speed < 8) warn("débit faible pour du 1080p (8 Mb/s conseillés)")
         }
@@ -354,6 +378,8 @@ class DiagnosticActivity : ComponentActivity() {
             }
             val startup = firstFrameAt - t0
             line("Première image : $startup ms · décodeur $decoder")
+            metric("lecture_premiere_image_ms", startup)
+            metric("lecture_decodeur", decoder)
             if (startup > 5_000) warn("démarrage lent ($startup ms)")
             // 20 s de lecture : images affichées, perdues, et secondes où le son avance sans image.
             var frozenSeconds = 0
@@ -412,6 +438,7 @@ class DiagnosticActivity : ComponentActivity() {
             } == true && error == null
             if (ready) {
                 val seek = firstFrameAt - seekAt
+                metric("lecture_recherche_ms", seek)
                 line("Recherche (+2 min) : $seek ms")
                 if (seek > 4_000) warn("recherche lente ($seek ms)")
             } else {
@@ -419,6 +446,9 @@ class DiagnosticActivity : ComponentActivity() {
                 warn("recherche : pas d'image au bout de 15 s")
             }
             summary = "démarrage $startup ms · ${"%.0f".format(ratio)} % d'images perdues" + if (frozenSeconds > 0) " · image figée" else ""
+            metric("lecture_image", "${size.width}x${size.height}")
+            metric("lecture_images_perdues_pct", "%.1f".format(java.util.Locale.ROOT, ratio))
+            metric("lecture_image_figee_s", frozenSeconds)
         } finally {
             line("Mémoire avant : $before")
             line("Mémoire pendant : ${CrashLog.memoryLine(this@DiagnosticActivity)}")
@@ -473,12 +503,183 @@ class DiagnosticActivity : ComponentActivity() {
             val worst = times.maxOrNull() ?: 0L
             line("Réponse de la page (curseur) : $avg ms en moyenne, $worst ms au pire")
             summary = "page $load ms · curseur $avg ms"
+            metric("page_300_liens_ms", load)
+            metric("aller_retour_page_ms", avg)
             if (created > 2_000) warn("moteur web long à démarrer ($created ms)")
             if (avg > 60) warn("page lente à répondre : le curseur aimanté sera moins vif")
         } finally {
             (wv.parent as? ViewGroup)?.removeView(wv)
             wv.destroy()
         }
+    }
+
+    /** Un moteur web caché, de la taille de l'écran, pour les étapes qui exercent les scripts de WiDo. */
+    private fun hiddenWebView(): WebView = WebView(this@DiagnosticActivity).apply {
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        alpha = 0f
+        isFocusable = false
+        addContentView(this, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+
+    private fun dropWebView(wv: WebView) {
+        (wv.parent as? ViewGroup)?.removeView(wv)
+        wv.destroy()
+    }
+
+    private suspend fun WebView.loadTestPage(): Boolean {
+        val html = assets.open("diagnostic/selftest.html").bufferedReader().use { it.readText() }
+        return withTimeoutOrNull(15_000) {
+            suspendCancellableCoroutine { cont ->
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView, url: String?) {
+                        if (cont.isActive) cont.resume(Unit)
+                    }
+                }
+                loadDataWithBaseURL("https://wido.test/", html, "text/html", "utf-8", null)
+            }
+        } != null
+    }
+
+    private suspend fun WebView.eval(script: String): String? = withTimeoutOrNull(5_000) {
+        suspendCancellableCoroutine { cont -> evaluateJavascript(script) { if (cont.isActive) cont.resume(it) } }
+    }
+
+    /**
+     * Les fonctions de WiDo, exercées pour de vrai sur une page de test (assets/diagnostic) avec les scripts de l'appli :
+     * curseur aimanté, carrousels défilants et animés, clavier du téléphone, passage au lecteur léger, fenêtre de
+     * cookies, puis « Masquer un élément » d'une page à l'autre.
+     */
+    private suspend fun Scope.features() {
+        val wv = hiddenWebView()
+        try {
+            if (!wv.loadTestPage()) {
+                fail("la page de test ne s'est pas ouverte")
+                return
+            }
+            val injector = ScriptInjector(this@DiagnosticActivity, TEST_SITE)
+            wv.eval(injector.internalScript())
+            wv.eval(assets.open("diagnostic/selftest.js").bufferedReader().use { it.readText() })
+            var result: org.json.JSONObject? = null
+            withTimeoutOrNull(45_000) {
+                while (true) {
+                    delay(300)
+                    val raw = wv.eval("window.__widoSelfTest&&window.__widoSelfTest.done?JSON.stringify(window.__widoSelfTest):null")
+                    val text = raw?.takeIf { it != "null" }?.let { runCatching { org.json.JSONTokener(it).nextValue() as? String }.getOrNull() }
+                    if (text != null) {
+                        result = org.json.JSONObject(text)
+                        break
+                    }
+                }
+            }
+            val r = result
+            if (r == null) {
+                fail("les tests de la page ne se sont pas terminés en 45 s")
+                return
+            }
+            var passed = 0
+            var failed = 0
+            val cases = r.optJSONArray("cases") ?: org.json.JSONArray()
+            for (i in 0 until cases.length()) {
+                val c = cases.getJSONObject(i)
+                val name = c.optString("name")
+                val detail = c.optString("detail").takeIf { it.isNotBlank() }?.let { " — $it" }.orEmpty()
+                if (c.optBoolean("ok")) {
+                    passed++
+                    line("✓ $name$detail")
+                } else {
+                    failed++
+                    fail("$name$detail")
+                }
+            }
+            // « Masquer un élément » : masqué sur cette page, puis retrouvé sur une « autre page » où il est emballé
+            // autrement et forcé visible par le site.
+            val pick = wv.eval("(function(){var r=document.getElementById('ad').getBoundingClientRect();return JSON.stringify([(r.left+r.width/2)/innerWidth,(r.top+r.height/2)/innerHeight]);})()")
+            val point = pick?.let { runCatching { org.json.JSONArray(org.json.JSONTokener(it).nextValue() as String) }.getOrNull() }
+            val hideOk = if (point != null) {
+                val raw = wv.eval("(${PageScripts.HIDE})(${point.getDouble(0)},${point.getDouble(1)})")
+                val selectors = raw?.let { runCatching { org.json.JSONArray(org.json.JSONTokener(it).nextValue() as String) }.getOrNull() }
+                    ?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+                wv.eval("window.__widoSelfTestRebuild()")
+                wv.eval(injector.hideScript(selectors))
+                delay(300)
+                val shown = wv.eval("getComputedStyle(document.getElementById('ad')).display")
+                line("Masquer un élément : ${selectors.size} signature(s) enregistrée(s)")
+                shown == "\"none\""
+            } else {
+                false
+            }
+            if (hideOk) {
+                passed++
+                line("✓ Masquer un élément : reste masqué sur une autre page, même forcé visible par le site")
+            } else {
+                failed++
+                fail("Masquer un élément : l'élément réapparaît sur une autre page")
+            }
+            val m = r.optJSONObject("metrics")
+            if (m != null) {
+                line("Curseur aimanté : ${m.optDouble("snapAvgMs")} ms en moyenne, ${m.optDouble("snapMaxMs")} ms au pire (${m.optInt("snapCalls")} appels)")
+                metric("curseur_ms_moyen", m.optDouble("snapAvgMs"))
+                metric("curseur_ms_pire", m.optDouble("snapMaxMs"))
+                if (m.optDouble("snapMaxMs") > 150) warn("curseur aimanté lent par moments (${m.optDouble("snapMaxMs")} ms)")
+            }
+            metric("fonctions_ok", passed)
+            metric("fonctions_echec", failed)
+            summary = "$passed réussies, $failed en échec"
+        } finally {
+            dropWebView(wv)
+        }
+    }
+
+    /** Ouverture d'un site : le temps de préparer le blocage (listes, masquages, règles d'adresse) du premier site. */
+    private suspend fun Scope.siteOpening() {
+        val repository = app.repository
+        val site = repository.ensureLoaded().sites.firstOrNull { it.enabled } ?: repository.localSites.value.firstOrNull { it.enabled }
+        if (site == null) {
+            line("Aucun site configuré")
+            summary = "aucun site"
+            return
+        }
+        val before = CrashLog.memoryLine(this@DiagnosticActivity)
+        val t0 = SystemClock.elapsedRealtime()
+        repository.blockerFor(site)
+        val t1 = SystemClock.elapsedRealtime()
+        repository.cosmeticFor(site)
+        val t2 = SystemClock.elapsedRealtime()
+        repository.urlMatcherFor(site)
+        val t3 = SystemClock.elapsedRealtime()
+        val total = t3 - t0
+        line("Blocage réseau : ${t1 - t0} ms · masquages : ${t2 - t1} ms · règles d'adresse : ${t3 - t2} ms")
+        line("Mémoire avant : $before")
+        line("Mémoire après : ${CrashLog.memoryLine(this@DiagnosticActivity)}")
+        metric("ouverture_site_ms", total)
+        summary = "prêt en $total ms"
+        when {
+            total > 10_000 -> fail("plus de 10 s pour préparer un site")
+            total > 3_000 -> warn("préparation lente ($total ms) : l'ouverture d'un site se fera attendre")
+        }
+    }
+
+    /** Le moteur web rend-il sa mémoire ? Trois pages de test ouvertes puis fermées, mémoire de l'appli avant et après. */
+    private suspend fun Scope.webLeaks() {
+        fun pss() = android.os.Debug.getPss() / 1024
+        Runtime.getRuntime().gc()
+        delay(300)
+        val before = pss()
+        repeat(3) {
+            val wv = hiddenWebView()
+            wv.loadTestPage()
+            delay(300)
+            dropWebView(wv)
+        }
+        Runtime.getRuntime().gc()
+        delay(1_000)
+        val after = pss()
+        val delta = after - before
+        line("Mémoire de l'appli : $before Mo avant, $after Mo après trois ouvertures et fermetures")
+        metric("fuite_moteur_web_mo", delta)
+        summary = "${if (delta >= 0) "+" else ""}$delta Mo"
+        if (delta > 30) warn("le moteur web garde $delta Mo après fermeture : risque de fermeture par Android après plusieurs sites")
     }
 
     private suspend fun Scope.appState() {
@@ -636,6 +837,8 @@ class DiagnosticActivity : ComponentActivity() {
 
     private companion object {
         const val MB = 1_048_576L
+        /** Site fictif de la page de test (les scripts internes ne dépendent pas du site). */
+        val TEST_SITE = dev.wido.core.Site(id = "selftest", name = "Test", url = "https://wido.test/")
         /** Flux HLS de test public (Big Buck Bunny, plusieurs qualités jusqu'au 1080p). */
         const val TEST_STREAM = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
         const val PING_URL = "https://www.google.com/generate_204"
