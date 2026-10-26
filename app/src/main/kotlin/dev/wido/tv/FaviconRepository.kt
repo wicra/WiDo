@@ -91,7 +91,7 @@ class FaviconRepository(private val context: Context) {
             else -> download(site, png, miss)
         }
         if (!png.exists()) return@withContext null
-        val bitmap = BitmapFactory.decodeFile(png.path) ?: return@withContext null
+        val bitmap = bounded(png.readBytes()) ?: return@withContext null
         val color = dominantColor(bitmap)
         rememberColor(key, color)
         SiteIcon(bitmap.asImageBitmap(), color).also { memory[key] = it }
@@ -166,12 +166,40 @@ class FaviconRepository(private val context: Context) {
         for (url in candidates.take(5)) {
             if (!url.startsWith("https://")) continue
             val bytes = runCatching { Http.get(url, MAX_ICON_BYTES, timeoutMs = 6_000) }.getOrNull() ?: continue
-            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: continue
-            if (bitmap.width < 16 || bitmap.height < 16) continue
-            if (best == null || bitmap.width > best.width) best = bitmap
-            if (bitmap.width >= SHARP_PX) break
+            val bitmap = bounded(bytes) ?: continue
+            val width = bitmap.width
+            if (width < 16 || bitmap.height < 16) {
+                bitmap.recycle()
+                continue
+            }
+            val current = best
+            if (current == null || width > current.width) {
+                current?.recycle()
+                best = bitmap
+            } else {
+                bitmap.recycle()
+            }
+            if (width >= SHARP_PX) break
         }
         return best?.let(::sharpen)
+    }
+
+    /**
+     * Décode une icône sans dépasser [MAX_ICON_PX] de côté : une icône de 1024 px (4 Mo en mémoire) ne s'affiche
+     * jamais en plus de 200 px sur l'accueil. Réduite au décodage, puis à la taille exacte.
+     */
+    private fun bounded(bytes: ByteArray): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= MAX_ICON_PX) sample *= 2
+        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+        val side = maxOf(decoded.width, decoded.height)
+        if (side <= MAX_ICON_PX) return decoded
+        val scale = MAX_ICON_PX.toFloat() / side
+        return Bitmap.createScaledBitmap(decoded, maxOf(1, (decoded.width * scale).toInt()), maxOf(1, (decoded.height * scale).toInt()), true)
+            .also { if (it !== decoded) decoded.recycle() }
     }
 
     /**
@@ -213,6 +241,8 @@ class FaviconRepository(private val context: Context) {
         val LINK = Regex("<link\\b[^>]*>", RegexOption.IGNORE_CASE)
         const val MAX_ICON_BYTES = 512_000
         const val SHARP_PX = 128
+        /** Côté maximal d'une icône en mémoire (le disque de l'accueil fait moins de 200 px). */
+        const val MAX_ICON_PX = 256
         const val TTL_MS = 14L * 24 * 60 * 60 * 1000
         const val MISS_TTL_MS = 24L * 60 * 60 * 1000
     }

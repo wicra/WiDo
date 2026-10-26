@@ -23,7 +23,7 @@ En haut, les onglets **Sites** et **Réglages** ([SETTINGS](SETTINGS.md)) : un o
 | **CH + / CH −** (ou Page +/−) | Fait défiler la page d'un écran. |
 | Rouge / vert / jaune / bleu | Raccourcis réglables. Par défaut : menu, recharger, texte +, texte −. |
 
-**En plein écran vidéo** (réglage par défaut) : **◀ ▶** reculent/avancent (de plus en plus loin si la touche est maintenue), **OK** lance/met en pause, **Retour** quitte le plein écran. Le volume se règle avec les **touches volume** de la télécommande, pas avec les flèches. **En pause**, les flèches font apparaître le curseur pour atteindre les réglages du lecteur du site (sous-titres, qualité…), **OK** clique ; dès que la lecture reprend, les flèches pilotent à nouveau le lecteur.
+**En plein écran vidéo** (réglage par défaut) : **◀ ▶** déplacent la seconde visée sur la **barre de lecture de WiDo**, en bas de l'écran (l'écart s'affiche : « +1:30 » ; de plus en plus loin si la touche est maintenue) : la vidéo y va dès qu'on lâche, ou avec **OK**. **▲ ▼** affichent ou masquent la barre (position, durée). **OK** lance/met en pause, **Retour** ferme la barre (sans bouger la vidéo), puis quitte le plein écran. Le volume se règle avec les **touches volume** de la télécommande, pas avec les flèches. **En pause**, les flèches font apparaître le curseur pour atteindre les réglages du lecteur du site (sous-titres, qualité…), **OK** clique ; dès que la lecture reprend, les flèches pilotent à nouveau le lecteur.
 
 Le curseur est une flèche de souris (la pointe est le point de clic) ; il devient bleu pendant l'appui sur OK et se masque après quelques secondes d'inactivité.
 

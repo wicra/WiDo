@@ -107,6 +107,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     /** Création du lecteur, pour mesurer le temps d'ouverture du site. */
     private var createdAt = 0L
 
+    /**
+     * Vrai une fois la page montée ([start] : WebView, curseur, messages). Avant, ces vues n'existent pas : tout ce
+     * qui est programmé dès l'ouverture (relevé de la vidéo, commandes du téléphone, aide) doit attendre.
+     */
+    private val pageReady: Boolean get() = ::osd.isInitialized && ::cursor.isInitialized && webView != null
+
     /** État gardé par Android quand il a fermé l'appli en arrière-plan (page et position du moment). */
     private var restored: Bundle? = null
 
@@ -162,7 +168,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             if (site.id != ConfigRepository.LINK_SITE_ID) settings.lastSiteId = site.id
             CrashLog.event("Lecteur ouvert : ${site.name}" + (intent.getStringExtra(EXTRA_URL)?.let { " (${Hosts.of(it).orEmpty()})" } ?: ""))
             loadingLabel.text = getString(R.string.loading_site, site.name)
+            val listsStart = SystemClock.elapsedRealtime()
             val blocker = app.repository.blockerFor(site)
+            CrashLog.trace("site : listes de blocage prêtes en ${SystemClock.elapsedRealtime() - listsStart} ms (${CrashLog.memoryLine(this@PlayerActivity)})")
             val scripts = ScriptInjector(this@PlayerActivity, site)
             scripts.early = scripts.earlyScript(app.repository.cosmeticFor(site), settings.youtubeAdblock, settings.sponsorBlock)
             injector = scripts
@@ -198,6 +206,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                         runOnUiThread {
                             hidePauseScreen()
                             forgetSnapAhead()
+                            cancelSeekBar()
+                            armed = false
+                            root.removeCallbacks(releaseUndecided)
+                            hideHandoffCover()
                         }
                         bridge?.reset()
                         mediaState.value = null
@@ -375,6 +387,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     private fun exitCustomView() {
         val view = customView ?: return
+        cancelSeekBar()
         root.removeView(view)
         customView = null
         customCallback?.onCustomViewHidden()
@@ -386,6 +399,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     // --- Télécommande -----------------------------------------------------------------------
 
     private val debounce = KeyDebounce()
+    private var typedHintAt = 0L
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (webView == null) return super.dispatchKeyEvent(event)
@@ -468,6 +482,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 return true
             }
             return super.dispatchKeyEvent(event)
+        }
+
+        // Barre de lecture affichée : Retour la ferme (et oublie la seconde visée) sans quitter le plein écran.
+        if (code == KeyEvent.KEYCODE_BACK && seekBar?.isShowing == true) {
+            if (event.action == KeyEvent.ACTION_UP) cancelSeekBar()
+            return true
         }
 
         when (code) {
@@ -812,14 +832,107 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     /** Flèches et OK en plein écran vidéo. Renvoie vrai si la touche est consommée. */
     private fun fullscreenKey(event: KeyEvent): Boolean {
-        val seek = settings.seekSeconds.toDouble()
+        val down = event.action == KeyEvent.ACTION_DOWN
         when (event.keyCode) {
-            KeyEvent.KEYCODE_DPAD_LEFT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(-seek * (1 + minOf(event.repeatCount / 4, 4)))
-            KeyEvent.KEYCODE_DPAD_RIGHT -> if (event.action == KeyEvent.ACTION_DOWN) seekBy(seek * (1 + minOf(event.repeatCount / 4, 4)))
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) toggleMedia()
+            // ◀ ▶ : la barre de WiDo montre la seconde visée ; la vidéo y va dès qu'on lâche (ou OK).
+            KeyEvent.KEYCODE_DPAD_LEFT -> if (down) moveSeekTarget(-1, event.repeatCount)
+            KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) moveSeekTarget(1, event.repeatCount)
+            // ▲ ▼ : affiche ou masque la barre (où en est la vidéo, combien il reste).
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> if (down && event.repeatCount == 0) {
+                if (seekBar?.isShowing == true) {
+                    commitSeekTarget()
+                    seekBar?.hide()
+                } else {
+                    showSeekBar()
+                }
+            }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (down && event.repeatCount == 0) {
+                if (seekTarget >= 0) commitSeekTarget() else toggleMedia()
+            }
             else -> return false
         }
         return true
+    }
+
+    // --- Barre de lecture de WiDo (vidéo de site en plein écran) ----------------------------------
+
+    private var seekBar: SeekBarView? = null
+    /** Seconde visée aux flèches, pas encore envoyée à la vidéo ; négative : aucune. */
+    private var seekTarget = -1.0
+    private val commitSeek = Runnable { commitSeekTarget() }
+    private val hideSeekBarLater = Runnable { seekBar?.hide() }
+
+    private fun seekBarView(): SeekBarView = seekBar ?: SeekBarView(this, settings.uiScale).also { bar ->
+        bar.visibility = View.GONE
+        bar.hint = getString(R.string.seekbar_hint)
+        bar.position = { estimatedTime() }
+        val height = (200 * resources.displayMetrics.density * settings.uiScale).toInt()
+        root.addView(bar, FrameLayout.LayoutParams(MATCH, height, Gravity.BOTTOM))
+        seekBar = bar
+    }
+
+    /** Position de la vidéo maintenant, d'après le dernier relevé (la page n'est interrogée que de temps en temps). */
+    private fun estimatedTime(): Double {
+        val state = mediaState.value ?: return 0.0
+        return if (state.paused) state.time else state.time + (SystemClock.elapsedRealtime() - mediaAt) / 1000.0
+    }
+
+    private fun showSeekBar(hideAfterMs: Long = SEEKBAR_HIDE_MS) {
+        val state = mediaState.value ?: return
+        if (state.duration <= 0) return
+        val bar = seekBarView()
+        bar.duration = state.duration
+        bar.title = webView?.title?.takeIf { it.isNotBlank() && it != webView?.url }.orEmpty()
+        bar.target = seekTarget
+        bar.bringToFront()
+        osd.bringToFront()
+        bar.show()
+        root.removeCallbacks(hideSeekBarLater)
+        root.postDelayed(hideSeekBarLater, hideAfterMs)
+    }
+
+    /** ◀ ▶ : la seconde visée avance ou recule (de plus en plus vite si la touche est maintenue), sans encore y aller. */
+    private fun moveSeekTarget(sign: Int, repeat: Int) {
+        val state = mediaState.value
+        if (state == null || state.duration <= 0) {
+            // Direct sans durée connue : simple saut, comme avant.
+            seekBy(sign * settings.seekSeconds.toDouble() * (1 + minOf(repeat / 4, 4)))
+            return
+        }
+        val base = if (seekTarget >= 0) seekTarget else estimatedTime()
+        val step = settings.seekSeconds * (1 + minOf(repeat / 4, 5))
+        seekTarget = (base + sign * step).coerceIn(0.0, maxOf(0.0, state.duration - 1))
+        cancelSeekGuard()
+        showSeekBar()
+        root.removeCallbacks(commitSeek)
+        root.postDelayed(commitSeek, SEEK_COMMIT_MS)
+    }
+
+    /** La vidéo va à la seconde visée ; la barre reste un instant pour montrer la nouvelle position. */
+    private fun commitSeekTarget() {
+        root.removeCallbacks(commitSeek)
+        val target = seekTarget
+        if (target < 0) return
+        seekTarget = -1.0
+        CrashLog.trace("site : barre de lecture → ${target.toLong()} s")
+        mediaJson(JSONObject().put("cmd", "seekTo").put("to", target).toString())
+        mediaState.value?.let {
+            mediaState.value = it.copy(time = target)
+            mediaAt = SystemClock.elapsedRealtime()
+        }
+        seekBar?.target = -1.0
+        root.removeCallbacks(hideSeekBarLater)
+        root.postDelayed(hideSeekBarLater, 2_500)
+        root.postDelayed({ passivePoll = true; media("state") }, 700)
+    }
+
+    /** Retour sur la barre : la seconde visée est oubliée, la vidéo ne bouge pas. */
+    private fun cancelSeekBar() {
+        root.removeCallbacks(commitSeek)
+        root.removeCallbacks(hideSeekBarLater)
+        seekTarget = -1.0
+        seekBar?.target = -1.0
+        seekBar?.hide()
     }
 
     /** Vidéo en pause en plein écran : le curseur apparaît et se déplace librement, OK clique. */
@@ -898,7 +1011,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         mediaAt = SystemClock.elapsedRealtime()
         if (backgrounded) BackgroundBridge.update(playbackInfo(state))
         applyAutoStart(state)
-        maybeAutoNative()
+        if (!maybeAutoNative()) decideHandoff(state)
         schedulePauseScreen(state)
         if (pauseCursor && !state.paused) {
             pauseCursor = false
@@ -1237,7 +1350,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     // --- Aide à l'écran ---------------------------------------------------------------------
 
     private fun showHelp() {
-        if (helpView != null) return
+        if (helpView != null || !pageReady) return
         val density = resources.displayMetrics.density
         val card = TextView(this).apply {
             text = getString(R.string.help_body)
@@ -1553,6 +1666,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     // --- Télécommande sur téléphone ----------------------------------------------------------
 
     override fun onRemote(command: RemoteCommand) {
+        // Commande du téléphone avant que la page soit prête : le curseur et les messages n'existent pas encore.
+        if (!pageReady) return
         when (command) {
             is RemoteCommand.Key -> when (command.key) {
                 RemoteKey.HOME -> close("télécommande du téléphone : Accueil")
@@ -1581,7 +1696,12 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
             is RemoteCommand.Scroll -> webView?.scrollBy(0, (command.dy * resources.displayMetrics.density).toInt())
             is RemoteCommand.Type -> {
                 typeText(command.text, command.submit)
-                osd.showText(getString(R.string.osd_text_sent))
+                // Le clavier en direct envoie à chaque lettre : le message ne s'affiche qu'à l'envoi (ou au plus toutes les 4 s).
+                val now = SystemClock.uptimeMillis()
+                if (command.submit || now - typedHintAt > 4_000) {
+                    typedHintAt = now
+                    osd.showText(getString(R.string.osd_text_sent))
+                }
             }
             is RemoteCommand.Open -> {
                 val current = site
@@ -1619,7 +1739,9 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     /** L'état du lecteur de la page est relevé de temps en temps, sans rien afficher : la progression reste à jour. */
     private val progressPoll = object : Runnable {
         override fun run() {
-            if (!osd.isShowing && panelView == null) {
+            // La page n'est pas encore là (listes de blocage encore en chargement sur une petite clé : plus de 10 s à la
+            // première ouverture) : la barre de messages n'existe pas encore. Avant, l'appli plantait ici.
+            if (pageReady && !osd.isShowing && panelView == null) {
                 passivePoll = true
                 media("state")
             }
@@ -1888,6 +2010,7 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
 
     private fun setCinema(on: Boolean) {
         cinema = on
+        if (!on) cancelSeekBar()
         mediaJson(JSONObject().put("cmd", "cinema").put("on", on).toString())
         if (on) osd.showText(getString(R.string.osd_cinema))
     }
@@ -1936,10 +2059,98 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
     private fun onStreamFound() {
         if (streamHinted) return
         streamHinted = true
-        // Peu de mémoire : le lecteur natif consomme bien moins que la page, il évite les fermetures.
         val app = application as WiDoApp
-        if (settings.autoNative && maybeAutoNative()) return
+        if (settings.autoNative) {
+            // La page est prévenue : la vidéo qui démarrera ne se verra ni ne s'entendra dans la page, le temps que le
+            // lecteur léger prenne la suite (plus de film qui joue un instant puis bascule).
+            armHandoff()
+            maybeAutoNative()
+            return
+        }
         osd.showText(getString(if (app.lowMemory) R.string.osd_native_found_low else R.string.osd_native_found))
+    }
+
+    /** La page cache et coupe sa vidéo dès qu'elle démarre (voir frame.js, `arm`). */
+    private var armed = false
+
+    private fun armHandoff() {
+        if (armed || nativeActive) return
+        armed = true
+        mediaJson(JSONObject().put("cmd", "arm").put("on", true).toString())
+    }
+
+    /** Ce n'est pas un film (pub, bande-annonce) ou le lecteur léger n'en veut pas : la page reprend, visible et avec le son. */
+    private fun releaseHandoff(play: Boolean) {
+        root.removeCallbacks(releaseUndecided)
+        hideHandoffCover()
+        if (!armed) return
+        armed = false
+        mediaJson(JSONObject().put("cmd", "release").put("play", play).toString())
+    }
+
+    /** Vidéo cachée depuis 4 s sans durée connue (direct, flux étrange) : on la rend à la page plutôt que de la laisser invisible. */
+    private val releaseUndecided = Runnable { if (!nativeActive) releaseHandoff(play = false) }
+
+    /**
+     * Armée, la page a caché une vidéo qui démarre : on décide tout de suite. Film → lecteur léger ; courte (pub) →
+     * la page la rejoue normalement ; durée encore inconnue → on attend sa durée (au plus 4 s).
+     */
+    private fun decideHandoff(state: MediaState) {
+        if (!armed || nativeActive || state.paused) return
+        when {
+            // Un film, mais le lecteur léger n'en veut pas (déjà essayé sur cette page, retour en cours…) : la page le joue.
+            state.duration > 0 -> releaseHandoff(play = false)
+            else -> {
+                root.removeCallbacks(releaseUndecided)
+                root.postDelayed(releaseUndecided, 4_000)
+            }
+        }
+    }
+
+    // --- Couverture du passage au lecteur léger ---
+
+    private var handoffCover: View? = null
+
+    /** Fond noir, titre et roue par-dessus la page, du moment où la page cède la place jusqu'au lecteur léger. */
+    private fun showHandoffCover() {
+        if (handoffCover != null) return
+        val density = resources.displayMetrics.density
+        val cover = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            isClickable = true
+            addView(
+                ProgressBar(this@PlayerActivity).apply { indeterminateTintList = ColorStateList.valueOf(ACCENT) },
+                FrameLayout.LayoutParams((44 * density).toInt(), (44 * density).toInt(), Gravity.CENTER),
+            )
+            val title = webView?.title?.takeIf { it.isNotBlank() && it != webView?.url }
+            if (title != null) {
+                addView(
+                    TextView(this@PlayerActivity).apply {
+                        text = title
+                        setTextColor(0xCCFFFFFF.toInt())
+                        textSize = 18f * settings.uiScale
+                        maxLines = 1
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                        useJakarta(700)
+                        gravity = Gravity.CENTER
+                    },
+                    FrameLayout.LayoutParams(MATCH, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER).apply {
+                        topMargin = (64 * density).toInt()
+                        leftMargin = (56 * density).toInt()
+                        rightMargin = (56 * density).toInt()
+                    },
+                )
+            }
+        }
+        handoffCover = cover
+        root.addView(cover, FrameLayout.LayoutParams(MATCH, MATCH))
+        cover.bringToFront()
+    }
+
+    private fun hideHandoffCover() {
+        val cover = handoffCover ?: return
+        handoffCover = null
+        cover.animate().alpha(0f).setDuration(220).withEndAction { root.removeView(cover) }.start()
     }
 
     /** « Lire dans WiDo » : le flux repéré s'ouvre dans le lecteur natif, la page se met en pause. */
@@ -1960,11 +2171,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         val page = webView?.url ?: return false
         if (state.paused || state.duration < AUTO_NATIVE_MIN_SECONDS || page == autoNativeTried) return false
         autoNativeTried = page
-        osd.showText(getString(R.string.osd_auto_native), OsdView.Kind.Info)
-        root.postDelayed({
-            val now = mediaState.value
-            if (!isFinishing && nativeReturnUrl == null && now != null && !now.paused && webView?.url == page) openNative()
-        }, AUTO_NATIVE_DELAY_MS)
+        // Tout de suite, sans message ni délai : la couverture cache la page, la page se tait, le lecteur s'ouvre.
+        openNative()
         return true
     }
 
@@ -1999,7 +2207,10 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         }
         // Le lecteur natif part de la seconde où en était la page.
         val start = currentPosition()
-        media("pause")
+        showHandoffCover()
+        root.removeCallbacks(releaseUndecided)
+        // La page se tait, se fige et cache sa vidéo (même si elle n'était pas armée).
+        media("hold")
         val cookies = runCatching { android.webkit.CookieManager.getInstance().getCookie(stream.url) }.getOrNull()
         val lowMemory = (application as WiDoApp).lowMemory
         val page = wv.url
@@ -2012,6 +2223,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
                 this, stream, current.id, ResumeUrl.toRemember(current, wv.url), wv.title, pageImage, wv.url, cookies,
                 wv.settings.userAgentString, start,
             ),
+            // Sans animation : la couverture noire de la page enchaîne sur celle du lecteur, puis sur la vidéo.
+            androidx.core.app.ActivityOptionsCompat.makeCustomAnimation(this, 0, 0),
         )
         // Les scripts de la page (pubs, mesures d'audience) s'arrêtent pendant le film : le processeur reste au décodage.
         wv.pauseTimers()
@@ -2068,6 +2281,18 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         // Retour normal (← Site, Retour) : si on relance le film dans la page, il repart dans le lecteur léger,
         // comme le veut le réglage. Après un échec du flux, on n'y renvoie pas (pas de boucle).
         if (!failed) autoNativeTried = null
+        if (failed) {
+            // Le lecteur léger n'a pas pu lire ce flux : la page reprend d'elle-même, à la même seconde, avec le son.
+            releaseHandoff(play = true)
+            osd.showText(getString(R.string.osd_native_fallback))
+        } else {
+            // Retour au site : la page redevient visible (sa vidéo reste en pause, à la seconde du film), et reste armée :
+            // relancer le film le renvoie dans le lecteur léger sans qu'il joue d'abord dans la page.
+            armed = false
+            mediaJson(JSONObject().put("cmd", "arm").put("on", false).toString())
+            if (settings.autoNative && client?.stream != null) armHandoff()
+            root.postDelayed({ hideHandoffCover() }, 400)
+        }
         if (pageLost) {
             // Page arrêtée par Android pendant le film : une page neuve, à la seconde où le film s'est arrêté.
             pageLost = false
@@ -2271,6 +2496,8 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         root.removeCallbacks(resumeSeek)
         root.removeCallbacks(autoStartPoll)
         root.removeCallbacks(showPause)
+        root.removeCallbacks(commitSeek)
+        root.removeCallbacks(hideSeekBarLater)
         adWindow?.close()
         customCallback?.onCustomViewHidden()
         webView?.let {
@@ -2329,14 +2556,15 @@ class PlayerActivity : ComponentActivity(), RemoteTarget {
         /** Flèches gardées en attente au plus (au-delà, l'appui maintenu prend le relais). */
         private const val SNAP_QUEUE = 3
         private const val SNAP_TIMEOUT_MS = 600L
+        /** La vidéo va à la seconde visée ce délai après le dernier appui sur ◀ ▶ (enchaîner les appuis ne la fait pas sauter à chaque fois). */
+        private const val SEEK_COMMIT_MS = 900L
+        private const val SEEKBAR_HIDE_MS = 4_000L
         /** Au-delà, les cibles annoncées sont trop anciennes (la page a pu changer) : on redemande. */
         private const val SNAP_AHEAD_MS = 2_500L
         private const val DOUBLE_BACK_MS = 450L
         private const val EXIT_CONFIRM_MS = 2_500L
         /** En dessous (pub, bande-annonce), on ne quitte pas la page pour le lecteur léger. */
         private const val AUTO_NATIVE_MIN_SECONDS = 240.0
-        /** Le temps de lire « Film détecté » avant le passage au lecteur léger. */
-        private const val AUTO_NATIVE_DELAY_MS = 700L
         private const val STATE_URL = "state_url"
         private const val STATE_POSITION = "state_position"
         /** Étiquette du vinyle de l'accueil, rapportée au rayon du disque (50 dp sur 86 dp au focus). */

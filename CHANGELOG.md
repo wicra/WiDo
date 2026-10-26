@@ -1,5 +1,19 @@
 # Changelog
 
+## Non publié (ouverture des sites)
+
+### Corrigé
+- **Ouverture d'un site plus rapide, surtout à l'allumage du projecteur** : les listes de blocage n'étaient plus à jour après la nuit et étaient retéléchargées pendant l'ouverture, jusqu'à trois fois et sans partage (plus de 10 s si le Wi-Fi n'était pas encore prêt) ; l'ouverture attendait aussi le téléchargement de la configuration. Maintenant : l'ouverture prend les listes en mémoire ou sur disque (même un peu anciennes) et ne télécharge jamais ; une même liste n'est chargée qu'une fois à la fois ; la configuration en mémoire est rendue sans attendre le réseau.
+- **Moins de fermetures par Android sur une clé d'1 Go** : au démarrage, la mise à jour des listes attend 15 s (l'accueil, la configuration et les icônes passent d'abord), une liste à la fois ; une liste qui épuise la mémoire en se compilant ne fait plus planter WiDo (le cache prend le relais) ; les icônes des sites sont gardées à 256 px au plus (jusqu'à 4 Mo chacune avant) ; l'accueil lâche ses images en mémoire quand un site s'ouvre ; deux écritures d'une même liste ne se mélangent plus.
+- **Passage au lecteur léger sans à-coup** : la décision se prend dès que la page lance sa vidéo et connaît sa durée (avant : au relevé suivant, jusqu'à 10 s plus tard, puis un message et 0,7 s d'attente). Une fois le flux repéré, la page est prévenue : le film qui démarre ne se voit ni ne s'entend dans la page ; un écran noir avec le titre le couvre, le lecteur s'ouvre sans animation sur fond noir et sans barre qui surgit. Une pub courte reprend aussitôt normalement dans la page. Si le lecteur léger ne lit pas le flux, la page reprend d'elle-même à la même seconde (« Lecture sur le site »).
+- **Clavier du téléphone (appli liée) : lettres manquantes ou recherche vide** : il n'envoyait que les lettres ajoutées, alors que la TV remplace tout le champ ; il ne restait que la dernière lettre, et Entrée envoyait un texte vide avant de valider. Le texte entier part maintenant à chaque frappe (corrections du clavier et accents compris), Entrée valide le texte tapé, Effacer vide aussi le champ de la TV ; le message « Texte envoyé » ne s'affiche plus à chaque lettre.
+- **Un site ne s'ouvrait pas et WiDo revenait à l'accueil (plantage 10 s après l'ouverture)** : à la première ouverture sur une petite clé, les listes de blocage mettent plus de 10 s à se charger ; le relevé de la vidéo, programmé à 10 s, touchait la barre de messages pas encore créée (`lateinit property osd has not been initialized`). Le relevé, les commandes du téléphone et l'aide attendent maintenant que la page soit montée. Le journal détaillé note le temps de chargement des listes.
+- **Lecteur léger : « ERROR_CODE_DECODING_FAILED »** : au lieu de relancer à l'identique, il relance dans une qualité plus légère et en H.264 quand le flux en propose.
+
+## Non publié (YouTube en plein écran)
+
+- **Barre de lecture de WiDo pour les vidéos de site en plein écran** (YouTube…) : le site cache sa barre et la télécommande ne pouvait pas la viser. ◀ ▶ déplacent maintenant la seconde visée sur une barre en bas de l'écran (« 12:40  +1:30 », plus vite si la touche est maintenue) ; la vidéo y va dès qu'on lâche (0,9 s) ou avec OK. ▲ ▼ affichent la barre (où en est la vidéo, la durée), Retour l'annule sans quitter le plein écran. Enchaîner les appuis ne fait plus sauter la vidéo à chaque fois.
+
 ## Non publié (test de la 1.0.8)
 
 - **« Masquer un élément » ne revient plus en naviguant sur le site** : le masquage est aussi posé sur l'élément lui-même (un site qui force `display:block !important` l'emportait sur la feuille de style), et l'élément est enregistré sous plusieurs signatures pour être retrouvé sur les autres pages : son sélecteur unique, ses propres classes quand elles suffisent à le désigner, et pour une pub en iframe, les iframes du même domaine tiers (jamais une grande iframe, qui peut être le lecteur vidéo).

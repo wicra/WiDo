@@ -556,19 +556,14 @@ private fun TouchPad(link: ScreenLink) {
 @Composable
 private fun LiveKeyboard(link: ScreenLink) {
     var text by remember { mutableStateOf("") }
+    // Côté TV, « type » remplace tout le contenu du champ. On envoie donc toujours le texte entier : avant, seuls les
+    // caractères ajoutés partaient, et chaque frappe effaçait les précédentes (il ne restait que la dernière lettre).
+    // Le texte entier suit aussi les corrections du clavier (mot remplacé, accent ajouté) sans suite de suppressions.
     fun type(t: String, submit: Boolean = false) = link.command(JSONObject().put("cmd", "type").put("text", t).put("submit", submit))
     fun change(next: String) {
-        val old = text
-        when {
-            next.startsWith(old) -> if (next.length > old.length) type(next.substring(old.length))
-            old.startsWith(next) -> repeat(old.length - next.length) { link.key(RemoteKey.DEL) }
-            else -> {
-                val common = old.commonPrefixWith(next).length
-                repeat(old.length - common) { link.key(RemoteKey.DEL) }
-                if (next.length > common) type(next.substring(common))
-            }
-        }
+        if (next == text) return
         text = next
+        type(next)
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         BasicTextField(
@@ -578,7 +573,8 @@ private fun LiveKeyboard(link: ScreenLink) {
             cursorBrush = SolidColor(Color.White),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = {
-                type("", submit = true)
+                // Le texte avec la validation (un texte vide aurait vidé le champ avant d'envoyer la recherche).
+                type(text, submit = true)
                 text = ""
             }),
             modifier = Modifier.fillMaxWidth(),
@@ -590,8 +586,8 @@ private fun LiveKeyboard(link: ScreenLink) {
             },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ActionButton(stringResource(R.string.phone_send_enter), { type("", submit = true); text = "" })
-            ActionButton(stringResource(R.string.remote_keyboard_clear), { text = "" }, primary = false)
+            ActionButton(stringResource(R.string.phone_send_enter), { type(text, submit = true); text = "" })
+            ActionButton(stringResource(R.string.remote_keyboard_clear), { text = ""; type("") }, primary = false)
         }
         Text(stringResource(R.string.remote_keyboard_hint), color = Palette.TextMuted, fontSize = 12.sp, lineHeight = 17.sp)
     }

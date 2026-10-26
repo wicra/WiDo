@@ -88,9 +88,12 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
     fun refresh() {
         viewModelScope.launch {
             app.repository.ensureLoaded()
-            // Les listes en cache sont chargées tout de suite : ouvrir un site sera immédiat.
-            launch { app.repository.warmLists() }
+            // Les listes en cache (même anciennes) sont chargées tout de suite, sans réseau : ouvrir un site sera immédiat.
+            launch { app.repository.warmLists(network = false) }
             app.repository.refresh()
+            // Puis leur mise à jour par le réseau, plus tard sur une petite clé : au démarrage, l'accueil, la config et
+            // les icônes passent d'abord (tout en même temps, Android fermait parfois WiDo dès l'allumage).
+            kotlinx.coroutines.delay(if (app.lowMemory) 15_000 else 2_000)
             app.repository.warmLists()
         }
         checkUpdate()

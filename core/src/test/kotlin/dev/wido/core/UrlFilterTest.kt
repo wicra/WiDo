@@ -190,6 +190,8 @@ class RemoteProtocolTest {
         assertEquals(RemoteCommand.Move(400f, -3f), RemoteProtocol.parse("""{"cmd":"move","dx":9999,"dy":-3}"""))
         assertEquals(RemoteCommand.Tap, RemoteProtocol.parse("""{"cmd":"tap"}"""))
         assertEquals(RemoteCommand.Type("salut", true), RemoteProtocol.parse("""{"cmd":"type","text":"salut\n","submit":true}"""))
+        // Champ effacé sur le téléphone : le champ de la TV est vidé aussi.
+        assertEquals(RemoteCommand.Type("", false), RemoteProtocol.parse("""{"cmd":"type","text":""}"""))
         assertEquals(RemoteCommand.Open("https://exemple.org"), RemoteProtocol.parse("""{"cmd":"open","url":"exemple.org"}"""))
         assertNull(RemoteProtocol.parse("""{"cmd":"open","url":"javascript:alert(1)"}"""))
         assertNull(RemoteProtocol.parse("""{"cmd":"key","key":"power"}"""))

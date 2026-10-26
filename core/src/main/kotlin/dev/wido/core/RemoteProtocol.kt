@@ -50,7 +50,8 @@ object RemoteProtocol {
             "type" -> {
                 val text = str("text").orEmpty().replace("\r", "").trimEnd('\n')
                 val submit = bool(o, "submit")
-                if ((text.isEmpty() && !submit) || text.length > PhoneProtocol.MAX_TEXT) null else RemoteCommand.Type(text, submit)
+                // Texte vide accepté : le clavier en direct du téléphone envoie le champ entier, effacé compris.
+                if (text.length > PhoneProtocol.MAX_TEXT) null else RemoteCommand.Type(text, submit)
             }
             "open" -> str("url")?.let { LocalSites.normalizeUrl(it) }
                 ?.takeIf { val s = Hosts.schemeOf(it); s == "https" || s == "http" }

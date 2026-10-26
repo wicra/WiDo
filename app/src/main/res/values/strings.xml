@@ -518,4 +518,6 @@
     <string name="s_screensaver_note">Remplace l\'écran de veille du système (l\'arc-en-ciel) par celui de WiDo : halos de verre bleu, heure et date. Dans le réglage qui s\'ouvre, choisis « WiDo ».</string>
     <string name="screensaver_manual">Réglage introuvable sur cette TV : Paramètres Android → Écran de veille (ou Économiseur d\'écran) → WiDo</string>
     <string name="open_interrupted">L\'ouverture du site a été interrompue : Android a fermé WiDo (souvent par manque de mémoire). Réessaie ; si ça recommence, lance Réglages → Test.</string>
+    <string name="seekbar_hint">◀ ▶ choisir la position · OK y aller · ▲ ▼ masquer · Retour annuler</string>
+    <string name="osd_native_fallback">Lecture sur le site (le lecteur léger ne lit pas ce flux)</string>
 </resources>

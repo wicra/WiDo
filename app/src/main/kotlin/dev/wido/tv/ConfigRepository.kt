@@ -191,20 +191,27 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     private val listsDir get() = File(context.filesDir, "lists").apply { mkdirs() }
 
     /** Garantit qu'une configuration est disponible (cache ou intégrée), sans réseau. */
-    suspend fun ensureLoaded(): WiDoConfig = mutex.withLock {
+    // Config déjà en mémoire : rendue tout de suite, sans attendre un téléchargement en cours (l'ouverture d'un site
+    // attendait jusqu'à 20 s derrière celui de la configuration distante quand le réseau traînait).
+    suspend fun ensureLoaded(): WiDoConfig = _state.value.config ?: mutex.withLock {
         _state.value.config ?: loadLocal()
     }
 
-    suspend fun refresh() = mutex.withLock {
-        if (_state.value.config == null) loadLocal()
-        _state.update { it.copy(loading = true, error = null) }
+    suspend fun refresh() {
+        mutex.withLock {
+            if (_state.value.config == null) loadLocal()
+            _state.update { it.copy(loading = true, error = null) }
+        }
+        // Le téléchargement se fait hors du verrou : rien ne l'attend.
         try {
             val text = withContext(Dispatchers.IO) {
                 String(Http.get(settings.configUrl, MAX_CONFIG_BYTES), Charsets.UTF_8)
             }
             val parsed = ConfigParser.parse(text)
             withContext(Dispatchers.IO) { writeAtomically(cacheFile, text) }
-            _state.value = ConfigState(parsed.config, parsed.warnings, ConfigSource.Remote, loading = false)
+            mutex.withLock { _state.value = ConfigState(parsed.config, parsed.warnings, ConfigSource.Remote, loading = false) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Configuration distante indisponible", e)
             _state.update { it.copy(loading = false, error = e.message) }
@@ -420,7 +427,9 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         return withContext(Dispatchers.Default) {
             // « Bloquer les pubs » désactivé : ni listes ni règles globales, seulement les règles du site.
             val lists = if (site.blockAds) {
-                coroutineScope { effectiveLists(config).map { url -> async { loadList(url) } }.awaitAll() }
+                // Ouverture d'un site : la liste en mémoire ou sur disque, même un peu ancienne. Jamais de téléchargement
+                // ici (c'est le rôle de warmLists, à l'accueil) : il retardait l'ouverture de plus de 10 s au réveil du projecteur.
+                coroutineScope { effectiveLists(config).map { url -> async { loadList(url, network = false) } }.awaitAll() }
             } else {
                 emptyList()
             }
@@ -447,7 +456,7 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     suspend fun urlMatcherFor(site: Site): UrlMatcher {
         val config = ensureLoaded()
         val lists = if (site.blockAds) {
-            coroutineScope { effectiveLists(config).map { url -> async { url to loadList(url) } }.awaitAll() }
+            coroutineScope { effectiveLists(config).map { url -> async { url to loadList(url, network = false) } }.awaitAll() }
         } else {
             emptyList()
         }
@@ -472,12 +481,17 @@ class ConfigRepository(private val context: Context, private val settings: Setti
      * Charge toutes les listes en mémoire, en arrière-plan, pour que l'ouverture d'un site soit
      * immédiate. `force` : retélécharge les listes même si le cache est récent.
      */
-    suspend fun warmLists(force: Boolean = false) {
+    suspend fun warmLists(force: Boolean = false, network: Boolean = true) {
         if (!listsMutex.tryLock()) return
         try {
             val urls = effectiveLists(ensureLoaded())
             _lists.update { it.copy(updating = true) }
-            val rules = coroutineScope { urls.map { url -> async { loadList(url, force) } }.awaitAll() }
+            // Petite clé : une liste à la fois (chacune passe par plusieurs copies en mémoire pendant sa compilation).
+            val rules = if (DeviceMemory.isLow(context)) {
+                urls.map { url -> loadList(url, force, network) }
+            } else {
+                coroutineScope { urls.map { url -> async { loadList(url, force, network) } }.awaitAll() }
+            }
             val dates = urls.mapNotNull { compiledFile(it).takeIf(File::exists)?.lastModified() }
             _lists.value = ListStatus(
                 lists = urls.size,
@@ -509,10 +523,21 @@ class ConfigRepository(private val context: Context, private val settings: Setti
      * Une liste : téléchargée au plus toutes les 6 heures, analysée une fois puis gardée sur disque au
      * format compilé (bien plus rapide à relire), et en mémoire tant que l'app tourne.
      */
-    private suspend fun loadList(url: String, force: Boolean = false): HostRules = withContext(Dispatchers.IO) {
+    private suspend fun loadList(url: String, force: Boolean = false, network: Boolean = true): HostRules =
+        // Une même liste n'est chargée qu'une fois à la fois : l'accueil et le lecteur la demandaient ensemble et la
+        // téléchargeaient, l'analysaient et l'écrivaient chacun (double pic de mémoire, fichier .tmp partagé).
+        listLocks.getOrPut(url) { Mutex() }.withLock { loadListLocked(url, force, network) }
+
+    private val listLocks = ConcurrentHashMap<String, Mutex>()
+
+    private suspend fun loadListLocked(url: String, force: Boolean, network: Boolean): HostRules = withContext(Dispatchers.IO) {
         val file = compiledFile(url)
+        // Sans réseau (ouverture d'un site) : déjà en mémoire → tout de suite.
+        if (!network && !force) parsedLists[url]?.let { return@withContext it }
         val fresh = file.exists() && System.currentTimeMillis() - file.lastModified() < LIST_TTL_MS
-        if (!fresh || force) {
+        // Sans réseau, une liste ancienne sur disque sert telle quelle ; on ne télécharge que s'il n'y a rien du tout.
+        val download = force || (!fresh && (network || !file.exists()))
+        if (download) {
             try {
                 val bytes = Http.get(url, MAX_LIST_BYTES, timeoutMs = 10_000)
                 // Listes uBlock découpées en fichiers : `!#include x.txt` est récupéré dans le même dossier.
@@ -527,7 +552,10 @@ class ConfigRepository(private val context: Context, private val settings: Setti
                 parsedLists[url] = compact
                 File(listsDir, sha1(url) + ".txt").delete() // ancien cache, non compilé
                 return@withContext compact
-            } catch (e: Exception) {
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Mémoire épuisée comprise (OutOfMemoryError) : les copies de la liste sont lâchées, le cache prend le relais.
                 Log.w(TAG, "Liste $url indisponible, utilisation du cache s'il existe", e)
             }
         }
@@ -542,7 +570,8 @@ class ConfigRepository(private val context: Context, private val settings: Setti
     }
 
     private fun writeAtomically(file: File, text: String) {
-        val tmp = File(file.parentFile, file.name + ".tmp")
+        // Nom temporaire unique : deux écritures du même fichier ne se mélangent jamais.
+        val tmp = File.createTempFile(file.name, ".tmp", file.parentFile)
         tmp.writeText(text)
         if (!tmp.renameTo(file)) {
             file.writeText(text)
