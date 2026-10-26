@@ -487,7 +487,7 @@ class ConfigRepository(private val context: Context, private val settings: Setti
             val urls = effectiveLists(ensureLoaded())
             _lists.update { it.copy(updating = true) }
             // Petite clé : une liste à la fois (chacune passe par plusieurs copies en mémoire pendant sa compilation).
-            val rules = if (DeviceMemory.isLow(context)) {
+            val rules = if (settings.lowMemory) {
                 urls.map { url -> loadList(url, force, network) }
             } else {
                 coroutineScope { urls.map { url -> async { loadList(url, force, network) } }.awaitAll() }
@@ -539,14 +539,19 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         val download = force || (!fresh && (network || !file.exists()))
         if (download) {
             try {
-                val bytes = Http.get(url, MAX_LIST_BYTES, timeoutMs = 10_000)
                 // Listes uBlock découpées en fichiers : `!#include x.txt` est récupéré dans le même dossier.
                 val base = url.substringBeforeLast('/') + "/"
-                val text = ListIncludes.expand(String(bytes, Charsets.UTF_8)) { name ->
-                    runCatching { String(Http.get(base + name, MAX_LIST_BYTES, timeoutMs = 10_000), Charsets.UTF_8) }.getOrNull()
+                // Analysée ligne à ligne depuis les octets reçus : ni le texte entier (deux fois sa taille en mémoire),
+                // ni sa copie avec les fichiers inclus, ni la liste compilée en un seul texte (petite clé d'1 Go).
+                val parsed = Http.get(url, MAX_LIST_BYTES, timeoutMs = 10_000).inputStream().bufferedReader(Charsets.UTF_8).use { reader ->
+                    FilterParser.parse(
+                        ListIncludes.expandLines(reader.lineSequence()) { name ->
+                            runCatching { Http.get(base + name, MAX_LIST_BYTES, timeoutMs = 10_000) }.getOrNull()
+                                ?.let { String(it, Charsets.UTF_8).lineSequence() }
+                        },
+                    )
                 }
-                val parsed = withContext(Dispatchers.Default) { FilterParser.parse(text) }
-                writeAtomically(file, CompiledRules.encode(parsed))
+                writeAtomically(file) { out -> CompiledRules.write(parsed, out) }
                 // En mémoire : domaines sous forme compacte (déjà écrits sur disque avec leurs noms).
                 val compact = parsed.compact()
                 parsedLists[url] = compact
@@ -569,12 +574,18 @@ class ConfigRepository(private val context: Context, private val settings: Setti
         (cached ?: HostRules()).also { parsedLists[url] = it }
     }
 
-    private fun writeAtomically(file: File, text: String) {
+    private fun writeAtomically(file: File, text: String) = writeAtomically(file) { it.append(text) }
+
+    private fun writeAtomically(file: File, write: (Appendable) -> Unit) {
         // Nom temporaire unique : deux écritures du même fichier ne se mélangent jamais.
         val tmp = File.createTempFile(file.name, ".tmp", file.parentFile)
-        tmp.writeText(text)
-        if (!tmp.renameTo(file)) {
-            file.writeText(text)
+        try {
+            tmp.bufferedWriter().use(write)
+            if (!tmp.renameTo(file)) {
+                file.delete()
+                if (!tmp.renameTo(file)) tmp.copyTo(file, overwrite = true)
+            }
+        } finally {
             tmp.delete()
         }
     }

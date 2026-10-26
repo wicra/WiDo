@@ -115,18 +115,21 @@ data class CosmeticPlan(
 object CompiledRules {
     private const val HEADER = "wido-rules 2"
 
-    fun encode(rules: HostRules): String = buildString {
-        append(HEADER).append('\n')
-        append("s ").append(rules.skipped).append('\n')
-        for (h in rules.blocked) append("b ").append(h).append('\n')
-        for (h in rules.allowed) append("a ").append(h).append('\n')
-        for (h in rules.noGenericHide) append("g ").append(h).append('\n')
-        for (h in rules.noHide) append("e ").append(h).append('\n')
-        for (u in rules.urls) append("n ").append(u).append('\n')
-        rules.scripts.forEach { (d, list) -> for (s in list) append("j ").append(d).append('\t').append(s).append('\n') }
-        rules.unscripts.forEach { (d, list) -> for (s in list) append("k ").append(d).append('\t').append(s).append('\n') }
-        rules.hide.forEach { (d, list) -> for (s in list) append("h ").append(d).append('\t').append(s).append('\n') }
-        rules.unhide.forEach { (d, list) -> for (s in list) append("u ").append(d).append('\t').append(s).append('\n') }
+    fun encode(rules: HostRules): String = buildString { write(rules, this) }
+
+    /** Écrit le format compilé au fil de l'eau (dans un fichier : jamais tout le texte en mémoire). */
+    fun write(rules: HostRules, out: Appendable) {
+        out.append(HEADER).append('\n')
+        out.append("s ").append(rules.skipped.toString()).append('\n')
+        for (h in rules.blocked) out.append("b ").append(h).append('\n')
+        for (h in rules.allowed) out.append("a ").append(h).append('\n')
+        for (h in rules.noGenericHide) out.append("g ").append(h).append('\n')
+        for (h in rules.noHide) out.append("e ").append(h).append('\n')
+        for (u in rules.urls) out.append("n ").append(u).append('\n')
+        rules.scripts.forEach { (d, list) -> for (s in list) out.append("j ").append(d).append('\t').append(s).append('\n') }
+        rules.unscripts.forEach { (d, list) -> for (s in list) out.append("k ").append(d).append('\t').append(s).append('\n') }
+        rules.hide.forEach { (d, list) -> for (s in list) out.append("h ").append(d).append('\t').append(s).append('\n') }
+        rules.unhide.forEach { (d, list) -> for (s in list) out.append("u ").append(d).append('\t').append(s).append('\n') }
     }
 
     /** Null si le texte n'est pas au format compilé (ancien cache, fichier abîmé). */
@@ -189,14 +192,22 @@ object ListIncludes {
     /** `fetch(nom)` renvoie le texte du fichier inclus, ou null s'il est indisponible. */
     fun expand(text: String, fetch: (String) -> String?): String {
         if (!text.contains("!#include ")) return text
+        return expandLines(text.lineSequence()) { name -> fetch(name)?.lineSequence() }.joinToString("\n")
+    }
+
+    /**
+     * Comme [expand], ligne à ligne : la liste et ses fichiers inclus sont lus au fur et à mesure de l'analyse,
+     * sans jamais tenir tout le texte en mémoire. `fetch(nom)` : les lignes du fichier inclus, ou null.
+     */
+    fun expandLines(lines: Sequence<String>, fetch: (String) -> Sequence<String>?): Sequence<String> {
         var count = 0
-        return text.lineSequence().joinToString("\n") { line ->
+        return lines.flatMap { line ->
             val name = line.trim().takeIf { it.startsWith("!#include ") }?.substringAfter("!#include ")?.trim()
             if (name == null || !NAME.matches(name) || name.contains("..") || count >= MAX_INCLUDES) {
-                line
+                sequenceOf(line)
             } else {
                 count++
-                fetch(name) ?: line
+                fetch(name) ?: sequenceOf(line)
             }
         }
     }

@@ -3,6 +3,8 @@
 ## Non publié (affiches sans lien, écran du test)
 
 - **Affiches de films qu'on ne pouvait pas viser ni dépasser** : sur certains sites, les cartes ne sont ni des liens ni des boutons (un bloc avec un clic JavaScript) ; le curseur aimanté les sautait, et ◀ ▶ restaient bloqués sur la rangée. Elles sont maintenant reconnues (le site leur donne le curseur « main ») : le curseur les vise, ◀ ▶ les parcourent et la rangée défile jusqu'au bout. Maintenir ◀ ▶ contre le bord d'un carrousel animé sans barre de défilement le fait aussi avancer (son API, ses flèches, sinon un glisser du doigt), une carte par demi-seconde.
+- **Réglage « Mémoire » (Général) : Auto / Économe / Complète** : WiDo choisissait seul le mode économe sous 1,7 Go ; on peut maintenant le forcer (une TV de 2 Go qui ferme quand même WiDo) ou l'enlever. Le test complet note le mode et la taille du tas.
+- **Mise à jour des listes de blocage moins gourmande** : la liste téléchargée est analysée ligne à ligne et écrite sur disque au fil de l'eau ; avant, elle passait en entier par plusieurs copies en mémoire (texte, texte avec ses fichiers inclus, liste compilée), un pic de plusieurs dizaines de Mo pour les grosses listes, au moment où Android choisit quelle appli fermer.
 - **Test complet : les étapes se parcourent à la télécommande** : ◀ depuis les boutons, puis ▲ ▼ ; l'étape sélectionnée déplie son détail (avertissements et échecs en tête). Pendant le test, la liste suit l'étape en cours. Nouveau cas « Cartes sans lien » sur la page de test.
 
 ## Non publié (test de la 1.1.1)

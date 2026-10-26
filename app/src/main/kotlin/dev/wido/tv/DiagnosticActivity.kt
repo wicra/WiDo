@@ -233,10 +233,12 @@ class DiagnosticActivity : ComponentActivity() {
         metric("memoire_mo", total)
         metric("memoire_libre_mo", free)
         metric("faible_memoire", app.lowMemory)
+        metric("mode_memoire", app.settings.memoryMode)
+        metric("tas_max_mo", Runtime.getRuntime().maxMemory() / MB)
         metric("ecran", "${mode.physicalWidth}x${mode.physicalHeight}")
         metric("moteur_web", runCatching { WebView.getCurrentWebViewPackage()?.versionName }.getOrNull())
         // Constat sur l'appareil, pas un défaut de WiDo : noté sans changer le verdict.
-        if (app.lowMemory) line("Appareil à peu de mémoire : WiDo passe en mode léger (lecteur léger pour les films, listes légères)")
+        if (app.lowMemory) line("Mode mémoire économe (${app.settings.memoryMode}) : lecteur limité au 1080p, listes une à une, pas de page préparée d'avance")
         if (free < 250) warn("moins de 250 Mo libres : fermer les autres applis aide")
     }
 

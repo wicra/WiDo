@@ -315,6 +315,17 @@ fun SettingsPane(
         if (!phone) SettingRow(stringResource(R.string.s_double_back)) {
             Segmented(listOf(on, off), if (settings.doubleBackToSites) 0 else 1) { changed { settings.doubleBackToSites = it == 0 } }
         }
+        SettingRow(stringResource(R.string.s_memory_mode)) {
+            Segmented(
+                listOf(stringResource(R.string.v_memory_auto), stringResource(R.string.v_memory_eco), stringResource(R.string.v_memory_full)),
+                dev.wido.tv.Settings.MEMORY_MODES.indexOf(settings.memoryMode).coerceAtLeast(0),
+            ) { changed { settings.memoryMode = dev.wido.tv.Settings.MEMORY_MODES[it] } }
+        }
+        Text(
+            stringResource(if (app.lowMemory) R.string.memory_now_eco else R.string.memory_now_full),
+            color = Palette.TextMuted,
+            fontSize = 13.sp,
+        )
         SettingRow(stringResource(R.string.s_new_relaxed)) {
             Segmented(
                 listOf(stringResource(R.string.v_strict), stringResource(R.string.v_relaxed), stringResource(R.string.v_mixed)),

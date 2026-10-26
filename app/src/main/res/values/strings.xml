@@ -428,6 +428,12 @@
     <string name="a11y_close">Fermer</string>
     <string name="osd_native_found_low">Vidéo détectée · menu rapide → Lire dans WiDo : bien plus léger pour cette TV</string>
     <string name="s_light_lists">Taille des listes</string>
+    <string name="s_memory_mode">Mémoire</string>
+    <string name="v_memory_auto">Auto</string>
+    <string name="v_memory_eco">Économe</string>
+    <string name="v_memory_full">Complète</string>
+    <string name="memory_now_eco">En ce moment : économe (lecteur en 1080p au plus, pas de page préparée d\'avance, caches libérés vite). Un changement compte au prochain démarrage de WiDo.</string>
+    <string name="memory_now_full">En ce moment : complète. Un changement compte au prochain démarrage de WiDo.</string>
     <string name="v_lists_full">Complètes</string>
     <string name="v_lists_light">Légères (peu de mémoire)</string>
     <string name="s_auto_native">Lecteur léger automatique</string>

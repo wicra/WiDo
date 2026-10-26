@@ -428,6 +428,12 @@
     <string name="a11y_close">Close</string>
     <string name="osd_native_found_low">Video found · quick menu → Play in WiDo: much lighter for this TV</string>
     <string name="s_light_lists">List size</string>
+    <string name="s_memory_mode">Memory</string>
+    <string name="v_memory_auto">Auto</string>
+    <string name="v_memory_eco">Saver</string>
+    <string name="v_memory_full">Full</string>
+    <string name="memory_now_eco">Right now: saver (player up to 1080p, no page prepared ahead, caches freed early). Changes apply the next time WiDo starts.</string>
+    <string name="memory_now_full">Right now: full. Changes apply the next time WiDo starts.</string>
     <string name="v_lists_full">Full</string>
     <string name="v_lists_light">Light (low memory)</string>
     <string name="s_auto_native">Light player automatically</string>
